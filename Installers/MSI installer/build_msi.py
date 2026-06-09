@@ -2,12 +2,27 @@
 build_msi.py — Voktora Windows MSI builder
 Compile avec Nuitka (--onedir) puis empaquète en .msi via WiX Toolset 4.x
 
+Arborescence attendue :
+    Voktora/
+    ├── assets/                  ← icônes sources
+    ├── Installers/
+    │   ├── assets/
+    │   ├── MSI installer/
+    │   │   ├── build_msi.py     ← CE FICHIER
+    │   │   └── voktora.wxs
+    │   └── DEB installer/
+    │       └── build_deb.sh
+    └── voktora/
+        ├── main.py
+        ├── themes/
+        └── version.txt
+
 Prérequis :
     pip install nuitka pyside6 cryptography
     winget install WiXToolset.WiX  (ou via MSI sur wixtoolset.org)
 
 Usage :
-    python packaging/build_msi.py [VERSION]
+    python "Installers/MSI installer/build_msi.py" [VERSION]
 """
 
 import os
@@ -16,10 +31,12 @@ import shutil
 import subprocess
 from pathlib import Path
 
-ROOT    = Path(__file__).resolve().parent.parent
+# Ce fichier est dans  Voktora/Installers/MSI installer/
+ROOT    = Path(__file__).resolve().parent.parent.parent
 VERSION = sys.argv[1] if len(sys.argv) > 1 else (ROOT / "voktora" / "version.txt").read_text().strip()
 DIST    = ROOT / "dist" / "windows"
 ONEDIR  = DIST / "voktora.dist"
+WXS_DIR = ROOT / "Installers" / "MSI installer"
 
 
 def run(cmd, **kw):
@@ -30,6 +47,7 @@ def run(cmd, **kw):
 def main():
     print("=== Voktora MSI builder ===")
     print(f"Version : {VERSION}")
+    print(f"Root    : {ROOT}")
 
     # ── 1. Nettoyage ──────────────────────────────────────────────────────────
     shutil.rmtree(DIST, ignore_errors=True)
@@ -51,14 +69,12 @@ def main():
 
     # Copier ressources dans le onedir
     shutil.copytree(ROOT / "voktora" / "themes", ONEDIR / "themes", dirs_exist_ok=True)
-    shutil.copytree(ROOT / "assets",          ONEDIR / "assets",  dirs_exist_ok=True)
+    shutil.copytree(ROOT / "assets",             ONEDIR / "assets",  dirs_exist_ok=True)
     shutil.copy(ROOT / "voktora" / "version.txt", ONEDIR / "version.txt")
 
     # ── 3. Harvest des fichiers pour WiX ──────────────────────────────────────
     print("\n>>> Génération voktora_files.wxs (wix harvest)...")
-    # WiX 4.x : wix extension add WixToolset.UI.wixext
-    # puis wix harvest directory  (remplace heat.exe de WiX 3.x)
-    harvest_out = ROOT / "packaging" / "voktora_files.wxs"
+    harvest_out = WXS_DIR / "voktora_files.wxs"
     try:
         run([
             "wix", "harvest", "directory",
@@ -86,7 +102,7 @@ def main():
     try:
         run([
             "wix", "build",
-            str(ROOT / "packaging" / "voktora.wxs"),
+            str(WXS_DIR / "voktora.wxs"),
             "-d", f"VERSION={VERSION}",
             "-d", f"SourceDir={ONEDIR}",
             "-ext", "WixToolset.UI.wixext",
@@ -98,7 +114,7 @@ def main():
         run(["candle.exe",
              f"-dVERSION={VERSION}",
              f"-dSourceDir={ONEDIR}",
-             str(ROOT / "packaging" / "voktora.wxs"),
+             str(WXS_DIR / "voktora.wxs"),
              str(harvest_out),
              "-o", str(wixobj)])
         run(["light.exe", str(wixobj),
