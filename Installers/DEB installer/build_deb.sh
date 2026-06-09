@@ -3,8 +3,23 @@
 # Voktora — build_deb.sh
 # Compile avec Nuitka (--onedir) puis empaquète en .deb
 #
+# Arborescence attendue :
+#   Voktora/
+#   ├── assets/                  ← icônes sources
+#   ├── Installers/
+#   │   ├── assets/
+#   │   ├── DEB installer/
+#   │   │   └── build_deb.sh     ← CE FICHIER
+#   │   └── MSI installer/
+#   │       ├── build_msi.py
+#   │       └── voktora.wxs
+#   └── voktora/
+#       ├── main.py
+#       ├── themes/
+#       └── version.txt
+#
 # Usage :
-#   ./packaging/build_deb.sh [VERSION]
+#   ./Installers/DEB\ installer/build_deb.sh [VERSION]
 #   VERSION par défaut : contenu de voktora/version.txt
 #
 # Dépendances build :
@@ -14,6 +29,7 @@
 
 set -euo pipefail
 
+# Ce fichier est dans  Voktora/Installers/DEB installer/
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 VERSION="${1:-$(cat "$ROOT/voktora/version.txt" | tr -d '[:space:]')}"
@@ -47,8 +63,8 @@ python -m nuitka \
 ONEDIR="$DIST_DIR/nuitka_out/main.dist"
 
 # Copier ressources
-cp -r "$ROOT/voktora/themes" "$ONEDIR/themes"
-cp -r "$ROOT/assets"     "$ONEDIR/assets"
+cp -r "$ROOT/voktora/themes"   "$ONEDIR/themes"
+cp -r "$ROOT/assets"           "$ONEDIR/assets"
 cp    "$ROOT/voktora/version.txt" "$ONEDIR/version.txt"
 
 # ── 3. Structure du paquet .deb ──────────────────────────────────────────────
