@@ -86,8 +86,10 @@ jobs:
       - name: Installer WiX Toolset (Windows)
         if: matrix.platform == 'windows'
         run: |
+          echo "DOTNET_NOLOGO=true" >> $GITHUB_ENV
           echo "WIX_EXTENSIONS_ACCEPT_EULA=1" >> $GITHUB_ENV
-          dotnet tool install --global wix
+          echo "OSMF_ACCEPT_EULA=1" >> $GITHUB_ENV
+          dotnet tool install --global wix --version 7.0.0
           wix extension add WixToolset.UI.wixext
 
       - name: Build Windows (.msi)
