@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Voktora — Project Instance Manager</title>
+  <meta name="description" content="Voktora est un gestionnaire de projets de développement avec vault AES-256, profils d'exécution, hooks, snapshots et plugins. Par yolezz."/>
+  <meta property="og:title" content="Voktora — Project Instance Manager"/>
+  <meta property="og:description" content="Gérez, lancez et automatisez vos projets de développement."/>
+  <meta property="og:image" content="https://raw.githubusercontent.com/yo-le-zz/Voktora/main/assets/Voktora.png"/>
+  <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/yo-le-zz/Voktora/main/assets/Voktora.png"/>
+  <style>
+    /* ── Reset & Variables ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --base:    #1e1e2e;
+      --mantle:  #181825;
+      --crust:   #11111b;
+      --surface0:#313244;
+      --surface1:#45475a;
+      --overlay0:#6c7086;
+      --text:    #cdd6f4;
+      --subtext1:#bac2de;
+      --subtext0:#a6adc8;
+      --blue:    #89b4fa;
+      --mauve:   #cba6f7;
+      --sapphire:#74c7ec;
+      --green:   #a6e3a1;
+      --peach:   #fab387;
+      --red:     #f38ba8;
+      --yellow:  #f9e2af;
+      --teal:    #94e2d5;
+      --grad: linear-gradient(135deg, #89b4fa22 0%, #cba6f722 50%, #74c7ec22 100%);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Segoe UI', 'Noto Sans', 'DejaVu Sans', Ubuntu, sans-serif;
+      background: var(--crust);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ── Scrollbar ──────────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: var(--mantle); }
+    ::-webkit-scrollbar-thumb { background: var(--surface1); border-radius: 4px; }
+
+    /* ── Noise texture overlay ──────────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Nav ────────────────────────────────────────────────────────────── */
+    nav {
+      position: sticky; top: 0;
+      z-index: 100;
+      background: #11111bcc;
+      backdrop-filter: blur(20px) saturate(180%);
+      border-bottom: 1px solid var(--surface0);
+      padding: 0 2rem;
+      display: flex; align-items: center; gap: 2rem;
+      height: 60px;
+    }
+    .nav-brand {
+      display: flex; align-items: center; gap: .75rem;
+      font-weight: 700; font-size: 1.1rem; color: var(--text);
+      text-decoration: none;
+    }
+    .nav-brand img { width: 30px; height: 30px; border-radius: 6px; }
+    .nav-links { display: flex; gap: 1.5rem; margin-left: auto; }
+    .nav-links a {
+      color: var(--subtext0); text-decoration: none; font-size: .9rem;
+      transition: color .2s;
+    }
+    .nav-links a:hover { color: var(--blue); }
+
+    /* ── Hero ───────────────────────────────────────────────────────────── */
+    .hero {
+      position: relative; z-index: 1;
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center;
+      padding: 6rem 2rem 4rem;
+      overflow: hidden;
+    }
+    .hero-glow {
+      position: absolute; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 60% 40% at 50% 0%, #89b4fa18 0%, transparent 70%),
+        radial-gradient(ellipse 40% 30% at 20% 50%, #cba6f712 0%, transparent 60%),
+        radial-gradient(ellipse 40% 30% at 80% 60%, #74c7ec12 0%, transparent 60%);
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: .5rem;
+      background: var(--surface0); border: 1px solid var(--surface1);
+      border-radius: 100px; padding: .35rem 1rem;
+      font-size: .8rem; color: var(--subtext0);
+      margin-bottom: 2rem;
+    }
+    .hero-badge span { color: var(--blue); font-weight: 600; }
+    .hero-icon {
+      width: 96px; height: 96px; border-radius: 22px;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 0 60px #89b4fa44, 0 20px 60px #00000088;
+      animation: float 4s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-10px); }
+    }
+    .hero h1 {
+      font-size: clamp(2.5rem, 8vw, 5rem);
+      font-weight: 800;
+      letter-spacing: -2px;
+      line-height: 1.1;
+      background: linear-gradient(135deg, var(--text) 0%, var(--blue) 50%, var(--mauve) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 1rem;
+    }
+    .hero-sub {
+      font-size: clamp(1rem, 2.5vw, 1.25rem);
+      color: var(--subtext0);
+      max-width: 560px;
+      margin: 0 auto 2.5rem;
+    }
+    .hero-sub strong { color: var(--subtext1); }
+
+    /* ── Download buttons ───────────────────────────────────────────────── */
+    .download-row {
+      display: flex; gap: 1rem; flex-wrap: wrap;
+      justify-content: center; align-items: stretch;
+      margin-bottom: 1.5rem;
+    }
+    .dl-btn {
+      display: flex; flex-direction: column; align-items: center;
+      gap: .35rem;
+      padding: 1rem 2rem;
+      border-radius: 14px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: .95rem;
+      transition: all .2s;
+      border: 2px solid transparent;
+      min-width: 200px;
+      position: relative;
+      overflow: hidden;
+    }
+    .dl-btn::before {
+      content: '';
+      position: absolute; inset: 0;
+      opacity: 0;
+      transition: opacity .2s;
+    }
+    .dl-btn:hover::before { opacity: 1; }
+    .dl-btn:hover { transform: translateY(-3px); box-shadow: 0 12px 40px #00000066; }
+
+    .dl-btn-linux {
+      background: linear-gradient(135deg, #a6e3a122, #94e2d522);
+      border-color: #a6e3a144;
+      color: var(--green);
+    }
+    .dl-btn-linux::before { background: linear-gradient(135deg, #a6e3a133, #94e2d533); }
+    .dl-btn-linux:hover { border-color: var(--green); }
+
+    .dl-btn-windows {
+      background: linear-gradient(135deg, #89b4fa22, #74c7ec22);
+      border-color: #89b4fa44;
+      color: var(--blue);
+    }
+    .dl-btn-windows::before { background: linear-gradient(135deg, #89b4fa33, #74c7ec33); }
+    .dl-btn-windows:hover { border-color: var(--blue); }
+
+    .dl-btn-src {
+      background: var(--surface0);
+      border-color: var(--surface1);
+      color: var(--subtext1);
+    }
+    .dl-btn-src:hover { border-color: var(--subtext0); color: var(--text); }
+
+    .dl-btn-platform { font-size: .75rem; opacity: .7; font-weight: 400; }
+    .dl-btn-ext {
+      font-size: 1.5rem; font-weight: 800;
+      letter-spacing: 1px;
+    }
+
+    .version-note {
+      font-size: .8rem; color: var(--overlay0);
+    }
+    .version-note a { color: var(--blue); text-decoration: none; }
+    .version-note a:hover { text-decoration: underline; }
+
+    /* ── Section container ──────────────────────────────────────────────── */
+    section {
+      position: relative; z-index: 1;
+      max-width: 1100px; margin: 0 auto;
+      padding: 5rem 2rem;
+    }
+    .section-label {
+      text-align: center;
+      font-size: .8rem; font-weight: 700; letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--blue);
+      margin-bottom: .75rem;
+    }
+    h2 {
+      text-align: center;
+      font-size: clamp(1.8rem, 4vw, 2.5rem);
+      font-weight: 700; letter-spacing: -1px;
+      margin-bottom: 1rem;
+    }
+    .section-sub {
+      text-align: center;
+      color: var(--subtext0);
+      max-width: 600px; margin: 0 auto 3.5rem;
+    }
+
+    /* ── Feature grid ───────────────────────────────────────────────────── */
+    .features { background: var(--mantle); border-top: 1px solid var(--surface0); border-bottom: 1px solid var(--surface0); }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 1.5rem;
+    }
+    .feat-card {
+      background: var(--base);
+      border: 1px solid var(--surface0);
+      border-radius: 16px;
+      padding: 1.75rem;
+      transition: all .2s;
+    }
+    .feat-card:hover {
+      border-color: var(--surface1);
+      transform: translateY(-4px);
+      box-shadow: 0 16px 48px #00000055;
+    }
+    .feat-icon {
+      font-size: 2rem; margin-bottom: 1rem;
+      display: block; line-height: 1;
+    }
+    .feat-title {
+      font-size: 1rem; font-weight: 700;
+      color: var(--text); margin-bottom: .5rem;
+    }
+    .feat-desc { font-size: .875rem; color: var(--subtext0); line-height: 1.5; }
+
+    /* ── Screenshots / window mockup ────────────────────────────────────── */
+    .mockup-section { text-align: center; }
+    .window-mockup {
+      display: inline-block;
+      background: var(--base);
+      border: 1px solid var(--surface0);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 40px 100px #00000088;
+      max-width: 900px; width: 100%;
+      margin: 0 auto;
+    }
+    .window-bar {
+      background: var(--mantle);
+      border-bottom: 1px solid var(--surface0);
+      padding: .65rem 1rem;
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .win-dot {
+      width: 12px; height: 12px; border-radius: 50%;
+    }
+    .win-dot.red   { background: #f38ba8; }
+    .win-dot.yellow { background: #f9e2af; }
+    .win-dot.green  { background: #a6e3a1; }
+    .window-title {
+      flex: 1; text-align: center;
+      font-size: .8rem; color: var(--overlay0);
+    }
+    .window-body {
+      display: grid; grid-template-columns: 220px 1fr;
+      height: 420px;
+    }
+    .win-sidebar {
+      background: var(--mantle);
+      border-right: 1px solid var(--surface0);
+      padding: 1rem;
+      display: flex; flex-direction: column; gap: .5rem;
+    }
+    .win-logo {
+      font-size: .9rem; font-weight: 800; color: var(--blue);
+      padding-bottom: .75rem;
+      border-bottom: 1px solid var(--surface0);
+      margin-bottom: .25rem;
+    }
+    .win-section-lbl {
+      font-size: .65rem; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--overlay0);
+      margin-top: .5rem;
+    }
+    .win-item {
+      font-size: .8rem; color: var(--subtext0);
+      padding: .35rem .75rem; border-radius: 6px;
+      cursor: default;
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .win-item.active {
+      background: var(--surface0); color: var(--text);
+    }
+    .win-item .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .win-main {
+      padding: 1.5rem;
+      display: flex; flex-direction: column; gap: 1rem;
+      overflow: hidden;
+    }
+    .win-project-header {
+      display: flex; align-items: center; gap: 1rem;
+    }
+    .win-proj-icon {
+      width: 52px; height: 52px; border-radius: 10px;
+      background: linear-gradient(135deg, #89b4fa33, #cba6f733);
+      border: 1px solid #89b4fa44;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem;
+    }
+    .win-proj-name {
+      font-size: 1.2rem; font-weight: 700; color: var(--text);
+    }
+    .win-proj-path { font-size: .75rem; color: var(--overlay0); }
+    .win-badges { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .badge {
+      font-size: .7rem; font-weight: 600; padding: .2rem .6rem;
+      border-radius: 4px;
+    }
+    .badge-inst { background: #89b4fa22; color: var(--blue); border: 1px solid #89b4fa44; }
+    .badge-lang { background: #3572A522; color: #74c7ec; border: 1px solid #74c7ec44; }
+    .badge-stat { background: #a6e3a122; color: var(--green); border: 1px solid #a6e3a144; }
+    .win-tabs {
+      display: flex; gap: .5rem;
+      border-bottom: 1px solid var(--surface0);
+      padding-bottom: .5rem;
+    }
+    .win-tab {
+      font-size: .8rem; color: var(--subtext0); padding: .3rem .75rem;
+      border-radius: 6px;
+    }
+    .win-tab.active { background: var(--surface0); color: var(--text); }
+    .win-btn-group { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .win-btn {
+      font-size: .75rem; padding: .4rem .9rem; border-radius: 6px;
+      cursor: default;
+    }
+    .win-btn-primary { background: #89b4fa22; color: var(--blue); border: 1px solid #89b4fa44; }
+    .win-btn-subtle { background: var(--surface0); color: var(--subtext1); border: 1px solid var(--surface1); }
+    .win-btn-success { background: #a6e3a122; color: var(--green); border: 1px solid #a6e3a144; }
+    .win-log {
+      margin-top: auto;
+      background: var(--crust); border-radius: 8px;
+      padding: .75rem; font-family: 'Consolas', monospace; font-size: .72rem;
+      color: var(--subtext0); border: 1px solid var(--surface0);
+    }
+    .log-ts { color: var(--overlay0); }
+    .log-ok  { color: var(--green); }
+
+    /* ── Install section ────────────────────────────────────────────────── */
+    .install-section { background: var(--crust); border-top: 1px solid var(--surface0); }
+    .install-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;
+    }
+    @media (max-width: 700px) { .install-grid { grid-template-columns: 1fr; } }
+    .install-card {
+      background: var(--base);
+      border: 1px solid var(--surface0);
+      border-radius: 16px;
+      padding: 2rem;
+    }
+    .install-card h3 {
+      font-size: 1.1rem; margin-bottom: 1.25rem;
+      display: flex; align-items: center; gap: .6rem;
+    }
+    .code-block {
+      background: var(--crust);
+      border: 1px solid var(--surface0);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      font-family: 'Consolas', 'DejaVu Sans Mono', monospace;
+      font-size: .85rem;
+      line-height: 1.8;
+      overflow-x: auto;
+    }
+    .code-block .cmd { color: var(--blue); }
+    .code-block .comment { color: var(--overlay0); }
+    .code-block .str { color: var(--green); }
+    .code-block .flag { color: var(--mauve); }
+
+    /* ── Stats strip ────────────────────────────────────────────────────── */
+    .stats-strip {
+      background: var(--mantle);
+      border-top: 1px solid var(--surface0);
+      border-bottom: 1px solid var(--surface0);
+    }
+    .stats-strip section {
+      display: flex; justify-content: center;
+      gap: 4rem; flex-wrap: wrap;
+      padding: 3rem 2rem;
+    }
+    .stat { text-align: center; }
+    .stat-num {
+      font-size: 2.5rem; font-weight: 800;
+      background: linear-gradient(135deg, var(--blue), var(--mauve));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .stat-label { font-size: .85rem; color: var(--subtext0); margin-top: .25rem; }
+
+    /* ── GitHub CTA ─────────────────────────────────────────────────────── */
+    .cta-section { text-align: center; }
+    .cta-section h2 { margin-bottom: 1rem; }
+    .cta-section p { color: var(--subtext0); margin-bottom: 2rem; }
+    .btn-gh {
+      display: inline-flex; align-items: center; gap: .75rem;
+      background: var(--surface0);
+      border: 1px solid var(--surface1);
+      border-radius: 12px;
+      padding: .9rem 2rem;
+      color: var(--text); font-weight: 600; font-size: 1rem;
+      text-decoration: none;
+      transition: all .2s;
+    }
+    .btn-gh:hover {
+      background: var(--surface1);
+      border-color: var(--subtext1);
+      transform: translateY(-2px);
+    }
+    .btn-gh svg { width: 22px; height: 22px; fill: currentColor; }
+
+    /* ── Footer ─────────────────────────────────────────────────────────── */
+    footer {
+      position: relative; z-index: 1;
+      background: var(--crust);
+      border-top: 1px solid var(--surface0);
+      padding: 3rem 2rem;
+      text-align: center;
+    }
+    .footer-logo {
+      display: inline-flex; align-items: center; gap: .75rem;
+      font-size: 1.2rem; font-weight: 800; color: var(--text);
+      margin-bottom: 1rem;
+    }
+    .footer-logo img { width: 28px; height: 28px; border-radius: 6px; }
+    .footer-sub { font-size: .85rem; color: var(--overlay0); }
+    .footer-sub a { color: var(--blue); text-decoration: none; }
+    .footer-sub a:hover { text-decoration: underline; }
+
+    /* ── Responsive ─────────────────────────────────────────────────────── */
+    @media (max-width: 700px) {
+      .window-body { grid-template-columns: 1fr; }
+      .win-sidebar { display: none; }
+      .nav-links { display: none; }
+      .stats-strip section { gap: 2rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Nav ──────────────────────────────────────────────────────────────── -->
+<nav>
+  <a class="nav-brand" href="#">
+    <img src="https://raw.githubusercontent.com/yo-le-zz/Voktora/main/assets/Voktora.png" alt="Voktora"/>
+    Voktora
+  </a>
+  <div class="nav-links">
+    <a href="#features">Fonctionnalités</a>
+    <a href="#install">Installation</a>
+    <a href="https://github.com/yo-le-zz/Voktora/tree/main/docs">Docs</a>
+    <a href="https://github.com/yo-le-zz/Voktora">GitHub</a>
+  </div>
+</nav>
+
+<!-- ── Hero ─────────────────────────────────────────────────────────────── -->
+<div class="hero">
+  <div class="hero-glow"></div>
+
+  <div class="hero-badge">
+    <span>NEW</span> Version 1.0.0 disponible
+  </div>
+
+  <img class="hero-icon"
+       src="https://raw.githubusercontent.com/yo-le-zz/Voktora/main/assets/Voktora.png"
+       alt="Voktora icon"/>
+
+  <h1>Voktora</h1>
+  <p class="hero-sub">
+    Gérez, lancez et automatisez vos projets de développement.<br/>
+    <strong>Vault AES-256 · Hooks · Profils · Snapshots · Plugins</strong>
+  </p>
+
+  <div class="download-row">
+    <a class="dl-btn dl-btn-linux"
+       href="https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora_1.0.0_amd64.deb">
+      <span class="dl-btn-platform">🐧 Linux (Debian/Ubuntu)</span>
+      <span class="dl-btn-ext">.deb</span>
+      <span class="dl-btn-platform">x86_64 · 1.0.0</span>
+    </a>
+    <a class="dl-btn dl-btn-windows"
+       href="https://github.com/yo-le-zz/Voktora/releases/latest/download/Voktora_1.0.0_x64.msi">
+      <span class="dl-btn-platform">🪟 Windows 10/11</span>
+      <span class="dl-btn-ext">.msi</span>
+      <span class="dl-btn-platform">x64 · 1.0.0</span>
+    </a>
+    <a class="dl-btn dl-btn-src"
+       href="https://github.com/yo-le-zz/Voktora">
+      <span class="dl-btn-platform">Code source</span>
+      <span class="dl-btn-ext">GitHub</span>
+      <span class="dl-btn-platform">Python 3.11+</span>
+    </a>
+  </div>
+
+  <p class="version-note">
+    Voir toutes les releases sur
+    <a href="https://github.com/yo-le-zz/Voktora/releases">GitHub</a> ·
+    Créé par <a href="https://github.com/yo-le-zz">yolezz</a>
+  </p>
+</div>
+
+<!-- ── Stats ─────────────────────────────────────────────────────────────── -->
+<div class="stats-strip">
+  <section>
+    <div class="stat">
+      <div class="stat-num">16</div>
+      <div class="stat-label">Modules Python</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">7</div>
+      <div class="stat-label">Types de hooks</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">6</div>
+      <div class="stat-label">Templates de projets</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">AES-256</div>
+      <div class="stat-label">Chiffrement vault</div>
+    </div>
+  </section>
+</div>
+
+<!-- ── Features ──────────────────────────────────────────────────────────── -->
+<div class="features" id="features">
+  <section>
+    <p class="section-label">Fonctionnalités</p>
+    <h2>Tout ce dont vous avez besoin</h2>
+    <p class="section-sub">Voktora centralise la gestion de vos projets dans une interface unifiée et extensible.</p>
+
+    <div class="grid-4">
+      <div class="feat-card">
+        <span class="feat-icon">🗂</span>
+        <div class="feat-title">Vue liste & grille</div>
+        <div class="feat-desc">Basculez entre une liste compacte et des cartes visuelles avec icône personnalisable, badge langage et statut.</div>
+      </div>
+      <div class="feat-card">
+        <span class="feat-icon">🔐</span>
+        <div class="feat-title">Vault AES-256</div>
+        <div class="feat-desc">Stockage chiffré de tokens GitHub, clés SSH et API keys. Master password dérivé PBKDF2, 480 000 itérations.</div>
+      </div>
+      <div class="feat-card">
+        <span class="feat-icon">⚡</span>
+        <div class="feat-title">Profils d'exécution</div>
+        <div class="feat-desc">Définissez commande, env vars, dossier de travail et scripts pre/post run par projet. Lancement en un clic.</div>
+      </div>
+      <div class="feat-card">
+        <span class="feat-icon">🪝</span>
+        <div class="feat-title">Hooks</div>
+        <div class="feat-desc">Automatisations shell ou Python sur 7 événements : on_create, on_open, on_git_push, on_clone, etc.</div>
+      </div>
+      <div class="feat-card">
+        <span class="feat-icon">📸</span>
+        <div class="feat-title">Snapshots</div>
+        <div class="feat-desc">Capturez l'état complet d'un projet, restaurez-le en un clic, comparez deux snapshots ligne par ligne.</div>
+      </div>
+      <div class="feat-card">
+        <span class="feat-icon">🧱</span>
+        <div class="feat-title">Templates</div>
+        <div class="feat-desc">Python, C++, Web App, Discord Bot, Minecraft Mod, ou vide. Structure + git init + premier commit automatiques.</div>
+      </div>
+      <div class="feat-card">
+        <span class="feat-icon">📊</span>
+        <div class="feat-title">Dashboard santé</div>
+        <div class="feat-desc">Score 0–100 par projet. Détecte .gitignore manquant, commits en retard, branches non mergées, inactivité.</div>
+      </div>
+      <div class="feat-card">
+        <span class="feat-icon">🧩</span>
+        <div class="feat-title">Plugins extensibles</div>
+        <div class="feat-desc">Ajoutez un .py dans data/plugins/ pour enregistrer commandes, boutons et hooks. Rechargement à chaud.</div>
+      </div>
+      <div class="feat-card">
+        <span class="feat-icon">🐙</span>
+        <div class="feat-title">GitHub App & OAuth</div>
+        <div class="feat-desc">Authentification via GitHub App (JWT RS256, token auto-renouvelé) ou OAuth App Device Flow classique.</div>
+      </div>
+      <div class="feat-card">
+        <span class="feat-icon">🧠</span>
+        <div class="feat-title">Smart commit</div>
+        <div class="feat-desc">Génère des messages Conventional Commits sans IA en analysant les fichiers modifiés. feat, fix, docs, style…</div>
+      </div>
+      <div class="feat-card">
+        <span class="feat-icon">🌙</span>
+        <div class="feat-title">Thème Catppuccin</div>
+        <div class="feat-desc">Interface sombre Catppuccin Mocha. PySide6, polices cross-platform, transitions fluides.</div>
+      </div>
+      <div class="feat-card">
+        <span class="feat-icon">📦</span>
+        <div class="feat-title">Packages natifs</div>
+        <div class="feat-desc">.deb pour Debian/Ubuntu, .msi pour Windows. Installation native sans Python requis sur la machine cible.</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ── Window mockup ──────────────────────────────────────────────────────── -->
+<section class="mockup-section">
+  <p class="section-label">Aperçu</p>
+  <h2>Interface</h2>
+  <p class="section-sub">Panneau projet avec 5 onglets, journal intégré, sidebar avec thème Catppuccin Mocha.</p>
+
+  <div class="window-mockup">
+    <div class="window-bar">
+      <div class="win-dot red"></div>
+      <div class="win-dot yellow"></div>
+      <div class="win-dot green"></div>
+      <div class="window-title">Voktora — Project Instance Manager</div>
+    </div>
+    <div class="window-body">
+      <div class="win-sidebar">
+        <div class="win-logo">✦ Voktora</div>
+        <div class="win-section-lbl">Projets</div>
+        <div class="win-item active">
+          <span class="dot" style="background:#89b4fa"></span>
+          MyApp
+        </div>
+        <div class="win-item">
+          <span class="dot" style="background:#a6e3a1"></span>
+          WebScraper
+        </div>
+        <div class="win-item">
+          <span class="dot" style="background:#cba6f7"></span>
+          DiscordBot
+        </div>
+        <div class="win-item">
+          <span class="dot" style="background:#fab387"></span>
+          GameEngine
+        </div>
+        <div class="win-section-lbl" style="margin-top:auto">Intents</div>
+        <div class="win-item">
+          <span class="dot" style="background:#cba6f744"></span>
+          NewIdea
+        </div>
+      </div>
+      <div class="win-main">
+        <div class="win-project-header">
+          <div class="win-proj-icon">🐍</div>
+          <div>
+            <div class="win-proj-name">MyApp</div>
+            <div class="win-proj-path">~/Projects/Instances/MyApp</div>
+          </div>
+          <div class="win-badges" style="margin-left:auto">
+            <span class="badge badge-inst">INSTANCE</span>
+            <span class="badge badge-lang">Python</span>
+            <span class="badge badge-stat">Active</span>
+          </div>
+        </div>
+        <div class="win-tabs">
+          <div class="win-tab active">⚡ Actions</div>
+          <div class="win-tab">🐙 Git</div>
+          <div class="win-tab">🧰 Outils</div>
+          <div class="win-tab">📸 Snapshots</div>
+          <div class="win-tab">📌 Détails</div>
+        </div>
+        <div class="win-btn-group">
+          <div class="win-btn win-btn-subtle">🗂 Explorateur</div>
+          <div class="win-btn win-btn-subtle">⬛ Terminal</div>
+          <div class="win-btn win-btn-subtle">💙 VS Code</div>
+        </div>
+        <div class="win-btn-group">
+          <div class="win-btn win-btn-primary">⚙ Gérer les profils</div>
+          <div class="win-btn win-btn-success">▶ Lancer profil par défaut</div>
+        </div>
+        <div class="win-log">
+          <span class="log-ts">[14:22:01]</span>  Projet chargé : MyApp<br/>
+          <span class="log-ts">[14:22:01]</span>  <span class="log-ok">[hook:on_open]</span> git pull --ff-only<br/>
+          <span class="log-ts">[14:22:02]</span>  Already up to date.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Installation ───────────────────────────────────────────────────────── -->
+<div class="install-section" id="install">
+  <section>
+    <p class="section-label">Installation</p>
+    <h2>Démarrez en 30 secondes</h2>
+    <p class="section-sub">Packages natifs pour Linux et Windows. Aucun Python requis sur la machine cible.</p>
+
+    <div class="install-grid">
+      <div class="install-card">
+        <h3>🐧 Linux (Debian / Ubuntu / Mint)</h3>
+        <div class="code-block">
+<span class="comment"># Télécharger et installer</span>
+<span class="cmd">wget</span> <span class="str">https://github.com/yo-le-zz/Voktora</span>
+     <span class="str">/releases/latest/download</span>
+     <span class="str">/voktora_1.0.0_amd64.deb</span>
+
+<span class="cmd">sudo dpkg -i</span> voktora_1.0.0_amd64.deb
+
+<span class="comment"># Si dépendances manquantes</span>
+<span class="cmd">sudo apt-get install -f</span>
+
+<span class="comment"># Lancer</span>
+<span class="cmd">voktora</span>
+        </div>
+      </div>
+
+      <div class="install-card">
+        <h3>🪟 Windows 10 / 11</h3>
+        <div class="code-block">
+<span class="comment"># 1. Télécharger Voktora_1.0.0_x64.msi</span>
+<span class="comment">#    depuis GitHub Releases</span>
+
+<span class="comment"># 2. Double-cliquer sur le .msi</span>
+<span class="comment">#    → Next → Install → Finish</span>
+
+<span class="comment"># 3. Voktora est dans</span>
+<span class="comment">#    C:\Program Files\Voktora\</span>
+<span class="comment">#    et dans le menu Démarrer</span>
+
+<span class="comment"># Désinstaller :</span>
+<span class="comment">#    Paramètres → Applications → Voktora</span>
+        </div>
+      </div>
+
+      <div class="install-card">
+        <h3>🐍 Depuis les sources (Python)</h3>
+        <div class="code-block">
+<span class="cmd">git clone</span> <span class="str">https://github.com/yo-le-zz/Voktora</span>
+<span class="cmd">cd</span> Voktora
+<span class="cmd">pip install</span> uv
+<span class="cmd">uv pip install</span> pyside6 cryptography
+<span class="cmd">python</span> src/main.py
+        </div>
+      </div>
+
+      <div class="install-card">
+        <h3>🔨 Compiler soi-même</h3>
+        <div class="code-block">
+<span class="comment"># Linux (.deb)</span>
+<span class="cmd">bash</span> packaging/build_deb.sh <span class="flag">1.0.0</span>
+
+<span class="comment"># Windows (.msi)</span>
+<span class="cmd">python</span> packaging/build_msi.py <span class="flag">1.0.0</span>
+
+<span class="comment"># Voir docs/BUILD.md pour les</span>
+<span class="comment"># prérequis Nuitka + WiX</span>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ── GitHub CTA ─────────────────────────────────────────────────────────── -->
+<section class="cta-section">
+  <p class="section-label">Open Source</p>
+  <h2>Disponible sur GitHub</h2>
+  <p>Code source libre, documentation complète, système de plugins ouvert.</p>
+  <a class="btn-gh" href="https://github.com/yo-le-zz/Voktora">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+    </svg>
+    yo-le-zz / Voktora
+  </a>
+</section>
+
+<!-- ── Footer ─────────────────────────────────────────────────────────────── -->
+<footer>
+  <div class="footer-logo">
+    <img src="https://raw.githubusercontent.com/yo-le-zz/Voktora/main/assets/Voktora.png" alt="Voktora"/>
+    Voktora
+  </div>
+  <p class="footer-sub">
+    Project Instance Manager · Version 1.0.0<br/>
+    Créé par <a href="https://github.com/yo-le-zz">yolezz</a> ·
+    <a href="https://github.com/yo-le-zz/Voktora">GitHub</a> ·
+    <a href="https://github.com/yo-le-zz/Voktora/blob/main/LICENSE">MIT License</a> ·
+    <a href="https://github.com/yo-le-zz/Voktora/tree/main/docs">Documentation</a>
+  </p>
+</footer>
+
+</body>
+</html>
