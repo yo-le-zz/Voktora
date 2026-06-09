@@ -1,0 +1,17 @@
+{
+    "name": "Forest",
+    "description": "Thème forêt naturelle avec verts profonds",
+    "colors": {
+        "background": "#1b2f1b",
+        "surface": "#2d4a2d",
+        "panel": "#3a5a3a",
+        "text": "#e8f5e8",
+        "text_secondary": "#c8e6c8",
+        "accent": "#66bb6a",
+        "primary": "#4caf50",
+        "success": "#81c784",
+        "warning": "#ffb74d",
+        "danger": "#e57373",
+        "border": "#4a674a"
+    }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "Default",
+  "description": "Thème par défaut de Meridian",
+  "colors": {
+    "background": "#1e1e2e",
+    "surface": "#181825",
+    "surface_variant": "#11111b",
+    "text_primary": "#cdd6f4",
+    "text_secondary": "#a6adc8",
+    "text_muted": "#6c7086",
+    "accent": "#89b4fa",
+    "accent_hover": "#b4d0fb",
+    "accent_pressed": "#74a9f9",
+    "success": "#a6e3a1",
+    "warning": "#fab387",
+    "error": "#f38ba8",
+    "border": "#313244",
+    "separator": "#313244",
+    "github": "#30363d",
+    "github_hover": "#484f58"
+  },
+  "fonts": {
+    "primary": "'Segoe UI', sans-serif",
+    "mono": "Consolas, 'Courier New', monospace",
+    "sizes": {
+      "default": "13px",
+      "title": "19px",
+      "subtitle": "11px",
+      "small": "11px"
+    }
+  }
+}

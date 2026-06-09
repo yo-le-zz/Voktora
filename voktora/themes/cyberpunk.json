@@ -1,0 +1,17 @@
+{
+    "name": "Cyberpunk",
+    "description": "Thème cyberpunk néon avec couleurs vives",
+    "colors": {
+        "background": "#0a0a0a",
+        "surface": "#1a1a1a",
+        "panel": "#2d2d2d",
+        "text": "#00ff00",
+        "text_secondary": "#00cc00",
+        "accent": "#ff00ff",
+        "primary": "#00ffff",
+        "success": "#00ff00",
+        "warning": "#ffaa00",
+        "danger": "#ff0066",
+        "border": "#333333"
+    }
+}

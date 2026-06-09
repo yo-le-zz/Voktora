@@ -1,0 +1,23 @@
+{
+  "name": "yolezz theme",
+  "description": "theme préférer !",
+  "colors": {
+    "background": "#3d3846",
+    "surface": "#3d3846",
+    "panel": "#c0bfbc",
+    "text": "#cdd6f4",
+    "text_secondary": "#deddda",
+    "accent": "#89b4fa",
+    "primary": "#89b4fa",
+    "success": "#2ec27e",
+    "warning": "#ffa348",
+    "danger": "#f66151",
+    "border": "#5e5c64"
+  },
+  "gradients": {
+    "enabled": true,
+    "start": "#cdd6f4",
+    "end": "#cdd6f4",
+    "angle": 45
+  }
+}
