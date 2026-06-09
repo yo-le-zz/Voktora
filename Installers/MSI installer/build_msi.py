@@ -6,7 +6,6 @@ Arborescence attendue :
     Voktora/
     ├── assets/                  ← icônes sources
     ├── Installers/
-    │   ├── assets/
     │   ├── MSI installer/
     │   │   ├── build_msi.py     ← CE FICHIER
     │   │   └── voktora.wxs
@@ -19,13 +18,13 @@ Arborescence attendue :
 
 Prérequis :
     pip install nuitka pyside6 cryptography
-    winget install WiXToolset.WiX  (ou via MSI sur wixtoolset.org)
+    winget install WiXToolset.WiX
+    wix extension add WixToolset.UI.wixext
 
 Usage :
     python "Installers/MSI installer/build_msi.py" [VERSION]
 """
 
-import os
 import sys
 import shutil
 import subprocess
@@ -35,12 +34,16 @@ from pathlib import Path
 ROOT    = Path(__file__).resolve().parent.parent.parent
 VERSION = sys.argv[1] if len(sys.argv) > 1 else (ROOT / "voktora" / "version.txt").read_text().strip()
 DIST    = ROOT / "dist" / "windows"
-ONEDIR  = DIST / "voktora.dist"
+
+# Nuitka nomme le dossier d'après le fichier source (main.py → main.dist),
+# indépendamment de --output-filename.
+ONEDIR  = DIST / "main.dist"
+
 WXS_DIR = ROOT / "Installers" / "MSI installer"
 
 
 def run(cmd, **kw):
-    print(f"  $ {cmd if isinstance(cmd, str) else ' '.join(cmd)}")
+    print(f"  $ {' '.join(str(c) for c in cmd)}")
     subprocess.run(cmd, check=True, **kw)
 
 
@@ -60,67 +63,39 @@ def main():
         "--standalone",
         "--remove-output",
         "--enable-plugin=pyside6",
-        "--assume-yes-for-downloads",          # CI : accepte auto Dependency Walker etc.
-        f"--windows-icon-from-ico={str(ROOT / 'assets' / 'Voktora.ico')}",
+        "--assume-yes-for-downloads",           # CI : accepte Dependency Walker etc.
+        f"--windows-icon-from-ico={ROOT / 'assets' / 'Voktora.ico'}",
         "--windows-console-mode=disable",
         f"--output-dir={DIST}",
         "--output-filename=voktora",
-        str(ROOT / "voktora" / "main.py"),
+        ROOT / "voktora" / "main.py",
     ])
 
+    # Nuitka crée main.dist/ (nom du .py source).
+    # On le renomme en voktora.dist/ pour la cohérence.
+    final_onedir = DIST / "voktora.dist"
+    if ONEDIR.exists():
+        ONEDIR.rename(final_onedir)
+    ONEDIR_FINAL = final_onedir
+
     # Copier ressources dans le onedir
-    shutil.copytree(ROOT / "voktora" / "themes", ONEDIR / "themes", dirs_exist_ok=True)
-    shutil.copytree(ROOT / "assets",             ONEDIR / "assets",  dirs_exist_ok=True)
-    shutil.copy(ROOT / "voktora" / "version.txt", ONEDIR / "version.txt")
+    shutil.copytree(ROOT / "voktora" / "themes", ONEDIR_FINAL / "themes", dirs_exist_ok=True)
+    shutil.copytree(ROOT / "assets",             ONEDIR_FINAL / "assets",  dirs_exist_ok=True)
+    shutil.copy(ROOT / "voktora" / "version.txt", ONEDIR_FINAL / "version.txt")
 
-    # ── 3. Harvest des fichiers pour WiX ──────────────────────────────────────
-    print("\n>>> Génération voktora_files.wxs (wix harvest)...")
-    harvest_out = WXS_DIR / "voktora_files.wxs"
-    try:
-        run([
-            "wix", "harvest", "directory",
-            str(ONEDIR),
-            "-cg", "VoktoraFiles",
-            "-dr", "VOKTORA_DIR",
-            "-var", "var.SourceDir",
-            "-gg", "-scom", "-sreg",
-            "-o", str(harvest_out),
-        ])
-    except FileNotFoundError:
-        # Fallback heat.exe (WiX 3.x)
-        run([
-            "heat.exe", "dir", str(ONEDIR),
-            "-cg", "VoktoraFiles",
-            "-dr", "VOKTORA_DIR",
-            "-var", "var.SourceDir",
-            "-gg", "-scom", "-sreg",
-            "-o", str(harvest_out),
-        ])
-
-    # ── 4. Build MSI ──────────────────────────────────────────────────────────
+    # ── 3. Build MSI (WiX 4 — HarvestDirectory dans le .wxs) ─────────────────
+    # Pas de `wix harvest` : WiX 4 utilise HarvestDirectory directement dans
+    # voktora.wxs, piloté par la variable SourceDir.
     print("\n>>> Build MSI (wix build)...")
     msi_out = DIST / f"Voktora_{VERSION}_x64.msi"
-    try:
-        run([
-            "wix", "build",
-            str(WXS_DIR / "voktora.wxs"),
-            "-d", f"VERSION={VERSION}",
-            "-d", f"SourceDir={ONEDIR}",
-            "-ext", "WixToolset.UI.wixext",
-            "-o", str(msi_out),
-        ])
-    except FileNotFoundError:
-        # Fallback WiX 3.x candle + light
-        wixobj = DIST / "voktora.wixobj"
-        run(["candle.exe",
-             f"-dVERSION={VERSION}",
-             f"-dSourceDir={ONEDIR}",
-             str(WXS_DIR / "voktora.wxs"),
-             str(harvest_out),
-             "-o", str(wixobj)])
-        run(["light.exe", str(wixobj),
-             "-ext", "WixUIExtension",
-             "-o", str(msi_out)])
+    run([
+        "wix", "build",
+        str(WXS_DIR / "voktora.wxs"),
+        "-d", f"VERSION={VERSION}",
+        "-d", f"SourceDir={ONEDIR_FINAL}",
+        "-ext", "WixToolset.UI.wixext",
+        "-o", str(msi_out),
+    ])
 
     print(f"\n=== Succès ===")
     print(f"MSI : {msi_out}")
