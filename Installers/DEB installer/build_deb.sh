@@ -15,7 +15,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(dirname "$SCRIPT_DIR")"
+ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 VERSION="${1:-$(cat "$ROOT/voktora/version.txt" | tr -d '[:space:]')}"
 ARCH="amd64"
 PKG_NAME="voktora"
