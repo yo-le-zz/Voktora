@@ -87,9 +87,11 @@ jobs:
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          $env:DOTNET_NOLOGO="true"
-          dotnet tool install --global wix --version 4.0.5
-          wix extension add WixToolset.UI.wixext
+          $env:DOTNET_NOLOGO = "true"
+          dotnet tool install --global wix --version 4.0.6
+          # --global installe l'extension dans le store global de l'outil,
+          # accessible depuis n'importe quel répertoire de travail.
+          wix extension add --global WixToolset.UI.wixext/4.0.6
 
       - name: Build Windows (.msi)
         if: matrix.platform == 'windows'
