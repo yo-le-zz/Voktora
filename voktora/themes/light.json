@@ -1,0 +1,32 @@
+{
+  "name": "Light",
+  "description": "Thème clair pour Meridian",
+  "colors": {
+    "background": "#ffffff",
+    "surface": "#f8f9fa",
+    "surface_variant": "#ffffff",
+    "text_primary": "#212529",
+    "text_secondary": "#495057",
+    "text_muted": "#6c757d",
+    "accent": "#0969da",
+    "accent_hover": "#2c5cc5",
+    "accent_pressed": "#0860ca",
+    "success": "#28a745",
+    "warning": "#ffc107",
+    "error": "#dc3545",
+    "border": "#dee2e6",
+    "separator": "#dee2e6",
+    "github": "#f6f8fa",
+    "github_hover": "#e9ecef"
+  },
+  "fonts": {
+    "primary": "'Segoe UI', sans-serif",
+    "mono": "Consolas, 'Courier New', monospace",
+    "sizes": {
+      "default": "13px",
+      "title": "19px",
+      "subtitle": "11px",
+      "small": "11px"
+    }
+  }
+}

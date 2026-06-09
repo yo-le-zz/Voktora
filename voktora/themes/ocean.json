@@ -1,0 +1,17 @@
+{
+    "name": "Ocean",
+    "description": "Thème océanique apaisant avec nuances de bleu",
+    "colors": {
+        "background": "#001e3c",
+        "surface": "#0d2847",
+        "panel": "#1a3a52",
+        "text": "#e0f2fe",
+        "text_secondary": "#b3e5fc",
+        "accent": "#00acc1",
+        "primary": "#03a9f4",
+        "success": "#4caf50",
+        "warning": "#ff9800",
+        "danger": "#f44336",
+        "border": "#2c5282"
+    }
+}

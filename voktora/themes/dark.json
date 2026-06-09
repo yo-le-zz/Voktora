@@ -1,0 +1,32 @@
+{
+  "name": "Dark",
+  "description": "Thème sombre alternatif",
+  "colors": {
+    "background": "#0a0a0a",
+    "surface": "#141414",
+    "surface_variant": "#000000",
+    "text_primary": "#ffffff",
+    "text_secondary": "#cccccc",
+    "text_muted": "#888888",
+    "accent": "#58a6ff",
+    "accent_hover": "#79b8ff",
+    "accent_pressed": "#4c94ff",
+    "success": "#4ade80",
+    "warning": "#ffab00",
+    "error": "#ff6b6b",
+    "border": "#2a2a2a",
+    "separator": "#2a2a2a",
+    "github": "#161b22",
+    "github_hover": "#21262d"
+  },
+  "fonts": {
+    "primary": "'Segoe UI', sans-serif",
+    "mono": "Consolas, 'Courier New', monospace",
+    "sizes": {
+      "default": "13px",
+      "title": "19px",
+      "subtitle": "11px",
+      "small": "11px"
+    }
+  }
+}

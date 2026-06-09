@@ -1,0 +1,17 @@
+{
+    "name": "Sunset",
+    "description": "Thème sunset chaud avec tons orangés",
+    "colors": {
+        "background": "#2d1b69",
+        "surface": "#3d2f6f",
+        "panel": "#4a3f7a",
+        "text": "#fff5e1",
+        "text_secondary": "#ffe0b2",
+        "accent": "#ff6b6b",
+        "primary": "#ff9f40",
+        "success": "#66bb6a",
+        "warning": "#ffa726",
+        "danger": "#ef5350",
+        "border": "#5a4a8a"
+    }
+}

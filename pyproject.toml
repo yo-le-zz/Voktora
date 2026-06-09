@@ -1,0 +1,7 @@
+[project]
+name = "voktora"
+version = "1.0.0"
+description = "Voktora centralise la gestion de vos projets dans une interface unifiée et extensible."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []

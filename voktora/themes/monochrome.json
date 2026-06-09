@@ -1,0 +1,17 @@
+{
+    "name": "Monochrome",
+    "description": "Thème monochrome élégant en nuances de gris",
+    "colors": {
+        "background": "#000000",
+        "surface": "#1a1a1a",
+        "panel": "#2d2d2d",
+        "text": "#ffffff",
+        "text_secondary": "#cccccc",
+        "accent": "#888888",
+        "primary": "#aaaaaa",
+        "success": "#66bb6a",
+        "warning": "#ffa726",
+        "danger": "#ef5350",
+        "border": "#404040"
+    }
+}
