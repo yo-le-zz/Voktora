@@ -42,7 +42,7 @@ def main():
         "--standalone",
         "--remove-output",
         "--enable-plugin=pyside6",
-        f"--windows-icon-from-ico={ROOT / 'assets' / 'Voktora.ico'}",
+        f"--windows-icon-from-ico={str(ROOT / 'assets' / 'Voktora.ico')}",
         "--windows-console-mode=disable",
         f"--output-dir={DIST}",
         "--output-filename=voktora",
