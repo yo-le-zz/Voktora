@@ -60,6 +60,7 @@ def main():
         "--standalone",
         "--remove-output",
         "--enable-plugin=pyside6",
+        "--assume-yes-for-downloads",          # CI : accepte auto Dependency Walker etc.
         f"--windows-icon-from-ico={str(ROOT / 'assets' / 'Voktora.ico')}",
         "--windows-console-mode=disable",
         f"--output-dir={DIST}",
