@@ -57,7 +57,7 @@ jobs:
 
       - name: Écrire version.txt
         shell: bash
-        run: echo "${{ github.event.pull_request.title }}" > src/version.txt
+        run: echo "${{ github.event.pull_request.title }}" > voktora/version.txt
 
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
