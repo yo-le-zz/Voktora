@@ -26,11 +26,18 @@ Usage :
 """
 
 import sys
+import io
 import uuid
 import shutil
 import subprocess
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
+# Force UTF-8 sur stdout/stderr (Windows utilise cp1252 par defaut)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # Ce fichier est dans  Voktora/Installers/MSI installer/
 ROOT    = Path(__file__).resolve().parent.parent.parent
@@ -120,7 +127,7 @@ def generate_files_wxs(onedir: Path, out: Path) -> None:
     ET.indent(tree, space="  ")
     out.write_bytes(b'<?xml version="1.0" encoding="UTF-8"?>\n' +
                     ET.tostring(wix_el, encoding="unicode").encode("utf-8"))
-    print(f"    {file_counter} fichiers indexés → {out}")
+    print(f"    {file_counter} fichiers indexes -> {out}")
 
 
 def main():
