@@ -65,7 +65,7 @@ jobs:
       - name: Installer dependances Python
         run: |
           pip install uv
-          uv pip install --system nuitka pyside6 cryptography
+          pip install nuitka pyside6 cryptography
 
       # -- Linux --------------------------------------------------------------
       - name: Dependances systeme Linux
