@@ -26,7 +26,6 @@ if hasattr(sys.stderr, "reconfigure"):
 ROOT    = Path(__file__).resolve().parent.parent.parent
 VERSION = sys.argv[1] if len(sys.argv) > 1 else (ROOT / "voktora" / "version.txt").read_text().strip()
 DIST    = ROOT / "dist" / "windows"
-ONEDIR  = DIST / "main.dist"
 WXS_DIR = ROOT / "Installers" / "MSI installer"
 
 
@@ -35,27 +34,40 @@ def run(cmd, **kw):
     subprocess.run(cmd, check=True, **kw)
 
 
+def find_nuitka_onedir() -> Path:
+    """
+    Nuitka cree un dossier  <output-filename>.dist  ou  <source>.dist
+    selon la version. On cherche tous les candidats et on prend le plus gros.
+    """
+    candidates = list(DIST.glob("*.dist"))
+    if not candidates:
+        raise FileNotFoundError(
+            f"Aucun dossier *.dist trouve dans {DIST}\n"
+            f"Contenu : {list(DIST.iterdir())}"
+        )
+    # Prendre le dossier avec le plus de fichiers (= le vrai onedir)
+    best = max(candidates, key=lambda p: sum(1 for _ in p.rglob("*") if _.is_file()))
+    total = sum(1 for _ in best.rglob("*") if _.is_file())
+    print(f"    onedir detecte : {best.name}  ({total} fichiers)")
+    return best
+
+
 def generate_files_wxs(onedir: Path, out: Path) -> None:
     """
     Genere voktora_files.wxs — fichier WiX source autonome (racine <Wix>).
     Passe directement a  wix build  en complement de voktora.wxs.
-    NE doit PAS etre inclus via <?include ?>.
 
     Structure :
       <Wix>
         <Fragment>
           <DirectoryRef Id="VOKTORA_DIR">
             <Directory Id="dir_assets" Name="assets"/>
-            <Directory Id="dir_themes" Name="themes">
-              ...
-            </Directory>
+            <Directory Id="dir_themes" Name="themes">...</Directory>
           </DirectoryRef>
         </Fragment>
         <Fragment>
           <ComponentGroup Id="VoktoraFiles">
-            <Component Id="c00001" Guid="..." Directory="VOKTORA_DIR">
-              <File Id="f00001" Source="..." Name="..." KeyPath="yes"/>
-            </Component>
+            <Component ...><File .../></Component>
             ...
           </ComponentGroup>
         </Fragment>
@@ -68,7 +80,7 @@ def generate_files_wxs(onedir: Path, out: Path) -> None:
 
     wix_el = ET.Element(f"{{{WIX}}}Wix")
 
-    # -- Fragment 1 : arborescence des sous-repertoires via DirectoryRef ------
+    # -- Fragment 1 : sous-repertoires via DirectoryRef -----------------------
     frag_dirs = ET.SubElement(wix_el, f"{{{WIX}}}Fragment")
     dir_ref   = ET.SubElement(frag_dirs, f"{{{WIX}}}DirectoryRef", Id="VOKTORA_DIR")
 
@@ -106,7 +118,7 @@ def generate_files_wxs(onedir: Path, out: Path) -> None:
         if not src.is_file():
             continue
         if src.name.lower() == "voktora.exe":
-            continue  # deja dans MainExecutable de voktora.wxs
+            continue  # deja dans MainExecutable
 
         ensure_dir(src.parent)
         file_counter += 1
@@ -140,12 +152,14 @@ def main():
     shutil.rmtree(DIST, ignore_errors=True)
     DIST.mkdir(parents=True)
 
+    # -- Compilation Nuitka ---------------------------------------------------
     print("\n>>> Compilation Nuitka...")
     run([
         sys.executable, "-m", "nuitka",
         "--standalone",
         "--remove-output",
         "--enable-plugin=pyside6",
+        "--include-qt-plugins=all",
         "--assume-yes-for-downloads",
         f"--windows-icon-from-ico={ROOT / 'assets' / 'Voktora.ico'}",
         "--windows-console-mode=disable",
@@ -154,20 +168,37 @@ def main():
         ROOT / "voktora" / "main.py",
     ])
 
-    onedir_final = DIST / "voktora.dist"
-    if ONEDIR.exists():
-        ONEDIR.rename(onedir_final)
+    # Detecter le dossier onedir cree par Nuitka (main.dist ou voktora.dist)
+    raw_onedir = find_nuitka_onedir()
 
+    # Renommer en voktora.dist si ce n'est pas deja le cas
+    onedir_final = DIST / "voktora.dist"
+    if raw_onedir != onedir_final:
+        raw_onedir.rename(onedir_final)
+        print(f"    renomme : {raw_onedir.name} -> voktora.dist")
+
+    # Verifier que le onedir n'est pas vide
+    n_files = sum(1 for _ in onedir_final.rglob("*") if _.is_file())
+    print(f"    onedir final : {onedir_final}  ({n_files} fichiers)")
+    if n_files < 50:
+        raise RuntimeError(
+            f"Le onedir semble incomplet ({n_files} fichiers). "
+            "Verifiez la compilation Nuitka."
+        )
+
+    # Copier ressources
     shutil.copytree(ROOT / "voktora" / "themes", onedir_final / "themes", dirs_exist_ok=True)
     shutil.copytree(ROOT / "assets",             onedir_final / "assets",  dirs_exist_ok=True)
     shutil.copy(ROOT / "voktora" / "version.txt", onedir_final / "version.txt")
 
+    n_final = sum(1 for _ in onedir_final.rglob("*") if _.is_file())
+    print(f"    apres copie ressources : {n_final} fichiers")
+
+    # -- Generer voktora_files.wxs --------------------------------------------
     files_wxs = WXS_DIR / "voktora_files.wxs"
     generate_files_wxs(onedir_final, files_wxs)
 
-    # Les deux .wxs sont passes a wix build — voktora_files.wxs est un
-    # fichier source autonome (<Wix>), PAS inclus via <?include ?>.
-    # voktora.wxs ne doit donc PAS contenir <?include voktora_files.wxs ?>.
+    # -- Build MSI ------------------------------------------------------------
     print("\n>>> Build MSI (wix build)...")
     msi_out = DIST / f"Voktora_{VERSION}_x64.msi"
     run([
@@ -180,9 +211,13 @@ def main():
         "-o", str(msi_out),
     ])
 
+    size_mb = msi_out.stat().st_size / 1_048_576
     print(f"\n=== Succes ===")
-    print(f"MSI : {msi_out}")
-    print(f"Taille : {msi_out.stat().st_size / 1_048_576:.1f} MB")
+    print(f"MSI    : {msi_out}")
+    print(f"Taille : {size_mb:.1f} MB")
+    if size_mb < 50:
+        print(f"AVERTISSEMENT : MSI anormalement petit ({size_mb:.1f} MB) — "
+              "les DLLs sont peut-etre manquantes.")
 
 
 if __name__ == "__main__":

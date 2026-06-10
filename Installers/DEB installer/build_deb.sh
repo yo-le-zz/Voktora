@@ -54,6 +54,7 @@ python -m nuitka \
   --standalone \
   --remove-output \
   --enable-plugin=pyside6 \
+  --include-qt-plugins=all \
   --disable-console \
   --linux-icon="$ROOT/assets/Voktora.png" \
   --output-dir="$DIST_DIR/nuitka_out" \
