@@ -4,7 +4,10 @@
   WiX Toolset 4.x
 
   Ce fichier est dans :  Voktora/Installers/MSI installer/voktora.wxs
-  voktora_files.wxs est genere dans le meme dossier par build_msi.py.
+
+  voktora_files.wxs est genere par build_msi.py et passe directement
+  a  wix build  comme second fichier source — il ne doit PAS etre inclus
+  via  <?include ?>.
 
   Variables :
     VERSION   - ex. 1.0.0
@@ -61,14 +64,11 @@
         </Component>
 
         <!--
-          Inclusion du fichier genere par build_msi.py.
-          voktora_files.wxs contient :
-            - les sous-repertoires (Directory) enfants de VOKTORA_DIR
-            - le ComponentGroup "VoktoraFiles" avec tous les fichiers DLL/Qt
-          Il est inclus ICI, a l'interieur de <Directory Id="VOKTORA_DIR">,
-          pour que ses elements <Directory> soient des enfants directs de ce noeud.
+          Les sous-repertoires (DLLs Qt, themes, assets...) sont declares
+          dans voktora_files.wxs via <DirectoryRef Id="VOKTORA_DIR">.
+          Ce fichier est passe directement a wix build comme second argument
+          — pas d'include ici.
         -->
-        <?include voktora_files.wxs ?>
 
       </Directory>
     </StandardDirectory>
