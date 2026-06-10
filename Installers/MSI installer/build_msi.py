@@ -159,7 +159,7 @@ def main():
         "--standalone",
         "--remove-output",
         "--enable-plugin=pyside6",
-        "--include-qt-plugins=all",
+        "--include-qt-plugins=iconengines,imageformats,platforms,styles,tls",
         "--assume-yes-for-downloads",
         f"--windows-icon-from-ico={ROOT / 'assets' / 'Voktora.ico'}",
         "--windows-console-mode=disable",
