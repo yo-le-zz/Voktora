@@ -7,6 +7,7 @@ Version : 1.1.2
 from __future__ import annotations
 
 import html
+import json
 import sys
 import threading
 from pathlib import Path
@@ -2330,6 +2331,9 @@ class MainWindow(QMainWindow):
         act_new_int.triggered.connect(lambda: self.act_create("intent"))
         act_import   = QAction("📂 Importer depuis ZIP...", self)
         act_import.triggered.connect(self.act_import_zip)
+        act_import_cfg = QAction("🔄 Importer config Meridian / Voktora...", self)
+        act_import_cfg.setToolTip("Fusionne un config.json d'une ancienne version Meridian ou Voktora")
+        act_import_cfg.triggered.connect(self.act_import_meridian_config)
         act_export   = QAction("📤 Exporter tout en ZIP...", self)
         act_export.triggered.connect(self.act_export_all)
         act_refresh  = QAction("↻ Actualiser", self)
@@ -2341,6 +2345,7 @@ class MainWindow(QMainWindow):
         menu_file.addAction(act_new_int)
         menu_file.addSeparator()
         menu_file.addAction(act_import)
+        menu_file.addAction(act_import_cfg)
         menu_file.addAction(act_export)
         menu_file.addSeparator()
         menu_file.addAction(act_refresh)
@@ -2518,20 +2523,34 @@ class MainWindow(QMainWindow):
     # ── SIDEBAR ──────────────────────────────────
 
     def _build_sidebar_header(self) -> QWidget:
-        """Sidebar complète : titre + GitHub + disque (haut compact) + stats (bas)."""
+        """
+        Sidebar avec QSplitter vertical interne :
+          zone haute = titre + GitHub + disque
+          zone basse = stats (redimensionnable en hauteur)
+        """
         sb = QWidget()
         sb.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-        outer = QVBoxLayout(sb)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
+        root_v = QVBoxLayout(sb)
+        root_v.setContentsMargins(0, 0, 0, 0)
+        root_v.setSpacing(0)
 
-        # ── ZONE HAUTE (contenu fixe, compact) ────────────────────────────────
+        self._sidebar_splitter = QSplitter(Qt.Vertical)
+        self._sidebar_splitter.setHandleWidth(5)
+        self._sidebar_splitter.setChildrenCollapsible(False)
+        self._sidebar_splitter.setStyleSheet(
+            "QSplitter::handle:vertical {"
+            "  background:#313244; border-top:1px solid #45475a; height:5px;"
+            "}"
+            "QSplitter::handle:vertical:hover { background:#89b4fa; }"
+        )
+
+        # ── Zone haute ────────────────────────────────────────────────────────
         top = QWidget()
+        top.setObjectName("sidebar")
         v = QVBoxLayout(top)
         v.setContentsMargins(12, 14, 12, 10)
         v.setSpacing(4)
 
-        # Titre
         lbl_t = QLabel("✦  Voktora")
         lbl_t.setObjectName("appTitle")
         v.addWidget(lbl_t)
@@ -2544,7 +2563,6 @@ class MainWindow(QMainWindow):
         v.addWidget(_make_sep())
         v.addSpacing(2)
 
-        # GitHub card (compacte)
         self._github_card = self._build_github_account_card()
         v.addWidget(self._github_card)
 
@@ -2552,7 +2570,6 @@ class MainWindow(QMainWindow):
         v.addWidget(_make_sep())
         v.addSpacing(2)
 
-        # Disque
         lbl_d = QLabel("DISQUE")
         lbl_d.setObjectName("sectionLbl")
         v.addWidget(lbl_d)
@@ -2566,20 +2583,14 @@ class MainWindow(QMainWindow):
         btn_ref.setObjectName("subtle")
         btn_ref.clicked.connect(self._refresh_all)
         v.addWidget(btn_ref)
+        v.addStretch()
 
-        outer.addWidget(top)
-
-        # ── ZONE BAS (stats, pousse vers le bas) ──────────────────────────────
-        outer.addStretch(1)
-
+        # ── Zone basse (stats redimensionnable) ───────────────────────────────
         stats_frame = QFrame()
         stats_frame.setObjectName("sidebarStats")
+        stats_frame.setMinimumHeight(40)
         stats_frame.setStyleSheet(
-            "QFrame#sidebarStats {"
-            "  background:#11111b;"
-            "  border-top:1px solid #313244;"
-            "  border-radius:0px;"
-            "}"
+            "QFrame#sidebarStats { background:#11111b; border-radius:0px; }"
             "QLabel { color:#6c7086; font-size:11px; background:transparent; }"
             "QLabel[class='statVal'] { color:#a6adc8; font-weight:600; font-size:11px; }"
         )
@@ -2588,10 +2599,13 @@ class MainWindow(QMainWindow):
         sv.setSpacing(3)
 
         hdr = QLabel("STATISTIQUES")
-        hdr.setStyleSheet("color:#45475a; font-size:9px; font-weight:700; letter-spacing:1px; background:transparent;")
+        hdr.setStyleSheet(
+            "color:#45475a; font-size:9px; font-weight:700;"
+            " letter-spacing:1px; background:transparent;"
+        )
         sv.addWidget(hdr)
 
-        def _stat_row(label: str, attr: str) -> QLabel:
+        def _stat_row(label: str, attr: str) -> None:
             row = QHBoxLayout()
             row.setSpacing(4)
             lbl_k = QLabel(label)
@@ -2603,17 +2617,22 @@ class MainWindow(QMainWindow):
             row.addWidget(lbl_v)
             sv.addLayout(row)
             setattr(self, attr, lbl_v)
-            return lbl_v
 
-        _stat_row("📁 Instances",   "_stat_instances")
-        _stat_row("🎯 Intents",     "_stat_intents")
-        _stat_row("💾 Disques",     "_stat_drives")
-        _stat_row("✅ Sains",       "_stat_healthy")
-        _stat_row("⚠️  Avertiss.",   "_stat_warnings")
-        _stat_row("❌ Cassés",      "_stat_broken")
+        _stat_row("📁 Instances",  "_stat_instances")
+        _stat_row("🎯 Intents",    "_stat_intents")
+        _stat_row("💾 Disques",    "_stat_drives")
+        _stat_row("✅ Sains",      "_stat_healthy")
+        _stat_row("⚠️  Avertiss.", "_stat_warnings")
+        _stat_row("❌ Cassés",     "_stat_broken")
+        sv.addStretch()
 
-        outer.addWidget(stats_frame)
+        self._sidebar_splitter.addWidget(top)
+        self._sidebar_splitter.addWidget(stats_frame)
+        self._sidebar_splitter.setSizes([350, 150])
+        self._sidebar_splitter.setStretchFactor(0, 1)
+        self._sidebar_splitter.setStretchFactor(1, 0)
 
+        root_v.addWidget(self._sidebar_splitter)
         return sb
 
     def _refresh_sidebar_stats(self) -> None:
@@ -4108,6 +4127,144 @@ class MainWindow(QMainWindow):
             self._refresh_all()
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Impossible d'importer :\n{e}")
+
+    def act_import_meridian_config(self) -> None:
+        """
+        Importe un config.json provenant de l'ancienne version Meridian
+        (ou d'une autre instance Voktora) et fusionne les instances/intents
+        sans écraser les données existantes.
+        """
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Importer une configuration Meridian / Voktora",
+            "",
+            "Fichiers JSON (*.json);;Tous les fichiers (*)"
+        )
+        if not file_path:
+            return
+
+        # Lire et valider le JSON
+        try:
+            with open(file_path, encoding="utf-8") as f:
+                legacy_cfg = json.load(f)
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur de lecture",
+                                 f"Impossible de lire le fichier :\n{e}")
+            return
+
+        # Compter ce qu'on va importer
+        instances = legacy_cfg.get("instances", [])
+        intents   = legacy_cfg.get("intents",   [])
+        categories = legacy_cfg.get("categories", [])
+        custom_statuses = legacy_cfg.get("custom_statuses", {})
+        storage   = legacy_cfg.get("storage",   {})
+
+        if not instances and not intents:
+            QMessageBox.warning(
+                self, "Rien à importer",
+                "Le fichier ne contient ni 'instances' ni 'intents'.\n"
+                "Vérifiez qu'il s'agit bien d'un config.json Meridian / Voktora."
+            )
+            return
+
+        # Résumé de prévisualisation
+        preview_lines = []
+        if instances:
+            preview_lines.append(f"  • {len(instances)} instance(s) :")
+            for e in instances[:5]:
+                preview_lines.append(f"      - {e.get('name','?')}  [{e.get('language','?')}]  {e.get('status','')}")
+            if len(instances) > 5:
+                preview_lines.append(f"      … +{len(instances)-5} autres")
+        if intents:
+            preview_lines.append(f"  • {len(intents)} intent(s) :")
+            for e in intents[:5]:
+                preview_lines.append(f"      - {e.get('name','?')}  [{e.get('language','?')}]  {e.get('status','')}")
+            if len(intents) > 5:
+                preview_lines.append(f"      … +{len(intents)-5} autres")
+        if categories:
+            preview_lines.append(f"  • {len(categories)} catégorie(s)")
+        if custom_statuses:
+            preview_lines.append(f"  • {len(custom_statuses)} statut(s) personnalisé(s)")
+        if storage:
+            preview_lines.append(f"  • Racines : {storage.get('instances_root','?')}")
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Confirmer l'import")
+        msg.setIcon(QMessageBox.Question)
+        msg.setText(
+            f"<b>Fichier :</b> {Path(file_path).name}<br><br>"
+            f"Contenu détecté :<br>"
+            + "<br>".join(f"<code>{l}</code>" for l in preview_lines)
+            + "<br><br>Les entrées déjà présentes (même chemin) seront <b>ignorées</b>.<br>"
+              "Les nouvelles seront <b>ajoutées</b> sans rien supprimer."
+        )
+        msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+        msg.button(QMessageBox.Ok).setText("✅ Importer")
+        msg.button(QMessageBox.Cancel).setText("Annuler")
+        if msg.exec() != QMessageBox.Ok:
+            return
+
+        # Fusion dans le config courant
+        try:
+            current_cfg = core._load_config()
+
+            # Instances — déduplique par chemin
+            existing_paths = {e["path"] for e in current_cfg.get("instances", [])}
+            added_inst = 0
+            for entry in instances:
+                if entry.get("path") not in existing_paths:
+                    current_cfg.setdefault("instances", []).append(entry)
+                    existing_paths.add(entry["path"])
+                    added_inst += 1
+
+            # Intents — déduplique par chemin
+            existing_paths_i = {e["path"] for e in current_cfg.get("intents", [])}
+            added_int = 0
+            for entry in intents:
+                if entry.get("path") not in existing_paths_i:
+                    current_cfg.setdefault("intents", []).append(entry)
+                    existing_paths_i.add(entry["path"])
+                    added_int += 1
+
+            # Catégories — union
+            if categories:
+                existing_cats = set(current_cfg.get("categories", []))
+                for cat in categories:
+                    if cat not in existing_cats:
+                        current_cfg.setdefault("categories", []).append(cat)
+                        existing_cats.add(cat)
+
+            # Statuts personnalisés — merge sans écraser
+            if custom_statuses:
+                current_cfg.setdefault("custom_statuses", {}).update(
+                    {k: v for k, v in custom_statuses.items()
+                     if k not in current_cfg.get("custom_statuses", {})}
+                )
+
+            # Racines storage — uniquement si vides
+            if storage:
+                cfg_storage = current_cfg.setdefault("storage", {})
+                if not cfg_storage.get("instances_root") and storage.get("instances_root"):
+                    cfg_storage["instances_root"] = storage["instances_root"]
+                if not cfg_storage.get("intents_root") and storage.get("intents_root"):
+                    cfg_storage["intents_root"] = storage["intents_root"]
+
+            core._save_config(current_cfg)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur de fusion",
+                                 f"La fusion a échoué :\n{e}")
+            return
+
+        self._refresh_all()
+
+        QMessageBox.information(
+            self, "Import terminé",
+            f"✅ Import réussi !\n\n"
+            f"  +{added_inst} instance(s) ajoutée(s)\n"
+            f"  +{added_int} intent(s) ajouté(s)\n\n"
+            f"L'app a été rechargée."
+        )
 
     def act_export_all(self):
         """Action pour exporter tous les projets en ZIP."""
