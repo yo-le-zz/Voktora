@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Voktora — voktora.wxs
+  Voktora - voktora.wxs
   WiX Toolset 4.x
 
   Ce fichier est dans :  Voktora/Installers/MSI installer/voktora.wxs
-  voktora_files.wxs est généré dans le même dossier par build_msi.py (pur Python).
+  voktora_files.wxs est genere dans le meme dossier par build_msi.py.
 
-  Variables passées par build_msi.py :
-    VERSION   — ex. 1.0.0
-    SourceDir — chemin absolu vers dist\windows\voktora.dist\
+  Variables :
+    VERSION   - ex. 1.0.0
+    SourceDir - chemin absolu vers dist\windows\voktora.dist\
 
-  Génération :
+  Build :
     python "Installers/MSI installer/build_msi.py" [VERSION]
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
@@ -27,7 +27,7 @@
            Scope="perMachine">
 
     <SummaryInformation Keywords="Voktora Project Manager"
-                        Description="Voktora — Project Instance Manager by yolezz"
+                        Description="Voktora - Project Instance Manager by yolezz"
                         Manufacturer="yolezz"/>
 
     <Icon Id="VoktoraIcon" SourceFile="$(var.SourceDir)\assets\Voktora.ico"/>
@@ -40,7 +40,7 @@
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="VOKTORA_DIR" Name="Voktora">
 
-        <!-- Exécutable principal + raccourcis -->
+        <!-- Executable principal + raccourcis -->
         <Component Id="MainExecutable" Guid="1B2C3D4E-5F6A-7B8C-9D0E-1F2A3B4C5D6E">
           <File Id="VoktoraExe"
                 Source="$(var.SourceDir)\voktora.exe"
@@ -61,17 +61,19 @@
         </Component>
 
         <!--
-          Tous les fichiers du onedir Nuitka (DLLs, Qt plugins, themes, assets…).
-          voktora_files.wxs est généré par build_msi.py via os.walk — sans
-          dépendance à wix harvest ni heat.exe.
-          voktora.exe est exclu du fichier généré (déjà déclaré ci-dessus).
+          Inclusion du fichier genere par build_msi.py.
+          voktora_files.wxs contient :
+            - les sous-repertoires (Directory) enfants de VOKTORA_DIR
+            - le ComponentGroup "VoktoraFiles" avec tous les fichiers DLL/Qt
+          Il est inclus ICI, a l'interieur de <Directory Id="VOKTORA_DIR">,
+          pour que ses elements <Directory> soient des enfants directs de ce noeud.
         -->
         <?include voktora_files.wxs ?>
 
       </Directory>
     </StandardDirectory>
 
-    <!-- Menu Démarrer -->
+    <!-- Menu Demarrer -->
     <StandardDirectory Id="ProgramMenuFolder">
       <Directory Id="VoktoraStartMenu" Name="Voktora"/>
     </StandardDirectory>
@@ -85,7 +87,7 @@
     <ui:WixUI Id="WixUI_InstallDir"/>
     <Property Id="WIXUI_INSTALLDIR" Value="VOKTORA_DIR"/>
 
-    <!-- Upgrade propre : supprime l'ancienne version avant installation -->
+    <!-- Upgrade propre -->
     <Upgrade Id="4A8B3C1D-E5F6-7890-ABCD-EF1234567890">
       <UpgradeVersion Minimum="0.0.0" Maximum="$(var.VERSION)"
                       Property="OLDERVERSIONBEINGUPGRADED"

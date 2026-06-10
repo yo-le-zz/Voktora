@@ -2,20 +2,6 @@
 build_msi.py - Voktora Windows MSI builder
 Compile avec Nuitka (--onedir) puis empaquete en .msi via WiX Toolset 4.x
 
-Arborescence attendue :
-    Voktora/
-    +-assets/
-    +-Installers/
-    |  +-MSI installer/
-    |  |  +-build_msi.py     <- CE FICHIER
-    |  |  +-voktora.wxs
-    |  +-DEB installer/
-    |     +-build_deb.sh
-    +-voktora/
-       +-main.py
-       +-themes/
-       +-version.txt
-
 Prerequis :
     pip install nuitka pyside6 cryptography
     winget install WiXToolset.WiX
@@ -26,7 +12,6 @@ Usage :
 """
 
 import sys
-import io
 import uuid
 import shutil
 import subprocess
@@ -43,10 +28,7 @@ if hasattr(sys.stderr, "reconfigure"):
 ROOT    = Path(__file__).resolve().parent.parent.parent
 VERSION = sys.argv[1] if len(sys.argv) > 1 else (ROOT / "voktora" / "version.txt").read_text().strip()
 DIST    = ROOT / "dist" / "windows"
-
-# Nuitka nomme le dossier d'apres le fichier source (main.py -> main.dist)
-ONEDIR  = DIST / "main.dist"
-
+ONEDIR  = DIST / "main.dist"   # Nuitka nomme d'apres le .py source
 WXS_DIR = ROOT / "Installers" / "MSI installer"
 
 
@@ -57,39 +39,42 @@ def run(cmd, **kw):
 
 def generate_files_wxs(onedir: Path, out: Path) -> None:
     """
-    Genere voktora_files.wxs en parcourant le onedir avec rglob.
-    Remplace wix harvest / heat.exe.
-    voktora.exe est exclu (deja dans MainExecutable de voktora.wxs).
+    Genere voktora_files.wxs (fichier include WiX 4).
 
-    Structure produite (fichier include WiX 4) :
+    Ce fichier est inclus via  <?include voktora_files.wxs ?>  dans voktora.wxs,
+    a l'interieur d'un element <Directory Id="VOKTORA_DIR">.
+    Il NE doit PAS etre passe en argument a  wix build.
+
+    Structure produite :
       <Include>
-        <Fragment>
-          <DirectoryRef Id="VOKTORA_DIR">
-            <Directory Id="dir_foo" Name="foo"> ... </Directory>
-          </DirectoryRef>
-        </Fragment>
-        <Fragment>
-          <ComponentGroup Id="VoktoraFiles">
-            <Component ...> <File .../> </Component>
-            ...
-          </ComponentGroup>
-        </Fragment>
+        <!-- sous-repertoires directement imbriques (pas de Fragment ici) -->
+        <Directory Id="dir_assets"  Name="assets"/>
+        <Directory Id="dir_themes"  Name="themes">
+          <Directory Id="dir_themes_sub" Name="..."/>
+        </Directory>
+        ...
+        <!-- un seul ComponentGroup avec tous les fichiers -->
+        <ComponentGroup Id="VoktoraFiles">
+          <Component Id="c00001" Guid="..." Directory="VOKTORA_DIR">
+            <File Id="f00001" Source="..." Name="..." KeyPath="yes"/>
+          </Component>
+          ...
+        </ComponentGroup>
       </Include>
+
+    Les <Directory> sont des enfants directs de <Include> — WiX les interprete
+    comme enfants de l'element parent au moment de l'inclusion (VOKTORA_DIR).
     """
     print(f"\n>>> Generation {out.name} ({onedir})...")
 
     WIX = "http://wixtoolset.org/schemas/v4/wxs"
     ET.register_namespace("", WIX)
 
-    # Racine obligatoire pour un fichier include WiX 4 : <Include>
     root_el = ET.Element(f"{{{WIX}}}Include")
 
-    # -- Fragment 1 : arborescence des sous-repertoires -----------------------
-    dir_frag = ET.SubElement(root_el, f"{{{WIX}}}Fragment")
-    dir_ref  = ET.SubElement(dir_frag, f"{{{WIX}}}DirectoryRef", Id="VOKTORA_DIR")
-
-    dir_elements: dict = {onedir: dir_ref}
-    dir_ids:      dict = {}
+    # -- Arborescence des sous-repertoires ------------------------------------
+    dir_elements: dict = {}   # Path -> ET.Element  (Directory)
+    dir_ids:      dict = {}   # Path -> str Id
 
     def dir_id(p: Path) -> str:
         if p not in dir_ids:
@@ -99,31 +84,31 @@ def generate_files_wxs(onedir: Path, out: Path) -> None:
             dir_ids[p] = f"dir_{safe}"
         return dir_ids[p]
 
-    def ensure_dir(p: Path) -> None:
+    def ensure_dir(p: Path) -> ET.Element:
         if p in dir_elements:
-            return
-        ensure_dir(p.parent)
-        parent_el = dir_elements[p.parent]
+            return dir_elements[p]
+        # parent : soit root_el (enfant direct de Include = enfant de VOKTORA_DIR),
+        # soit un sous-repertoire deja cree
+        parent_el = root_el if p.parent == onedir else ensure_dir(p.parent)
         el = ET.SubElement(parent_el, f"{{{WIX}}}Directory",
                            Id=dir_id(p), Name=p.name)
         dir_elements[p] = el
+        return el
 
     for d in sorted(p for p in onedir.rglob("*") if p.is_dir()):
         ensure_dir(d)
 
-    # -- Fragment 2 : ComponentGroup avec tous les fichiers -------------------
-    file_frag = ET.SubElement(root_el, f"{{{WIX}}}Fragment")
-    cg        = ET.SubElement(file_frag, f"{{{WIX}}}ComponentGroup",
-                              Id="VoktoraFiles", Directory="VOKTORA_DIR")
+    # -- ComponentGroup avec tous les fichiers --------------------------------
+    cg = ET.SubElement(root_el, f"{{{WIX}}}ComponentGroup",
+                       Id="VoktoraFiles")
 
     file_counter = 0
     for src in sorted(onedir.rglob("*")):
         if not src.is_file():
             continue
         if src.name.lower() == "voktora.exe":
-            continue  # deja dans MainExecutable
+            continue  # deja dans MainExecutable de voktora.wxs
 
-        ensure_dir(src.parent)
         file_counter += 1
         fid  = f"f{file_counter:05d}"
         cid  = f"c{file_counter:05d}"
@@ -181,17 +166,18 @@ def main():
     shutil.copytree(ROOT / "assets",             onedir_final / "assets",  dirs_exist_ok=True)
     shutil.copy(ROOT / "voktora" / "version.txt", onedir_final / "version.txt")
 
-    # -- 3. Generer voktora_files.wxs (pur Python, sans wix harvest) ----------
+    # -- 3. Generer voktora_files.wxs (pur Python) ----------------------------
     harvest_out = WXS_DIR / "voktora_files.wxs"
     generate_files_wxs(onedir_final, harvest_out)
 
     # -- 4. Build MSI ---------------------------------------------------------
+    # IMPORTANT : on ne passe PAS voktora_files.wxs a wix build —
+    # il est inclus via <?include ?> dans voktora.wxs.
     print("\n>>> Build MSI (wix build)...")
     msi_out = DIST / f"Voktora_{VERSION}_x64.msi"
     run([
         "wix", "build",
         str(WXS_DIR / "voktora.wxs"),
-        str(harvest_out),
         "-d", f"VERSION={VERSION}",
         "-d", f"SourceDir={onedir_final}",
         "-ext", "WixToolset.UI.wixext",
