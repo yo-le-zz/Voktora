@@ -135,6 +135,18 @@ def get_app_dir() -> Path:
 
 @functools.cache
 def get_data_dir() -> Path:
+    # Sur Linux, si l'app est installée dans /opt ou /usr (non accessible en écriture),
+    # on utilise le répertoire XDG standard : ~/.local/share/voktora/
+    if IS_LINUX:
+        app_dir = get_app_dir()
+        # Installé système (/opt/*, /usr/*)  → données dans ~/.local/share/voktora
+        if str(app_dir).startswith("/opt/") or str(app_dir).startswith("/usr/"):
+            xdg_data = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+            d = xdg_data / "voktora"
+            d.mkdir(parents=True, exist_ok=True)
+            return d
+
+    # Windows ou Linux dev (dossier local) → data/ à côté de l'exe
     d = get_app_dir() / "data"
     d.mkdir(parents=True, exist_ok=True)
     return d
@@ -155,8 +167,12 @@ def get_config_path() -> Path:
 def ensure_app_dirs() -> None:
     """Crée tous les dossiers nécessaires au démarrage (Windows + Linux)."""
     dirs = [get_data_dir(), get_backups_dir()]
-    themes_dir = Path(__file__).resolve().parent / "themes"
-    dirs.append(themes_dir)
+    # Les thèmes sont dans le dossier de l'app (lecture seule sur Linux installé)
+    # On ne tente pas de les créer si c'est /opt/
+    themes_dir = get_app_dir() / "themes"
+    if not (IS_LINUX and (str(get_app_dir()).startswith("/opt/") or
+                          str(get_app_dir()).startswith("/usr/"))):
+        dirs.append(themes_dir)
     for d in dirs:
         try:
             d.mkdir(parents=True, exist_ok=True)
