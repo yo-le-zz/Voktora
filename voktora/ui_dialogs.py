@@ -1,5 +1,6 @@
 """
 ui_dialogs.py — Dialogs Voktora
+Version : 1.0.1
 Regroupe tous les dialogs : categories, statuts, config, personnalisation,
 thèmes, chiffrement, migration, master password, vault, profils, hooks,
 snapshots, dashboard, plugins.

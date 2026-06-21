@@ -1,5 +1,6 @@
 """
 ui_project_panel.py — Panneau détaillé d'un projet Voktora
+Version : 1.0.1
 Nouveau panneau centré, plein écran, avec :
   • Header : icône personnalisable, nom, badges, bouton retour
   • 5 onglets : Actions / Git / Outils / Snapshots / Profils

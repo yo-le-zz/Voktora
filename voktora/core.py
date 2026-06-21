@@ -1,7 +1,8 @@
 """
 Voktora — Project Instance Manager
+Voktora v1.0.1
 core.py : Logique métier — config, instances, intents, Git, chiffrement AES-256 (Fernet+PBKDF2), auth GitHub
-Version : 1.2.0  —  Windows + Linux compatible
+Version : 1.0.1  —  Windows + Linux compatible
 """
 
 import os
@@ -31,7 +32,7 @@ from dataclasses import dataclass, field
 # ──────────────────────────────────────────────
 
 APP_NAME              = "Voktora"
-APP_VERSION           = "1.0.0"
+APP_VERSION           = "1.0.1"
 CONTAINER_NAME        = "Voktora"
 INSTANCES_DIR         = "Instances"
 INTENTS_DIR           = "Intents"
@@ -243,7 +244,7 @@ def _migrate_config(cfg: dict) -> tuple:
         cfg["_schema_version"] = 6
 
     if cfg.get("_schema_version", 0) < 7:
-        # v1.3.0 : support GitHub App
+        # v1.0.1 : support GitHub App
         app_cfg = cfg.setdefault("app_config", {})
         if "auth_method" not in app_cfg:
             # Si un client_id OAuth est déjà configuré → on reste en oauth
@@ -265,7 +266,7 @@ def _migrate_config(cfg: dict) -> tuple:
         cfg["_schema_version"] = 7
 
     if cfg.get("_schema_version", 0) < 8:
-        # v1.2.2: vault support
+        # v1.0.1 : vault support
         cfg.setdefault("vault", {})
         cfg["_schema_version"] = 8
 
@@ -287,7 +288,7 @@ def _migrate_config(cfg: dict) -> tuple:
         "note_auto_save_interval": 30,
         "window_geometry": None,
         "splitter_states": {},
-        # v1.2.0 nouveaux champs
+        # v1.0.1 : nouveaux champs
         "hide_github_not_connected": False,
         "quick_apps": [],          # [{"name": "VS Code", "cmd": "code", "icon": "💙"}, ...]
         "cache_mode": "memory",    # "memory" ou "disk"
@@ -1635,16 +1636,85 @@ def get_instance_token(path: Path, password: str = "") -> str:
     return raw
 
 
-def vault_store(path: Path, token: str) -> None:
+def vault_session_store(path: Path, token: str) -> None:
+    """Stocke un token déchiffré en mémoire (session uniquement, non persisté)."""
     _SESSION_VAULT[str(path)] = token
 
 
-def vault_clear(path: Path) -> None:
+def vault_session_clear(path: Path) -> None:
+    """Supprime un token du cache de session."""
     _SESSION_VAULT.pop(str(path), None)
 
 
 # ──────────────────────────────────────────────
-# TRANSFERT Instance ↔ Intent (v1.2.0)
+# MISES À JOUR — Vérification GitHub Releases
+# ──────────────────────────────────────────────
+
+def _version_gt(v1: str, v2: str) -> bool:
+    """True si v1 > v2 (comparaison sémantique X.Y.Z)."""
+    def _parse(v: str) -> tuple:
+        try:
+            return tuple(int(x) for x in v.strip().lstrip("v").split("."))
+        except ValueError:
+            return (0,)
+    return _parse(v1) > _parse(v2)
+
+
+def check_for_update() -> tuple[bool, str, str]:
+    """
+    Interroge l'API GitHub Releases pour vérifier si une nouvelle version est disponible.
+    Retourne (update_available: bool, latest_version: str, release_url: str).
+    Ne lève jamais d'exception — toujours sûr à appeler depuis un thread.
+    """
+    try:
+        req = urllib.request.Request(
+            "https://api.github.com/repos/yo-le-zz/Voktora/releases/latest",
+            headers={
+                "User-Agent": f"{APP_NAME}/{APP_VERSION}",
+                "Accept":     "application/vnd.github+json",
+            }
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        latest  = data.get("tag_name", "").lstrip("v").strip()
+        rel_url = data.get("html_url",
+                           "https://github.com/yo-le-zz/Voktora/releases/latest")
+        if latest and _version_gt(latest, APP_VERSION):
+            return True, latest, rel_url
+        return False, latest, rel_url
+    except Exception:
+        return False, "", ""
+
+
+# ──────────────────────────────────────────────
+# ORDRE DES PROJETS — persistance drag & drop / tri
+# ──────────────────────────────────────────────
+
+def reorder_entries(kind: str, ordered_paths: list[str]) -> None:
+    """
+    Persiste l'ordre des instances ou intents après un glisser-déposer.
+    kind        : "instance" ou "intent"
+    ordered_paths : chemins dans le nouvel ordre.
+    Les entrées absentes de la liste sont ajoutées à la fin (sécurité).
+    """
+    key = f"{kind}s"          # "instances" | "intents"
+    cfg = _load_config()
+    entries       = cfg.get(key, [])
+    path_to_entry = {e["path"]: e for e in entries}
+    reordered: list[dict] = []
+    for p in ordered_paths:
+        if p in path_to_entry:
+            reordered.append(path_to_entry[p])
+    seen = set(ordered_paths)
+    for e in entries:
+        if e["path"] not in seen:
+            reordered.append(e)
+    cfg[key] = reordered
+    _save_config(cfg)
+
+
+# ──────────────────────────────────────────────
+# TRANSFERT Instance ↔ Intent (v1.0.1)
 # ──────────────────────────────────────────────
 
 def transfer_project(path: Path, from_kind: str, to_kind: str) -> Path:
@@ -1725,7 +1795,7 @@ def transfer_project(path: Path, from_kind: str, to_kind: str) -> Path:
 
 
 # ──────────────────────────────────────────────
-# CLONE DANS UN PROJET EXISTANT (v1.2.0)
+# CLONE DANS UN PROJET EXISTANT (v1.0.1)
 # ──────────────────────────────────────────────
 
 def clone_into_existing(project_path: Path, repo_url: str,

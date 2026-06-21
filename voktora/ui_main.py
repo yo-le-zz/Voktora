@@ -1,7 +1,8 @@
 """
 Voktora — Project Instance Manager
-window.py : Interface graphique PySide6
-Version : 1.1.2
+Voktora v1.0.1
+ui_main.py : Interface graphique PySide6
+Version : 1.0.1
 """
 
 from __future__ import annotations
@@ -377,6 +378,15 @@ class DeleteWorker(QThread):
             self.finished.emit(False, str(e))
 
 
+class UpdateCheckWorker(QThread):
+    """Vérifie en arrière-plan si une mise à jour Voktora est disponible."""
+    result = Signal(bool, str, str)   # available, latest_version, url
+
+    def run(self):
+        available, latest, url = core.check_for_update()
+        self.result.emit(available, latest, url)
+
+
 class OAuthPollWorker(QThread):
     """
     Worker qui sonde l'API GitHub toutes les N secondes jusqu'à obtenir le token.
@@ -413,7 +423,7 @@ def _make_sep() -> QFrame:
 
 
 # ══════════════════════════════════════════════════════
-#  DIALOG — CONNEXION GITHUB OAUTH (Device Flow) — v1.0.8
+#  DIALOG — CONNEXION GITHUB OAUTH (Device Flow) — v1.0.1
 # ══════════════════════════════════════════════════════
 
 class GitHubLoginDialog(QDialog):
@@ -1329,7 +1339,7 @@ class CreateDialog(QDialog):
 
 
 # ══════════════════════════════════════════════════════
-#  DIALOG — EMPLACEMENT DE STOCKAGE (v1.0.7)
+#  DIALOG — EMPLACEMENT DE STOCKAGE (v1.0.1)
 # ══════════════════════════════════════════════════════
 
 class StorageDialog(QDialog):
@@ -1438,7 +1448,7 @@ class StorageDialog(QDialog):
 
 
 # ══════════════════════════════════════════════════════
-#  DIALOG — DIAGNOSTIC / RÉPARATION (v1.0.7)
+#  DIALOG — DIAGNOSTIC / RÉPARATION (v1.0.1)
 # ══════════════════════════════════════════════════════
 
 class DiagnosticDialog(QDialog):
@@ -2159,12 +2169,16 @@ class MainWindow(QMainWindow):
         # Tente de restaurer la session GitHub OAuth au démarrage
         self._restore_github_session()
 
-        # Contrôle de santé au démarrage (v1.0.7)
+        # Contrôle de santé au démarrage (v1.0.1)
         self._run_startup_health_check()
         
-        # Afficher les résumés de migration (v1.0.9)
+        # Afficher les résumés de migration (v1.0.1)
         self._show_migration_summary()
         self._reload_note_autosave_timer()
+
+        # Vérification des mises à jour au démarrage (v1.0.1)
+        self._update_worker: UpdateCheckWorker | None = None
+        QTimer.singleShot(3000, self._run_update_check)
 
     # ──────────────────────────────────────────────
     #  SESSION GITHUB — Restauration au démarrage
@@ -2205,7 +2219,67 @@ class MainWindow(QMainWindow):
         self._update_github_account_card()
 
     # ──────────────────────────────────────────────
-    #  CONTRÔLE DE SANTÉ AU DÉMARRAGE (v1.0.7)
+    #  MISES À JOUR — Vérification au démarrage
+    # ──────────────────────────────────────────────
+
+    def _build_update_banner(self) -> QFrame:
+        """Construit la bannière de notification de mise à jour (cachée par défaut)."""
+        banner = QFrame()
+        banner.setObjectName("updateBanner")
+        banner.setStyleSheet("""
+            QFrame#updateBanner {
+                background-color: #1e3a5f;
+                border-bottom: 1px solid #89b4fa;
+            }
+        """)
+        h = QHBoxLayout(banner)
+        h.setContentsMargins(14, 6, 10, 6)
+        h.setSpacing(10)
+
+        self._update_lbl = QLabel()
+        self._update_lbl.setStyleSheet("color: #cdd6f4; font-size: 12px;")
+        h.addWidget(self._update_lbl)
+        h.addStretch()
+
+        self._btn_update_dl = QPushButton("⬇  Télécharger")
+        self._btn_update_dl.setStyleSheet(
+            "background:#89b4fa; color:#1e1e2e; font-weight:700;"
+            " border-radius:5px; padding:4px 14px; font-size:12px;"
+        )
+        h.addWidget(self._btn_update_dl)
+
+        btn_ignore = QToolButton()
+        btn_ignore.setText("✕")
+        btn_ignore.setToolTip("Ignorer cette mise à jour")
+        btn_ignore.setStyleSheet(
+            "color:#6c7086; background:transparent; border:none;"
+            " font-size:14px; padding:2px 6px;"
+        )
+        btn_ignore.clicked.connect(banner.hide)
+        h.addWidget(btn_ignore)
+
+        return banner
+
+    def _run_update_check(self) -> None:
+        """Lance la vérification des mises à jour en arrière-plan."""
+        self._update_worker = UpdateCheckWorker()
+        self._update_worker.result.connect(self._on_update_result)
+        self._update_worker.start()
+
+    def _on_update_result(self, available: bool, latest: str, url: str) -> None:
+        self._update_worker = None
+        if available:
+            self._update_lbl.setText(
+                f"🚀  Mise à jour disponible : <b>v{latest}</b>"
+                f"  (version actuelle : v{core.APP_VERSION})"
+            )
+            self._btn_update_dl.clicked.connect(
+                lambda: core.open_url_in_browser(url)
+            )
+            self._update_banner.show()
+
+    # ──────────────────────────────────────────────
+    #  CONTRÔLE DE SANTÉ AU DÉMARRAGE (v1.0.1)
     # ──────────────────────────────────────────────
 
     def _run_startup_health_check(self) -> None:
@@ -2229,7 +2303,7 @@ class MainWindow(QMainWindow):
             return
         
         # Créer le message de migration
-        title = "📋 Migration de configuration v1.0.9"
+        title = "📋 Migration de configuration v1.0.1"
         message = "<b>Les anciens fichiers de configuration ont été migrés automatiquement :</b><br><br>"
         message += "<ul>"
         for migration in migrations:
@@ -2475,9 +2549,23 @@ class MainWindow(QMainWindow):
     def _build_ui(self):
         root = QWidget()
         self.setCentralWidget(root)
-        h = QHBoxLayout(root)
+
+        # Layout vertical : bannière (haut, cachée) + contenu principal (bas)
+        root_v = QVBoxLayout(root)
+        root_v.setContentsMargins(0, 0, 0, 0)
+        root_v.setSpacing(0)
+
+        # ── Bannière mise à jour (cachée au démarrage) ────────────────────
+        self._update_banner = self._build_update_banner()
+        self._update_banner.hide()
+        root_v.addWidget(self._update_banner)
+
+        # ── Contenu principal ─────────────────────────────────────────────
+        _content_w = QWidget()
+        h = QHBoxLayout(_content_w)
         h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(0)
+        root_v.addWidget(_content_w, stretch=1)
 
         # ── Splitter horizontal : sidebar gauche + contenu droit ──
         self._main_splitter = QSplitter(Qt.Horizontal)
@@ -2934,7 +3022,7 @@ class MainWindow(QMainWindow):
         self.lbl_branch_info.setObjectName("repoLine")
         gg.addWidget(self.lbl_branch_info)
 
-        # Indicateur token actif (v1.0.8)
+        # Indicateur token actif (v1.0.1)
         self.lbl_token_active = QLabel("")
         self.lbl_token_active.setObjectName("sectionLbl")
         self.lbl_token_active.setStyleSheet("color: #6c7086; font-size: 11px;")
@@ -3409,7 +3497,7 @@ class MainWindow(QMainWindow):
                 "🔐  Token PAT protégé par mot de passe (Whirlpool)" if protected else ""
             )
 
-            # Affiche la source du token qui sera utilisé (v1.0.8)
+            # Affiche la source du token qui sera utilisé (v1.0.1)
             pat_raw = core.get_instance_token_raw(self._sel_path)
             session = core.get_github_session()
             if pat_raw:
@@ -3476,7 +3564,7 @@ class MainWindow(QMainWindow):
         self.lbl_path.setText(str(self._sel_path))
 
     # ══════════════════════════════════════════════
-    #  ACTIONS — GitHub OAuth (v1.0.8)
+    #  ACTIONS — GitHub OAuth (v1.0.1)
     # ══════════════════════════════════════════════
 
     def act_github_login(self) -> None:
@@ -3702,7 +3790,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Erreur VS Code", str(e))
 
     # ══════════════════════════════════════════════
-    #  ACTIONS — Paramètres (v1.0.7)
+    #  ACTIONS — Paramètres (v1.0.1)
     # ══════════════════════════════════════════════
 
     def act_open_storage_settings(self):
@@ -4028,7 +4116,7 @@ class MainWindow(QMainWindow):
         core.launch_uninstall_and_quit(bat_path)
 
     # ──────────────────────────────────────────────
-    #  NOUVELLES ACTIONS v1.0.9
+    #  NOUVELLES ACTIONS v1.0.1
     # ──────────────────────────────────────────────
 
     def act_git_clone(self):

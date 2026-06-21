@@ -1,5 +1,6 @@
 """
 hooks.py — Système de hooks Voktora
+Version : 1.0.1
 Chaque hook peut lancer un script Python ou une commande shell.
 Hooks disponibles : on_create, on_open, on_delete, on_clone,
                     on_git_push, on_git_commit, on_git_pull
