@@ -1,5 +1,6 @@
 """
 vault.py — Vault sécurisé Voktora
+Version : 1.0.1
 Stockage chiffré de secrets : tokens GitHub, clés SSH, API keys, .env, etc.
 Toutes les clés sont dérivées du master password via PBKDF2 (core.vault_*).
 """

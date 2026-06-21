@@ -1,80 +1,89 @@
-# Voktora — Changelog
+# Changelog — Voktora
 
-Format : [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
+Toutes les modifications notables de ce projet sont documentées ici.  
+Format : [Semantic Versioning](https://semver.org/) — `MAJEUR.MINEUR.CORRECTIF`
+
+---
+
+## [1.0.1] — 2025-01-01
+
+### Corrigé
+
+- **Critique — `TypeError: vault_store() got an unexpected keyword argument 'domain'`**  
+  Deux fonctions `vault_store` coexistaient dans `core.py`. Python écrase silencieusement
+  la première définition par la seconde : la version légacy `vault_store(path, token)` (cache
+  de session) shadait la version cryptographique `vault_store(key, value, domain)`.  
+  Résultat : toute tentative d'associer un compte GitHub (chiffré ou non) levait une
+  `TypeError`. Correctif : renommage en `vault_session_store()` et `vault_session_clear()` ;
+  une seule `vault_store()` cryptographique existe désormais dans le code.
+
+- Avertissements au démarrage `Could not parse stylesheet of object QLineEdit`  
+  Stylesheets invalides sur certains champs du dialog GitHub.
+
+### Ajouté
+
+#### Vérification automatique des mises à jour
+- `core.check_for_update()` interroge l'API GitHub Releases
+  (`repos/yo-le-zz/Voktora/releases/latest`) et compare sémantiquement les versions via
+  `core._version_gt()`.
+- `UpdateCheckWorker` (QThread) lance la vérification 3 secondes après le démarrage,
+  sans bloquer l'interface.
+- Si une nouvelle version est détectée : bannière bleue non bloquante en haut de la
+  fenêtre principale, avec bouton **Télécharger** (ouvre la page GitHub Releases) et
+  bouton **✕** pour fermer. Aucune bannière si la version est à jour.
+
+#### Mode grille — colonnes dynamiques
+- Le nombre de colonnes (2 à 7) est recalculé automatiquement à chaque `resizeEvent`
+  selon la largeur disponible du viewport.
+- Re-rendu instantané sans perte de la sélection en cours.
+- Objectif : 6–7 cartes par ligne sur un écran large, 2 sur un écran étroit.
+
+#### Tri multi-critères
+- Nouveau `QComboBox` dans la barre de contrôle du `ProjectBrowser` :
+  **Nom A→Z**, **Nom Z→A**, **Date (récent)**, **Date (ancien)**, **Langage**,
+  **Statut**, **Type** (instances d'abord).
+- Tri appliqué simultanément aux modes liste et grille.
+- Persistance par session (réinitialisé à "Nom A→Z" au prochain lancement).
+
+#### Ping — vérification d'accessibilité
+- Bouton **⬤ Ping** dans la barre de contrôle : vérifie tous les projets visibles
+  en thread daemon (non bloquant).
+- En mode liste : les entrées se colorent en vert (dossier OK + Git), jaune
+  (dossier OK sans Git) ou rouge (dossier introuvable), avec tooltip explicatif.
+- En mode grille : chaque carte affiche un point coloré en coin supérieur droit ;
+  clic individuel pour pinger un seul projet.
+
+#### Drag-and-drop dans la vue liste
+- Réordonnancement par glisser-déposer activé sur les listes Instances et Intents
+  (`QAbstractItemView.InternalMove`).
+- L'ordre est persisté automatiquement dans la configuration (`core.reorder_entries()`)
+  150 ms après le drop, pour éviter les écritures en rafale.
+
+### Technique interne
+
+- `core.reorder_entries(kind, ordered_paths)` : persiste l'ordre drag-and-drop dans
+  `config.json` ; les entrées absentes de la liste sont ajoutées à la fin (sécurité).
+- `core._version_gt(v1, v2)` : comparaison sémantique `X.Y.Z`, robuste aux préfixes `v`.
+- `_build_update_banner()` : construction déclarative de la bannière de mise à jour
+  (layout VBox inséré au-dessus du splitter principal dans `_build_ui`).
 
 ---
 
 ## [1.0.0] — Release initiale
 
-Première version publique de **Voktora** (anciennement Meridian), entièrement rebranded et restructuré.
+### Ajouté
 
-Créé par **yolezz**.
-
-### ✦ Interface
-
-- **Double vue projets** : liste ☰ et grille ⊞ switchables
-  - Grille : cartes visuelles avec icône personnalisable (image ou emoji), badge langage coloré, badge instance/intent
-  - Liste : sidebar compacte avec recherche unifiée, filtrage live, couleurs
-- **Panneau projet dédié** : plein écran avec 5 onglets (Actions / Git / Outils / Snapshots / Détails)
-  - Header : icône cliquable, nom, badges, bouton ⇄ Autre projet
-  - Journal intégré par projet
-- Barre de statut : compteur projets + version
-- Raccourcis : `F5`, `Ctrl+N`, `Ctrl+F`, `Escape`
-- Thème Catppuccin Mocha (PySide6), polices cross-platform
-
-### 🔐 Sécurité & Vault
-
-- **Master password** au premier lancement (PBKDF2-HMAC-SHA256, 480 000 itérations)
-- **Vault AES-256** (Fernet) avec clé dérivée par domaine : `github_token`, `ssh_key`, `api_key`, `env_secret`, `general`
-- Tokens GitHub automatiquement stockés dans le vault si déverrouillé
-- `token_encrypt()` / `token_decrypt()` → AES-256 Fernet (remplace l'ancien XOR)
-
-### 🐙 GitHub
-
-- **GitHub App** (JWT RS256) : token d'installation renouvelé automatiquement (cache 55 min)
-- **OAuth App** (Device Flow) : rétrocompat totale
-- Dialog de connexion refait : 6 pages (choix / OAuth / GitHub App / device code / attente / guide migration)
-- `verify_github_token()` : vérification token en temps réel
-
-### ⚡ Fonctionnalités
-
-- **Profils d'exécution** (`profiles.py`) : commande, env vars, dossier, pre/post scripts
-- **Hooks** (`hooks.py`) : 7 événements, handlers shell ou Python
-- **Templates** (`templates.py`) : Python, C++, Web App, Discord Bot, Minecraft Mod, Vide
-- **Snapshots** (`snapshots.py`) : capture, restauration, diff entre snapshots
-- **Dashboard** (`dashboard.py`) : santé et usage avec scores 0–100
-- **Plugins** (`plugins.py`) : système extensible, rechargement à chaud
-- **Git automation** (`git.py`) : smart commit (Conventional Commits), auto-push, push avec token
-
-### 📦 Packaging
-
-- **Linux** : paquet `.deb` (dpkg) — installe dans `/opt/voktora/`, symlink `/usr/bin/voktora`, `.desktop` XDG, AppStream XML
-- **Windows** : paquet `.msi` (WiX Toolset 4.x) — installe dans `C:\Program Files\Voktora\`, raccourcis Bureau + Menu Démarrer
-- Remplacement de l'installateur PySide6 custom
-
-### 🔧 Architecture
-
-| Fichier | Rôle |
-|---------|------|
-| `main.py` | Point d'entrée, master password setup |
-| `core.py` | Config, crypto, auth GitHub, session |
-| `vault.py` | Vault sécurisé AES-256 |
-| `git.py` | Git automation |
-| `hooks.py` | Système de hooks |
-| `profiles.py` | Profils d'exécution |
-| `templates.py` | Templates de projets |
-| `snapshots.py` | Snapshot / restore / diff |
-| `dashboard.py` | Health & usage analytics |
-| `plugins.py` | Plugins extensibles |
-| `migration.py` | Migration de config |
-| `theme_manager.py` | Thèmes CSS |
-| `ui_main.py` | MainWindow |
-| `ui_project_view.py` | Vue liste / grille (ProjectBrowser) |
-| `ui_project_panel.py` | Panneau projet 5 onglets |
-| `ui_dialogs.py` | Tous les dialogs fusionnés |
-
-### 🚀 CI/CD
-
-- Push `dev` → PR automatique vers `main` (titre = version)
-- Squash & Merge → build `.deb` + `.msi` → release GitHub
-- `src/version.txt` écrit par le CI à chaque release
+- Gestion d'instances et d'intents (projets locaux organisés par type)
+- Vault chiffré AES-256 (Fernet + dérivation PBKDF2-HMAC-SHA256)
+- Authentification GitHub — OAuth Device Flow et GitHub App (PEM)
+- Templates de projets : Python, C++, Web App, Discord Bot, Minecraft Mod, Vide
+- Dashboard de santé : repos cassés, branches en retard, `.gitignore` manquant, inactivité
+- Système de hooks (`on_create`, `on_open`, `on_delete`, `on_clone`, `on_git_push`, ...)
+- Système de plugins Python (API `register_command`, `register_button`, `register_hook`)
+- Snapshots de projets (`.snap` = zip structuré avec manifeste)
+- Profils d'exécution par projet (env vars, commande de lancement, pre/post scripts)
+- Vues liste et grille avec switch dynamique
+- Thèmes : Dark (défaut), Light, CRT Cyberpunk + thèmes personnalisés JSON
+- Export / import de configuration JSON
+- Auto-commit et auto-push Git avec messages Conventional Commits générés localement
+- Raccourcis clavier : F5 (actualiser), Ctrl+N (nouvelle instance), Ctrl+F (recherche)

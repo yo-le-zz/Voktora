@@ -1,5 +1,6 @@
 """
 git.py — Git automation Voktora
+Version : 1.0.1
 Auto-commit, auto-push, smart commit messages (Conventional Commits sans IA).
 """
 

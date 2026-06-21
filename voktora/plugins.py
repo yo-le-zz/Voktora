@@ -1,5 +1,6 @@
 """
 plugins.py — Système de plugins Voktora
+Version : 1.0.1
 Charge les plugins depuis data/plugins/ et expose un registre de hooks/commandes/boutons UI.
 
 Interface d'un plugin (exemple — voir docs/plugins.md) :

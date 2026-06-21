@@ -1,5 +1,6 @@
 """
 dashboard.py — Health & Usage Analytics local Voktora
+Version : 1.0.1
 Analyse l'état des projets : repos cassés, branches en retard,
 .gitignore manquant, inactivité, stats d'usage.
 """

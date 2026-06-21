@@ -1,5 +1,6 @@
 """
 theme_manager.py — Gestionnaire de thèmes Voktora
+Version : 1.0.1
 Thèmes built-in : default (dark), light, crt_cyberpunk.
 Thèmes personnalisés stockés dans data/themes/*.json.
 

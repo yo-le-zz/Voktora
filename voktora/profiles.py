@@ -1,5 +1,6 @@
 """
 profiles.py — Runtime Profiles Voktora
+Version : 1.0.1
 Profils d'exécution par projet : env vars, commande de lancement,
 dossier de travail, scripts pre/post run.
 """

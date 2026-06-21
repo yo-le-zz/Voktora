@@ -1,5 +1,6 @@
 """
 templates.py — Templates de projets Voktora
+Version : 1.0.1
 Crée la structure initiale d'un projet avec git init, dépendances, README.
 """
 
