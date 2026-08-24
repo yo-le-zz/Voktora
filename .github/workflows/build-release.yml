@@ -78,6 +78,18 @@ jobs:
             libxcb-xkb1 libxkbcommon-x11-0 libgl1 libglib2.0-0 \
             patchelf dpkg-dev
 
+      - name: Installer le compilateur C Linux
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends gcc g++
+      
+          echo "CC=/usr/bin/gcc" >> "$GITHUB_ENV"
+          echo "CXX=/usr/bin/g++" >> "$GITHUB_ENV"
+      
+          /usr/bin/gcc --version
+          /usr/bin/g++ --version
+
       - name: Build Linux (.deb)
         if: matrix.platform == 'linux'
         run: bash "Installers/DEB installer/build_deb.sh" "${{ github.event.pull_request.title }}"
@@ -89,6 +101,7 @@ jobs:
         run: |
           $env:DOTNET_NOLOGO = "true"
           dotnet tool install --global wix --version 4.0.6
+          "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8
           wix extension add --global WixToolset.UI.wixext/4.0.6
 
       - name: Build Windows (.msi)
