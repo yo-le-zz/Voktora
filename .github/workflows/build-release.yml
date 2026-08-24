@@ -23,15 +23,15 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.13" }
 
-      - name: Dependances systeme Qt (offscreen)
+      - name: Dépendances système Qt (offscreen)
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            libxcb-xinerama0 libxcb-icccm4 libxcb-image0 \
+            libegl1 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 \
             libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
             libxcb-xkb1 libxkbcommon-x11-0 libgl1 libglib2.0-0
 
-      - name: Installer les dependances de test
+      - name: Installer les dépendances de test
         run: pip install pytest pytest-cov ruff cryptography pyside6
 
       - name: Lint (ruff)
