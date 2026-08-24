@@ -2,9 +2,9 @@ name: Build & Release Voktora
 
 on:
   push:
-    branches: [dev]
+    branches: [dev, main]
   pull_request:
-    types: [closed]
+    types: [opened, synchronize, reopened, closed]
     branches: [main]
 
 permissions:
@@ -13,35 +13,81 @@ permissions:
 
 jobs:
 
-  # -- JOB 1 : push dev -> PR automatique vers main --------------------------
-  open_pr:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+  # -- JOB 0 : lint + tests ---------------------------------------------------
+  test:
+    if: github.event_name == 'push' || github.event.pull_request.merged != true
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Dépendances système Qt (offscreen)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 \
+            libxcb-xinerama0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-xkb1 \
+            libxkbcommon-x11-0 \
+            libgl1 \
+            libglib2.0-0
+
+      - name: Installer les dépendances de test
+        run: |
+          pip install pytest pytest-cov ruff cryptography pyside6
+
+      - name: Lint (ruff)
+        run: ruff check voktora tests
+
+      - name: Tests unitaires (pytest)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pytest --cov=voktora --cov-report=term-missing
+
+  # -- JOB 1 : push dev -> PR automatique vers main --------------------------
+  open_pr:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Titre du dernier commit (= version)
         id: ci
-        run: echo "title=$(git log -1 --pretty=%s)" >> $GITHUB_OUTPUT
+        run: echo "title=$(git log -1 --pretty=%s)" >> "$GITHUB_OUTPUT"
 
-      - name: Creer / mettre a jour la PR dev -> main
+      - name: Créer / mettre à jour la PR dev -> main
         uses: peter-evans/create-pull-request@v7
         with:
-          token:  ${{ secrets.GITHUB_TOKEN }}
-          base:   main
-          head:   dev
-          title:  ${{ steps.ci.outputs.title }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: main
+          head: dev
+          title: ${{ steps.ci.outputs.title }}
           body: |
             Merge automatique depuis `dev`.
-            **Version :** `${{ steps.ci.outputs.title }}`
-            -> Faites **Squash & Merge** pour declencher le build et la release.
 
-  # -- JOB 2 : merge PR sur main -> build DEB + MSI -------------------------
+            **Version :** `${{ steps.ci.outputs.title }}`
+
+            -> Faites **Squash & Merge** pour déclencher le build et la release.
+
+  # -- JOB 2 : merge PR sur main -> build DEB + MSI --------------------------
   build:
     if: >
       github.event_name == 'pull_request' &&
       github.event.pull_request.merged == true
+
     strategy:
       fail-fast: false
       matrix:
@@ -50,98 +96,128 @@ jobs:
             platform: linux
           - os: windows-latest
             platform: windows
+
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Ecrire version.txt
+      - name: Écrire version.txt
         shell: bash
         run: echo "${{ github.event.pull_request.title }}" > voktora/version.txt
 
       - uses: actions/setup-python@v5
-        with: { python-version: "3.13" }
+        with:
+          python-version: "3.13"
 
-      - name: Installer dependances Python
+      - name: Installer les dépendances Python
         run: |
-          pip install uv
+          python -m pip install --upgrade pip
           pip install nuitka pyside6 cryptography
 
       # -- Linux --------------------------------------------------------------
-      - name: Dependances systeme Linux
+
+      - name: Dépendances système Linux
         if: matrix.platform == 'linux'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            libxcb-xinerama0 libxcb-icccm4 libxcb-image0 \
-            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
-            libxcb-xkb1 libxkbcommon-x11-0 libgl1 libglib2.0-0 \
-            patchelf dpkg-dev
+            gcc \
+            g++ \
+            libegl1 \
+            libxcb-xinerama0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-xkb1 \
+            libxkbcommon-x11-0 \
+            libgl1 \
+            libglib2.0-0 \
+            patchelf \
+            dpkg-dev
 
-      - name: Installer le compilateur C Linux
+      - name: Configurer le compilateur C Linux
         if: matrix.platform == 'linux'
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends gcc g++
-      
           echo "CC=/usr/bin/gcc" >> "$GITHUB_ENV"
           echo "CXX=/usr/bin/g++" >> "$GITHUB_ENV"
-      
+
+          echo "Compilateur C :"
           /usr/bin/gcc --version
+
+          echo "Compilateur C++ :"
           /usr/bin/g++ --version
 
       - name: Build Linux (.deb)
         if: matrix.platform == 'linux'
-        run: bash "Installers/DEB installer/build_deb.sh" "${{ github.event.pull_request.title }}"
+        run: |
+          bash "Installers/DEB installer/build_deb.sh" \
+            "${{ github.event.pull_request.title }}"
 
       # -- Windows ------------------------------------------------------------
+
       - name: Installer WiX Toolset (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
           $env:DOTNET_NOLOGO = "true"
+
           dotnet tool install --global wix --version 4.0.6
-          "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8
+
+          "$env:USERPROFILE\.dotnet\tools" |
+            Out-File -FilePath $env:GITHUB_PATH -Encoding utf8
+
           wix extension add --global WixToolset.UI.wixext/4.0.6
 
       - name: Build Windows (.msi)
         if: matrix.platform == 'windows'
-        run: python "Installers/MSI installer/build_msi.py" "${{ github.event.pull_request.title }}"
+        shell: pwsh
+        run: |
+          python "Installers/MSI installer/build_msi.py" `
+            "${{ github.event.pull_request.title }}"
 
       # -- Upload artifacts ---------------------------------------------------
+
       - name: Upload DEB artifact
         if: matrix.platform == 'linux'
         uses: actions/upload-artifact@v4
         with:
           name: linux-deb
           path: dist/linux/voktora_*.deb
+          if-no-files-found: error
 
       - name: Upload MSI artifact
         if: matrix.platform == 'windows'
         uses: actions/upload-artifact@v4
         with:
           name: windows-msi
-          path: dist\windows\Voktora_*_x64.msi
+          path: dist/windows/Voktora_*_x64.msi
+          if-no-files-found: error
 
-  # -- JOB 3 : creer la release GitHub ---------------------------------------
+  # -- JOB 3 : créer la release GitHub ---------------------------------------
   release:
     needs: build
+
     if: >
       github.event_name == 'pull_request' &&
       github.event.pull_request.merged == true
+
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/download-artifact@v4
 
-      - name: Creer la release GitHub
+      - name: Créer la release GitHub
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.pull_request.title }}
-          name:     "Voktora ${{ github.event.pull_request.title }}"
+          name: "Voktora ${{ github.event.pull_request.title }}"
           body: |
             ## Voktora ${{ github.event.pull_request.title }}
 
-            Gestionnaire de projets de developpement par **yolezz**
+            Gestionnaire de projets de développement par **yolezz**
 
             | Plateforme | Fichier | Installation |
             |-----------|---------|-------------|
@@ -149,10 +225,13 @@ jobs:
             | Windows 10/11 x64 | `.msi` | Double-cliquer |
 
             ### Notes d'installation
-            - **Linux** : les dependances Qt (libxcb, libgl1...) sont installees automatiquement par dpkg
-            - **Windows** : necessite Windows 10 64-bit ou plus recent
 
-            Documentation : https://github.com/yo-le-zz/Voktora/tree/main/doc
+            - **Linux** : les dépendances Qt (libxcb, libegl1, libgl1...) sont installées automatiquement par dpkg
+            - **Windows** : nécessite Windows 10 64-bit ou plus récent
+
+            Documentation :
+            https://github.com/yo-le-zz/Voktora/tree/main/doc
+
           files: |
             linux-deb/voktora_*.deb
             windows-msi/Voktora_*_x64.msi
