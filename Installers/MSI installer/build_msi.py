@@ -11,10 +11,10 @@ Usage :
     python "Installers/MSI installer/build_msi.py" [VERSION]
 """
 
-import sys
-import uuid
 import shutil
 import subprocess
+import sys
+import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -212,7 +212,7 @@ def main():
     ])
 
     size_mb = msi_out.stat().st_size / 1_048_576
-    print(f"\n=== Succes ===")
+    print("\n=== Succes ===")
     print(f"MSI    : {msi_out}")
     print(f"Taille : {size_mb:.1f} MB")
     if size_mb < 50:
