@@ -1,6 +1,6 @@
 """
 dashboard.py — Health & Usage Analytics local Voktora
-Version : 1.0.1
+Version : 1.0.2
 Analyse l'état des projets : repos cassés, branches en retard,
 .gitignore manquant, inactivité, stats d'usage.
 """
@@ -9,14 +9,12 @@ from __future__ import annotations
 
 import json
 import subprocess
-import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import core
-
 
 # ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -42,8 +40,10 @@ class ProjectHealth:
     @property
     def status_icon(self) -> str:
         s = self.score
-        if s >= 80: return "🟢"
-        if s >= 50: return "🟡"
+        if s >= 80:
+            return "🟢"
+        if s >= 50:
+            return "🟡"
         return "🔴"
 
 

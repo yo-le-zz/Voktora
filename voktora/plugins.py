@@ -1,6 +1,6 @@
 """
 plugins.py — Système de plugins Voktora
-Version : 1.0.1
+Version : 1.0.2
 Charge les plugins depuis data/plugins/ et expose un registre de hooks/commandes/boutons UI.
 
 Interface d'un plugin (exemple — voir docs/plugins.md) :
@@ -26,14 +26,12 @@ Interface d'un plugin (exemple — voir docs/plugins.md) :
 from __future__ import annotations
 
 import importlib.util
-import sys
 import traceback
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Any
 
 import core
-
 
 # ── Types ──────────────────────────────────────────────────────────────────────
 

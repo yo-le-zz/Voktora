@@ -1,6 +1,6 @@
 """
 snapshots.py — Snapshot / Restore de projets Voktora
-Version : 1.0.1
+Version : 1.0.2
 Capture l'état complet d'un projet (fichiers + métadonnées config)
 dans un .snap (zip structuré) et permet de le restaurer.
 """
@@ -15,7 +15,6 @@ from datetime import datetime
 from pathlib import Path
 
 import core
-
 
 SNAP_EXT      = ".snap"
 SNAP_MANIFEST = "manifest.json"

@@ -1,6 +1,6 @@
 """
 git.py — Git automation Voktora
-Version : 1.0.1
+Version : 1.0.2
 Auto-commit, auto-push, smart commit messages (Conventional Commits sans IA).
 """
 
@@ -8,18 +8,19 @@ from __future__ import annotations
 
 import re
 import subprocess
-import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
-
 
 # ── Smart commit message ───────────────────────────────────────────────────────
 
 _CONVENTIONAL_TYPES = {
+    # Les motifs les plus spécifiques doivent être vérifiés avant les motifs
+    # génériques (ex. un fichier "test_x.py" doit être classé "test", pas
+    # "feat", bien qu'il corresponde aussi à l'extension .py).
+    re.compile(r"test_|_test\.|spec\.|\.spec\."):         "test",
     re.compile(r"\.(py|js|ts|rs|go|cpp|c|java|kt|rb)$"): "feat",
     re.compile(r"\.(md|rst|txt)$"):                       "docs",
     re.compile(r"\.(css|scss|less|html|svg)$"):           "style",
-    re.compile(r"test_|_test\.|spec\.|\.spec\."):         "test",
     re.compile(r"requirements|package\.json|Cargo\.toml|go\.mod|CMake"): "build",
     re.compile(r"\.github|\.gitignore|\.env|Dockerfile"):               "ci",
     re.compile(r"fix|bug|patch|hotfix", re.I):                          "fix",

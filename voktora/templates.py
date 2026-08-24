@@ -1,20 +1,14 @@
 """
 templates.py — Templates de projets Voktora
-Version : 1.0.1
+Version : 1.0.2
 Crée la structure initiale d'un projet avec git init, dépendances, README.
 """
 
 from __future__ import annotations
 
-import json
-import os
 import subprocess
-import sys
-from dataclasses import dataclass, field
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
-
-import core
 
 BUILTIN_TEMPLATES: dict[str, dict] = {
     "python": {

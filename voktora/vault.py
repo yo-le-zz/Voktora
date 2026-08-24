@@ -1,6 +1,6 @@
 """
 vault.py — Vault sécurisé Voktora
-Version : 1.0.1
+Version : 1.0.2
 Stockage chiffré de secrets : tokens GitHub, clés SSH, API keys, .env, etc.
 Toutes les clés sont dérivées du master password via PBKDF2 (core.vault_*).
 """
@@ -42,7 +42,6 @@ def store(key: str, value: str, kind: SecretKind = "general",
     core.vault_store(key, value, domain)
     # Métadonnées (non chiffrées)
     import json
-    from pathlib import Path
     meta_path = _meta_path()
     meta = _load_meta()
     meta[key] = {"kind": kind, "label": label or key, "note": note}

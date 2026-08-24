@@ -2,9 +2,9 @@ name: Build & Release Voktora
 
 on:
   push:
-    branches: [dev]
+    branches: [dev, main]
   pull_request:
-    types: [closed]
+    types: [opened, synchronize, reopened, closed]
     branches: [main]
 
 permissions:
@@ -13,8 +13,38 @@ permissions:
 
 jobs:
 
+  # -- JOB 0 : lint + tests -- sur tout push et toute pull request -----------
+  test:
+    if: github.event_name == 'push' || github.event.pull_request.merged != true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+
+      - name: Dependances systeme Qt (offscreen)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libxcb-xinerama0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-xkb1 libxkbcommon-x11-0 libgl1 libglib2.0-0
+
+      - name: Installer les dependances de test
+        run: pip install pytest pytest-cov ruff cryptography pyside6
+
+      - name: Lint (ruff)
+        run: ruff check voktora tests
+
+      - name: Tests unitaires (pytest)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pytest --cov=voktora --cov-report=term-missing
+
   # -- JOB 1 : push dev -> PR automatique vers main --------------------------
   open_pr:
+    needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     steps:
@@ -37,7 +67,11 @@ jobs:
             **Version :** `${{ steps.ci.outputs.title }}`
             -> Faites **Squash & Merge** pour declencher le build et la release.
 
-  # -- JOB 2 : merge PR sur main -> build DEB + MSI -------------------------
+  # -- JOB 2 : merge PR sur main -> build DEB + MSI (via Docker) -------------
+  # La compilation a lieu dans les images docker/linux.Dockerfile et
+  # docker/windows.Dockerfile plutot que directement sur le runner, afin que
+  # le build soit strictement identique en local, entre contributeurs et
+  # en CI. Voir docker/README.md.
   build:
     if: >
       github.event_name == 'pull_request' &&
@@ -59,41 +93,30 @@ jobs:
         shell: bash
         run: echo "${{ github.event.pull_request.title }}" > voktora/version.txt
 
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.13" }
-
-      - name: Installer dependances Python
-        run: |
-          pip install uv
-          pip install nuitka pyside6 cryptography
-
       # -- Linux --------------------------------------------------------------
-      - name: Dependances systeme Linux
+      - name: Build Linux (.deb) via Docker
         if: matrix.platform == 'linux'
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            libxcb-xinerama0 libxcb-icccm4 libxcb-image0 \
-            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
-            libxcb-xkb1 libxkbcommon-x11-0 libgl1 libglib2.0-0 \
-            patchelf dpkg-dev
-
-      - name: Build Linux (.deb)
-        if: matrix.platform == 'linux'
-        run: bash "Installers/DEB installer/build_deb.sh" "${{ github.event.pull_request.title }}"
+          docker build -f docker/linux.Dockerfile -t voktora-build-linux .
+          mkdir -p dist/linux
+          docker run --rm -v "${{ github.workspace }}/dist:/app/dist" \
+            voktora-build-linux "${{ github.event.pull_request.title }}"
 
       # -- Windows ------------------------------------------------------------
-      - name: Installer WiX Toolset (Windows)
+      - name: Basculer Docker en mode conteneurs Windows
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          $env:DOTNET_NOLOGO = "true"
-          dotnet tool install --global wix --version 4.0.6
-          wix extension add --global WixToolset.UI.wixext/4.0.6
+          & 'C:\Program Files\Docker\Docker\DockerCli.exe' -SwitchDaemon
 
-      - name: Build Windows (.msi)
+      - name: Build Windows (.msi) via Docker
         if: matrix.platform == 'windows'
-        run: python "Installers/MSI installer/build_msi.py" "${{ github.event.pull_request.title }}"
+        shell: pwsh
+        run: |
+          docker build -f docker/windows.Dockerfile -t voktora-build-windows .
+          New-Item -ItemType Directory -Force -Path dist/windows | Out-Null
+          docker run --rm -v "${{ github.workspace }}\dist:C:\app\dist" `
+            voktora-build-windows "${{ github.event.pull_request.title }}"
 
       # -- Upload artifacts ---------------------------------------------------
       - name: Upload DEB artifact

@@ -1,6 +1,6 @@
 """
 Voktora — main.py
-Version : 1.0.1
+Version : 1.0.2
 Point d'entrée de l'application.
 """
 
@@ -19,11 +19,10 @@ os.environ.setdefault(
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from PySide6.QtWidgets import QApplication, QMessageBox
-from PySide6.QtGui     import QIcon
-from PySide6.QtCore    import Qt
-
 import core
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QApplication
 
 
 def main() -> None:
@@ -65,7 +64,7 @@ def main() -> None:
     if ver_file.is_file():
         v = ver_file.read_text(encoding="utf-8").strip()
         if v:
-            core.APP_VERSION = v
+            core.constants.APP_VERSION = v
             app.setApplicationVersion(v)
 
     from ui_main import MainWindow
