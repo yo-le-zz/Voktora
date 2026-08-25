@@ -26,6 +26,9 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
         libxkbcommon-x11-0 \
         libgl1 \
         libglib2.0-0 \
+        libegl1 \
+        libopengl0 \
+        libxcb-cursor0 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir nuitka pyside6 cryptography

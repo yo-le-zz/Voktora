@@ -116,7 +116,7 @@ def apply_template(template_key: str, project_path: Path,
         try:
             r = subprocess.run(
                 cmd, shell=True, cwd=str(project_path),
-                capture_output=True, text=True, timeout=60,
+                capture_output=True, text=True, timeout=60, check=False,
             )
             if log_cb:
                 out = (r.stdout + r.stderr).strip()

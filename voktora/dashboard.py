@@ -112,7 +112,7 @@ def analyze_project(project_path: Path) -> ProjectHealth:
         try:
             r = subprocess.run(
                 ["git", "rev-list", "--left-right", "--count", "HEAD...@{upstream}"],
-                cwd=str(project_path), capture_output=True, text=True, timeout=8,
+                cwd=str(project_path), capture_output=True, text=True, timeout=8, check=False,
             )
             if r.returncode == 0 and r.stdout.strip():
                 a, b = r.stdout.strip().split()
@@ -128,7 +128,7 @@ def analyze_project(project_path: Path) -> ProjectHealth:
         try:
             r = subprocess.run(
                 ["git", "branch", "--no-merged", "HEAD"],
-                cwd=str(project_path), capture_output=True, text=True, timeout=8,
+                cwd=str(project_path), capture_output=True, text=True, timeout=8, check=False,
             )
             if r.returncode == 0:
                 branches = [b.strip().lstrip("* ") for b in r.stdout.strip().splitlines() if b.strip()]
@@ -141,7 +141,7 @@ def analyze_project(project_path: Path) -> ProjectHealth:
         try:
             r = subprocess.run(
                 ["git", "rev-list", "--count", "HEAD"],
-                cwd=str(project_path), capture_output=True, text=True, timeout=8,
+                cwd=str(project_path), capture_output=True, text=True, timeout=8, check=False,
             )
             if r.returncode == 0:
                 h.commit_count = int(r.stdout.strip())

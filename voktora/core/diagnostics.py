@@ -85,7 +85,7 @@ def run_health_check() -> HealthCheckResult:
 
     try:
         subprocess.run(["git", "--version"], capture_output=True,
-                       timeout=5, creationflags=constants._NO_WINDOW)
+                       timeout=5, creationflags=constants._NO_WINDOW, check=False)
     except (FileNotFoundError, subprocess.TimeoutExpired):
         result.issues.append(DiagnosticIssue(
             level="warning", category="dependency",
@@ -174,7 +174,7 @@ def reinstall_dependencies() -> tuple:
         result = subprocess.run(
             [sys.executable, "-m", "pip", "install", "--upgrade", "PySide6"],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=120, creationflags=constants._NO_WINDOW,
+            timeout=120, creationflags=constants._NO_WINDOW, check=False,
         )
         return result.returncode == 0, (result.stdout + result.stderr).strip()
     except subprocess.TimeoutExpired:

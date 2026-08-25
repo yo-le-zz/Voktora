@@ -161,7 +161,7 @@ def _run_git(cwd: Path, cmd: list[str],
     try:
         r = subprocess.run(
             cmd, cwd=str(cwd),
-            capture_output=True, text=True, timeout=60,
+            capture_output=True, text=True, timeout=60, check=False,
         )
         if log_cb:
             out = (r.stdout + r.stderr).strip()
@@ -178,7 +178,7 @@ def _git_output(cwd: Path, cmd: list[str]) -> str:
     try:
         r = subprocess.run(
             cmd, cwd=str(cwd),
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, timeout=10, check=False,
         )
         return r.stdout
     except Exception:

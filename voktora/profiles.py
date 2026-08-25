@@ -103,7 +103,7 @@ def launch(project_path: Path, profile: RunProfile,
     for cmd in profile.pre_run:
         try:
             r = _sp.run(cmd, shell=True, cwd=str(work_dir), env=env,
-                        capture_output=True, text=True, timeout=30)
+                        capture_output=True, text=True, timeout=30, check=False)
             if log_cb and r.stdout.strip():
                 log_cb(f"[pre_run] {r.stdout.strip()}")
         except Exception as e:

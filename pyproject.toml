@@ -21,8 +21,33 @@ line-length = 120
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
+select = [
+    "E", "F", "I", "UP", "B", "SIM",
+    "PLW1510", # subprocess.run sans check= explicite — clarté d'intention
+    "RUF034",  # condition if/else inutile (mêmes valeurs des deux côtés)
+    "RUF012",  # valeur par défaut mutable de classe sans annotation ClassVar
+    "FURB162", # datetime.fromisoformat(...replace("Z","+00:00")) redondant en py3.11+
+]
 ignore = [
     "E501",   # longueur de ligne — géré par le formatteur, pas bloquant
     "SIM105", # try/except/pass : équivalent à contextlib.suppress, style existant du projet
+    # BLE001 (except Exception trop large) volontairement PAS activé : des dizaines
+    # d'endroits l'utilisent intentionnellement comme frontière d'erreur ("ne jamais
+    # laisser une exception interne planter l'UI, toujours afficher un message
+    # propre"). Remplacer chacun par le(s) type(s) précis exigerait d'auditer un par
+    # un tout ce que chaque bibliothèque peut lever, au risque réel d'en oublier un
+    # et de réintroduire des plantages — un remplacement mécanique serait plus
+    # dangereux que la règle qu'il est censé satisfaire.
+    # DTZ005 (datetime.now() sans tz) volontairement pas activé : Voktora est une
+    # application de bureau locale, les horodatages affichés (logs, noms de backup,
+    # messages de commit) sont délibérément en heure locale naïve — les rendre
+    # UTC-aware n'aiderait pas l'utilisateur et compliquerait l'affichage.
+    # TRY004 (préférer TypeError) pas suivi sur les 2 occurrences concernées : il
+    # s'agit de contenu JSON structurellement invalide, ce qui est sémantiquement
+    # une ValueError (valeur incorrecte), pas un TypeError (type Python incorrect).
+    # S110/S112 (try/except/pass|continue) volontairement pas activés : les
+    # occurrences existantes sont des échecs silencieux intentionnels et bénins
+    # (repli si le dossier n'est pas un dépôt git, nettoyage best-effort d'un
+    # fichier temporaire déjà absent, statistique d'affichage optionnelle) — y
+    # ajouter du logging au forceps ferait plus de bruit que de valeur.
 ]

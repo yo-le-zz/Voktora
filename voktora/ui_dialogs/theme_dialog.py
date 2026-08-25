@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import ClassVar
 
 import core
 import theme_manager
@@ -38,7 +39,7 @@ class CustomThemeDialog(QDialog):
     """Dialogue pour créer ou modifier un thème personnalisé."""
 
     # Couleurs clés exposées dans l'éditeur (les plus impactantes visuellement)
-    _COLOR_KEYS = [
+    _COLOR_KEYS: ClassVar[list[tuple[str, str]]] = [
         ("base",      "Fond principal"),
         ("mantle",    "Fond secondaire / panneaux"),
         ("crust",     "Fond profond / barre de statut"),

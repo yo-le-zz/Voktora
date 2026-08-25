@@ -25,7 +25,7 @@ def _run_git(args: list, cwd: Path) -> str:
         ["git"] + args, cwd=str(cwd),
         capture_output=True, text=True,
         encoding="utf-8", errors="replace",
-        creationflags=constants._NO_WINDOW,
+        creationflags=constants._NO_WINDOW, check=False,
     )
     return (result.stdout + result.stderr).strip()
 

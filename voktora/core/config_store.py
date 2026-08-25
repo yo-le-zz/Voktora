@@ -70,10 +70,10 @@ def _migrate_config(cfg: dict) -> tuple:
         # v1.0.1 : support GitHub App
         app_cfg = cfg.setdefault("app_config", {})
         if "auth_method" not in app_cfg:
-            # Si un client_id OAuth est déjà configuré → on reste en oauth
-            # L'utilisateur sera invité à migrer via l'UI
-            existing_client_id = app_cfg.get("github_client_id", "")
-            app_cfg["auth_method"] = constants.AUTH_METHOD_OAUTH if existing_client_id else constants.AUTH_METHOD_OAUTH
+            # Le compte reste en OAuth par défaut à cette étape du schéma —
+            # l'utilisateur est invité à migrer vers GitHub App via l'UI s'il
+            # le souhaite.
+            app_cfg["auth_method"] = constants.AUTH_METHOD_OAUTH
             changed = True
         gh_acct = cfg.setdefault("github_account", {})
         for key, val in [

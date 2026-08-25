@@ -231,7 +231,7 @@ def _get_installation_token_cached(app_id: str, private_key_pem: str,
     # Parser la date d'expiration
     try:
         from datetime import datetime
-        dt = datetime.fromisoformat(expires_str.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(expires_str)
         expires_ts = dt.timestamp()
     except Exception:
         expires_ts = time.time() + 3300  # fallback 55 min
