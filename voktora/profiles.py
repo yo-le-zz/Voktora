@@ -1,6 +1,6 @@
 """
 profiles.py — Runtime Profiles Voktora
-Version : 1.0.1
+Version : 1.0.2
 Profils d'exécution par projet : env vars, commande de lancement,
 dossier de travail, scripts pre/post run.
 """
@@ -8,9 +8,9 @@ dossier de travail, scripts pre/post run.
 from __future__ import annotations
 
 import json
-import subprocess
 import os
-from dataclasses import dataclass, field, asdict
+import subprocess
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import core
@@ -30,7 +30,7 @@ class RunProfile:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, d: dict) -> "RunProfile":
+    def from_dict(cls, d: dict) -> RunProfile:
         return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
 
 
@@ -98,13 +98,12 @@ def launch(project_path: Path, profile: RunProfile,
     env["MERIDIAN_PROFILE"]      = profile.name
 
     import subprocess as _sp
-    import sys as _sys
 
     # Exécuter scripts pre_run
     for cmd in profile.pre_run:
         try:
             r = _sp.run(cmd, shell=True, cwd=str(work_dir), env=env,
-                        capture_output=True, text=True, timeout=30)
+                        capture_output=True, text=True, timeout=30, check=False)
             if log_cb and r.stdout.strip():
                 log_cb(f"[pre_run] {r.stdout.strip()}")
         except Exception as e:

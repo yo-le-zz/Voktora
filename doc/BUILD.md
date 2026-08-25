@@ -4,6 +4,15 @@
 
 ---
 
+> 🐳 **Méthode recommandée : Docker.** Depuis la v1.0.2, la compilation
+> Linux (.deb) et Windows (.msi) se fait via des images Docker dédiées
+> (`docker/linux.Dockerfile`, `docker/windows.Dockerfile`), pour un build
+> strictement identique en local, entre contributeurs et en CI. Voir
+> [`docker/README.md`](../docker/README.md). Le reste de ce guide décrit
+> la compilation manuelle directe (sans Docker), toujours possible si besoin.
+
+---
+
 ## Prérequis
 
 | Outil | Version | Installation |
@@ -95,10 +104,10 @@ Copy-Item src\version.txt     dist\windows\main.dist\version.txt
 
 ```bash
 # Script automatique (compile + package en .deb)
-bash packaging/build_deb.sh 1.0.0
+bash "Installers/DEB installer/build_deb.sh" 1.0.2
 
 # Résultat
-ls dist/linux/voktora_1.0.0_amd64.deb
+ls dist/linux/voktora_1.0.2_amd64.deb
 ```
 
 Le script :
@@ -115,10 +124,10 @@ Le script :
 
 ```powershell
 # Script automatique (compile + package en .msi via WiX)
-python packaging\build_msi.py 1.0.0
+python "Installers\MSI installer\build_msi.py" 1.0.2
 
 # Résultat
-dir dist\windows\Voktora_1.0.0_x64.msi
+dir dist\windows\Voktora_1.0.2_x64.msi
 ```
 
 Le script :

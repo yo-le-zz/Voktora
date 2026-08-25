@@ -1,15 +1,20 @@
 """
 ui_project_view.py — Vues projets Voktora
-Version : 1.0.1
-Voktora v1.0.1
+Version : 1.0.2
+Voktora v1.0.2
 Deux modes d'affichage switchables :
   • Liste  : QListWidget avec drag-and-drop + recherche + tri
-  • Grille : cartes ProjectCard, colonnes dynamiques (2–7), tri, ping
+  • Grille : cartes ProjectCard, colonnes dynamiques (2–9), tri, ping
 
 Nouvelles fonctionnalités v1.0.1 :
   - Colonnes dynamiques en grille (s'adapte à la largeur de la fenêtre)
   - Tri multi-critères : Nom, Date, Langage, Statut, Type
   - Ping : indicateur visuel d'accessibilité de chaque projet
+
+Nouvelles fonctionnalités v1.0.2 :
+  - Recherche partagée entre les deux modes (corrige la recherche
+    invisible en mode grille)
+  - Recherche également sur les tags, en plus du nom et du chemin
   - Drag-and-drop dans la liste pour réordonner (persisté via core.reorder_entries)
 """
 
@@ -17,18 +22,27 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from typing import Callable
-
-from PySide6.QtCore    import Qt, Signal, QSize, QMimeData, QTimer
-from PySide6.QtGui     import QColor, QFont, QIcon, QPixmap, QPainter
-from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QButtonGroup, QComboBox, QFrame,
-    QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMessageBox, QPushButton, QScrollArea,
-    QSizePolicy, QToolButton, QVBoxLayout, QWidget,
-)
 
 import core
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QButtonGroup,
+    QComboBox,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QPushButton,
+    QScrollArea,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Constantes
@@ -38,7 +52,7 @@ _CARD_W   = 170
 _CARD_H   = 165
 _CARD_GAP = 12
 _COLS_MIN = 2
-_COLS_MAX = 7
+_COLS_MAX = 9
 
 _SORT_OPTIONS = [
     ("name_asc",   "Nom A → Z"),
@@ -64,6 +78,16 @@ _LANG_COLORS: dict[str, str] = {
     "Kotlin":     "#A97BFF",
     "Swift":      "#F05138",
 }
+
+
+def _entry_matches(entry: dict, needle_lower: str) -> bool:
+    """Teste si une entrée (instance/intent) correspond à une recherche —
+    sur le nom, le chemin, ou l'un de ses tags. `needle_lower` doit déjà
+    être passé en minuscules par l'appelant."""
+    haystack = entry.get("name", "") + entry.get("path", "")
+    if needle_lower in haystack.lower():
+        return True
+    return any(needle_lower in tag.lower() for tag in entry.get("tags") or [])
 
 
 def _lang_color(lang: str) -> str:
@@ -133,6 +157,10 @@ class ProjectCard(QFrame):
         self.setCursor(Qt.PointingHandCursor)
         self.setObjectName("projectCard")
         self._apply_style(active=False)
+
+        tags = entry.get("tags") or []
+        if tags:
+            self.setToolTip("Tags : " + ", ".join(tags))
 
         v = QVBoxLayout(self)
         v.setContentsMargins(8, 8, 8, 6)
@@ -338,6 +366,7 @@ class ProjectGridView(QScrollArea):
         self._current_entries: list[tuple[dict, str]]   = []
         self._cols:            int                      = 3
         self._sort_key:        str                      = "name_asc"
+        self._filter_text:     str                      = ""
 
     # ── Colonnes dynamiques ───────────────────────────────────────────────────
 
@@ -366,17 +395,15 @@ class ProjectGridView(QScrollArea):
 
     def set_sort(self, sort_key: str) -> None:
         self._sort_key = sort_key
-        self._apply_and_render(self._all_entries)
+        self.filter(self._filter_text)
 
     def filter(self, text: str) -> None:
         t = text.strip().lower()
-        if not t:
-            filtered = self._all_entries
-        else:
-            filtered = [
-                (e, k) for e, k in self._all_entries
-                if t in (e.get("name", "") + e.get("path", "")).lower()
-            ]
+        self._filter_text = text
+        filtered = (
+            self._all_entries if not t
+            else [(e, k) for e, k in self._all_entries if _entry_matches(e, t)]
+        )
         self._apply_and_render(filtered)
 
     def _apply_and_render(self, entries: list[tuple[dict, str]]) -> None:
@@ -451,12 +478,6 @@ class ProjectListView(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(6)
 
-        self._search = QLineEdit()
-        self._search.setPlaceholderText("Rechercher…")
-        self._search.setObjectName("searchBox")
-        self._search.textChanged.connect(self._filter)
-        v.addWidget(self._search)
-
         lbl_i = QLabel("INSTANCES")
         lbl_i.setObjectName("sectionLbl")
         v.addWidget(lbl_i)
@@ -474,6 +495,7 @@ class ProjectListView(QWidget):
         self._all_instances: list[dict] = []
         self._all_intents:   list[dict] = []
         self._sort_key = "name_asc"
+        self._search_text = ""
         self._reorder_pending_inst = False
         self._reorder_pending_int  = False
 
@@ -519,7 +541,7 @@ class ProjectListView(QWidget):
 
     def set_sort(self, sort_key: str) -> None:
         self._sort_key = sort_key
-        self._filter(self._search.text())
+        self._filter(self._search_text)
 
     def _sort_list(self, entries: list[dict], kind: str) -> list[dict]:
         pairs = [(e, kind) for e in entries]
@@ -560,12 +582,17 @@ class ProjectListView(QWidget):
             self._int_list.addItem(item)
         self._int_list.blockSignals(False)
 
+    def filter(self, text: str) -> None:
+        """Filtre la vue liste par texte (nom, chemin, ou tags) — appelé
+        depuis la barre de recherche partagée de ProjectBrowser, quel que
+        soit le mode d'affichage actif."""
+        self._search_text = text
+        self._filter(text)
+
     def _filter(self, text: str) -> None:
         t = text.strip().lower()
-        inst = [e for e in self._all_instances
-                if not t or t in (e.get("name","") + e.get("path","")).lower()]
-        ints = [e for e in self._all_intents
-                if not t or t in (e.get("name","") + e.get("path","")).lower()]
+        inst = [e for e in self._all_instances if not t or _entry_matches(e, t)]
+        ints = [e for e in self._all_intents if not t or _entry_matches(e, t)]
         self._render(inst, ints)
 
     def _on_sel(self, item: QListWidgetItem | None, kind: str) -> None:
@@ -585,9 +612,6 @@ class ProjectListView(QWidget):
             if item.data(Qt.UserRole) == path:
                 lst.setCurrentItem(item)
                 return
-
-    def get_search_widget(self) -> QLineEdit:
-        return self._search
 
     # ── Ping global ───────────────────────────────────────────────────────────
 
@@ -675,6 +699,13 @@ class ProjectBrowser(QWidget):
         bar.addWidget(self._btn_list)
         bar.addWidget(self._btn_grid)
         v.addLayout(bar)
+
+        # ── Recherche — partagée entre les deux modes d'affichage ──────────────
+        self._search = QLineEdit()
+        self._search.setPlaceholderText("Rechercher…")
+        self._search.setObjectName("searchBox")
+        self._search.textChanged.connect(self._on_search)
+        v.addWidget(self._search)
 
         # ── Barre tri + ping ──────────────────────────────────────────────────
         ctrl = QHBoxLayout()
@@ -768,6 +799,14 @@ class ProjectBrowser(QWidget):
     def get_grid_view(self) -> ProjectGridView:
         return self._grid_view
 
+    def get_search_widget(self) -> QLineEdit:
+        return self._search
+
+    def _on_search(self, text: str) -> None:
+        self.filter(text)
+
     def filter(self, text: str) -> None:
-        self._list_view._filter(text)
+        """Filtre les deux vues (liste ET grille) par texte — la recherche
+        reste active quel que soit le mode d'affichage courant."""
+        self._list_view.filter(text)
         self._grid_view.filter(text)
