@@ -59,10 +59,10 @@ jobs:
       - name: Creer / mettre a jour la PR dev -> main
         uses: peter-evans/create-pull-request@v7
         with:
-          token:  ${{ secrets.GITHUB_TOKEN }}
-          base:   main
-          head:   dev
-          title:  ${{ steps.ci.outputs.title }}
+          token:   ${{ secrets.GITHUB_TOKEN }}
+          base:    main
+          head:    dev
+          title:   ${{ steps.ci.outputs.title }}
           body: |
             Merge automatique depuis `dev`.
             **Version :** `${{ steps.ci.outputs.title }}`
