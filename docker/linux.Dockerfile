@@ -12,6 +12,7 @@
 FROM python:3.13-slim-bookworm
 
 RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        build-essential \
         git \
         patchelf \
         dpkg-dev \
@@ -30,6 +31,13 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
         libopengl0 \
         libxcb-cursor0 \
     && rm -rf /var/lib/apt/lists/*
+
+# Force gcc/g++ explicitement : l'image officielle python:3.13-slim-bookworm
+# embarque des métadonnées sysconfig qui poussent Nuitka/Scons à chercher un
+# compilateur nommé "x86_64-conda-linux-gnu-gcc" (héritage du pipeline de
+# build de l'image officielle) au lieu du gcc réellement installé ci-dessus.
+ENV CC=gcc
+ENV CXX=g++
 
 RUN pip install --no-cache-dir nuitka pyside6 cryptography
 
