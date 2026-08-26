@@ -4,12 +4,15 @@
 
 ---
 
-> 🐳 **Méthode recommandée : Docker.** Depuis la v1.0.2, la compilation
-> Linux (.deb) et Windows (.msi) se fait via des images Docker dédiées
-> (`docker/linux.Dockerfile`, `docker/windows.Dockerfile`), pour un build
-> strictement identique en local, entre contributeurs et en CI. Voir
-> [`docker/README.md`](../docker/README.md). Le reste de ce guide décrit
-> la compilation manuelle directe (sans Docker), toujours possible si besoin.
+> 🐳 **Docker : usage local optionnel uniquement.** La CI GitHub Actions
+> compile directement sur les runners (voir `.github/workflows/build-release.yml`),
+> pas via Docker — Windows notamment ne peut pas compiler via Docker sur les
+> runners GitHub hébergés (Docker Desktop n'y est pas installé). Les
+> `Dockerfile` dans `docker/` restent disponibles pour qui veut un
+> environnement reproductible en local. Voir [`docker/README.md`](../docker/README.md)
+> (y compris un problème connu non résolu sur le build Linux via Docker).
+> Le reste de ce guide décrit la compilation manuelle directe, la méthode
+> utilisée par la CI.
 
 ---
 

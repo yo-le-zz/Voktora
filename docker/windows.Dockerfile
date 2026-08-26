@@ -1,8 +1,12 @@
 # Voktora — image de compilation Windows (.msi)
 #
 # Fournit un environnement reproductible pour compiler Voktora avec Nuitka
-# et l'empaqueter en .msi via WiX Toolset 4.x, identique en local et en CI.
-# Necessite un hote Docker configure en "Windows containers".
+# et l'empaqueter en .msi via WiX Toolset 4.x — utilisable en LOCAL, sur une
+# machine Windows avec Docker Desktop configure en "Windows containers".
+#
+# NON utilise en CI : les runners windows-latest de GitHub Actions n'ont pas
+# Docker Desktop installe. Le workflow CI compile Windows directement sur
+# le runner (voir .github/workflows/build-release.yml, job "build").
 #
 # Utilisation :
 #   docker build -f docker/windows.Dockerfile -t voktora-build-windows .
