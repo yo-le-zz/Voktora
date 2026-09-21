@@ -41,7 +41,8 @@ jobs:
       - name: Tests unitaires (pytest)
         env:
           QT_QPA_PLATFORM: offscreen
-        run: pytest --cov=voktora --cov-report=term-missing
+          QT_QPA_PLATFORMTHEME: ""
+        run: pytest --cov=voktora --cov-report=term-missing -s
 
   # -- JOB 1 : push dev -> PR automatique vers main --------------------------
   open_pr:
