@@ -41,6 +41,7 @@ jobs:
       - name: Tests unitaires (pytest)
         env:
           QT_QPA_PLATFORM: offscreen
+          QT_QPA_PLATFORMTHEME: minimal
         run: pytest
 
   # -- JOB 1 : push dev -> PR automatique vers main --------------------------
