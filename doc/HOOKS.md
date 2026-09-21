@@ -8,7 +8,7 @@ Les hooks déclenchent automatiquement des scripts shell ou Python lors d'évén
 
 | Hook | Quand |
 |------|-------|
-| `on_create` | Nouvelle instance ou intent créée |
+| `on_create` | Nouveau projet créé (création, import ou clone) |
 | `on_open` | Projet ouvert dans le panneau détail |
 | `on_delete` | Projet supprimé |
 | `on_clone` | Dépôt Git cloné |

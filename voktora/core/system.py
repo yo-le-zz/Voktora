@@ -1,10 +1,16 @@
 """
 Voktora — core.system
-Fragment de core.py extrait lors du découpage v1.0.2 en package.
+Ouverture de l'explorateur, du terminal et d'applications externes.
+
+Sécurité : le nom d'un projet peut venir d'une archive ZIP ou d'un dossier
+importé, donc être contrôlé par un tiers. Aucun chemin n'est donc jamais
+interpolé dans une chaîne interprétée par un shell : il est toujours passé
+comme argument distinct (argv) ou comme répertoire de travail (`cwd`).
 """
 
 from __future__ import annotations
 
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -34,23 +40,22 @@ def open_explorer(path: Path) -> None:
 def open_terminal(path: Path) -> None:
     """Ouvre un terminal au chemin donné (Windows + Linux)."""
     if constants.IS_WINDOWS:
-        subprocess.Popen(
-            f'start "Voktora Terminal" cmd /k "cd /d "{path}""',
-            shell=True,
-        )
+        # Nouvelle console cmd démarrée DANS le dossier : pas de « cd /d "…" » à échapper.
+        subprocess.Popen(["cmd", "/k"], cwd=str(path), creationflags=subprocess.CREATE_NEW_CONSOLE)
     elif constants.IS_LINUX:
-        # Essayer plusieurs émulateurs de terminal courants
+        # Essayer plusieurs émulateurs de terminal courants ; le dossier est
+        # transmis soit en argument dédié, soit via cwd (jamais dans un `cd '…'`).
         terminals = [
-            ["gnome-terminal", f"--working-directory={path}"],
-            ["konsole", "--workdir", str(path)],
-            ["xterm", "-e", f"cd '{path}' && bash"],
-            ["xfce4-terminal", f"--working-directory={path}"],
-            ["tilix", f"--working-directory={path}"],
-            ["bash", "-c", f"cd '{path}' && bash"],
+            (["gnome-terminal", f"--working-directory={path}"], None),
+            (["konsole", "--workdir", str(path)], None),
+            (["xterm"], str(path)),
+            (["xfce4-terminal", f"--working-directory={path}"], None),
+            (["tilix", f"--working-directory={path}"], None),
+            (["bash"], str(path)),
         ]
-        for cmd in terminals:
+        for cmd, cwd in terminals:
             try:
-                subprocess.Popen(cmd)
+                subprocess.Popen(cmd, cwd=cwd)
                 return
             except FileNotFoundError:
                 continue
@@ -69,14 +74,30 @@ def open_vscode(path: Path) -> None:
         ) from exc
 
 
+def build_app_command(cmd: str, path: Path) -> list[str] | str:
+    """Construit la commande d'une application « ouvrir avec » SANS passer par un shell.
+
+    `cmd` peut contenir {path}. Sous POSIX, le modèle est découpé avec shlex puis
+    {path} est substitué dans chaque argument : le chemin reste UN argument,
+    quels que soient les caractères qu'il contient. Sous Windows (CreateProcess
+    attend une ligne de commande), le chemin est protégé avec list2cmdline.
+    """
+    if constants.IS_WINDOWS:
+        quoted = subprocess.list2cmdline([str(path)])
+        return cmd.replace("{path}", quoted) if "{path}" in cmd else f"{cmd} {quoted}"
+    argv = shlex.split(cmd)
+    if any("{path}" in arg for arg in argv):
+        return [arg.replace("{path}", str(path)) for arg in argv]
+    return [*argv, str(path)]
+
+
 def open_app_at_path(cmd: str, path: Path) -> None:
     """
     Ouvre une application personnalisée avec le chemin projet.
     La commande peut contenir {path} comme placeholder.
     Ex : cmd = "code {path}"  →  code /home/user/MonProjet
     """
-    full_cmd = cmd.replace("{path}", str(path)) if "{path}" in cmd else f"{cmd} {path}"
-    subprocess.Popen(full_cmd, shell=True)
+    subprocess.Popen(build_app_command(cmd, path))
 
 
 def run_project_builder(path: Path) -> None:

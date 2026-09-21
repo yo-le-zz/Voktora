@@ -10,7 +10,6 @@ import html
 import core
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -23,8 +22,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from task_worker import TaskWorker
 
 from . import token_password_dialog, workers
+from .repo_picker import RepoChooserDialog
 
 
 class GitDialog(QDialog):
@@ -74,9 +75,16 @@ class GitDialog(QDialog):
             layout.addWidget(banner)
 
         layout.addWidget(QLabel("URL du repository :"))
+        url_row = QHBoxLayout()
         self.url_edit = QLineEdit(current_url)
         self.url_edit.setPlaceholderText("https://github.com/user/repo.git")
-        layout.addWidget(self.url_edit)
+        url_row.addWidget(self.url_edit)
+        self.btn_pick_repo = QPushButton("🐙 Mes dépôts…")
+        self.btn_pick_repo.setToolTip("Choisir parmi vos dépôts et ceux de vos organisations")
+        self.btn_pick_repo.setEnabled(bool(core.get_github_session()))
+        self.btn_pick_repo.clicked.connect(self._pick_repo)
+        url_row.addWidget(self.btn_pick_repo)
+        layout.addLayout(url_row)
 
         self.chk_private = QCheckBox("🔒  Ce repository est privé")
         self.chk_private.setChecked(token_protected or (not has_global_account))
@@ -287,57 +295,102 @@ class GitDialog(QDialog):
         self._repo_verified = False
         self.lbl_verify_result.setText("")
 
-    def _get_current_token(self) -> str:
-        typed = self.token_edit.text().strip()
+    @staticmethod
+    def _resolve_token(typed: str, in_clear: str, has_global: bool) -> tuple[str, str]:
+        """(token utilisable, message d'erreur). Fait des appels réseau : hors thread GUI si possible."""
         if typed:
-            # Vérifier le token saisi manuellement
-            is_valid, message = core.verify_github_token(typed)
-            if is_valid:
-                return typed
-            else:
-                # Token invalide, on l'indique à l'utilisateur
-                self.lbl_verify_result.setText(f"❌ {message}")
-                return ""
-        if self._token_in_clear:
-            return self._token_in_clear
-        # Vérifier la session GitHub globale
-        if self._has_global:
+            ok, message = core.verify_github_token(typed)
+            return (typed, "") if ok else ("", f"❌ {message}")
+        if in_clear:
+            return in_clear, ""
+        if has_global:
             session = core.get_github_session()
             if session and session.get("token"):
-                # Vérifier que le token OAuth est toujours valide
-                is_valid, message = core.verify_github_token(session["token"])
-                if is_valid:
-                    return session["token"]
-                else:
-                    # Token OAuth invalide
-                    self.lbl_verify_result.setText(f"❌ Session GitHub expirée : {message}")
-                    return ""
-        return ""
+                ok, message = core.verify_github_token(session["token"])
+                return (session["token"], "") if ok else ("", f"❌ Session GitHub expirée : {message}")
+        return "", ""
+
+    def _get_current_token(self) -> str:
+        token, error = self._resolve_token(self.token_edit.text().strip(), self._token_in_clear, self._has_global)
+        if error:
+            self.lbl_verify_result.setText(error)
+        return token
+
+    def _start_task(self, job, on_done) -> None:
+        """Lance `job()` dans un thread ; `on_done(résultat)` est appelé dans le thread GUI."""
+        worker = TaskWorker(lambda _ctx: job())
+        worker.succeeded.connect(on_done)
+        worker.failed.connect(self._on_task_failed)
+        self._worker = worker
+        worker.start()
+
+    def done(self, result: int) -> None:
+        worker = getattr(self, "_worker", None)
+        if worker is not None and worker.isRunning():
+            worker.wait(15_000)   # les appels réseau ont un délai maximal de 10 s
+        super().done(result)
+
+    def _on_task_failed(self, message: str) -> None:
+        self._accept_after_verify = False
+        self.btn_verify.setEnabled(True)
+        self.btn_load_branches.setEnabled(True)
+        self.btn_load_branches.setText("↻  Charger depuis GitHub")
+        self.lbl_verify_result.setText(f"❌ {message}")
+
+    def _pick_repo(self) -> None:
+        dlg = RepoChooserDialog(self)
+        if dlg.exec() == QDialog.Accepted and dlg.selected_repo():
+            repo = dlg.selected_repo()
+            self.url_edit.setText(repo.clone_url)
+            self.chk_private.setChecked(repo.private)
+            self.branch_combo.setCurrentText(repo.default_branch)
 
     def _verify_repo(self):
-        url   = self.url_edit.text().strip()
-        token = self._get_current_token() if self.chk_private.isChecked() else ""
+        url = self.url_edit.text().strip()
         if not url:
             self.lbl_verify_result.setText("⚠  Entrez d'abord une URL.")
             return
+        private = self.chk_private.isChecked()
+        typed, in_clear, has_global = self.token_edit.text().strip(), self._token_in_clear, self._has_global
         self.btn_verify.setEnabled(False)
         self.lbl_verify_result.setText("⏳  Vérification…")
-        QApplication.processEvents()
-        ok, msg = core.verify_github_repo(url, token)
+
+        def job():
+            token, error = self._resolve_token(typed, in_clear, has_global) if private else ("", "")
+            return (False, error) if error else core.verify_github_repo(url, token)
+
+        self._start_task(job, self._on_verified)
+
+    def _on_verified(self, result) -> None:
+        ok, msg = result
         self._repo_verified = ok
         self.lbl_verify_result.setText(msg)
         self.btn_verify.setEnabled(True)
+        if getattr(self, "_accept_after_verify", False):
+            self._accept_after_verify = False
+            if ok:
+                self.accept()
+            else:
+                QMessageBox.warning(self, "Voktora — Repo inaccessible",
+                                    f"{msg}\n\nVérifiez l'URL et le token.")
 
     def _load_remote_branches(self):
-        url   = self.url_edit.text().strip()
-        token = self._get_current_token() if self.chk_private.isChecked() else ""
+        url = self.url_edit.text().strip()
         if not url:
             QMessageBox.warning(self, "Voktora", "Entrez d'abord une URL de repo.")
             return
+        private = self.chk_private.isChecked()
+        typed, in_clear, has_global = self.token_edit.text().strip(), self._token_in_clear, self._has_global
         self.btn_load_branches.setEnabled(False)
         self.btn_load_branches.setText("⏳  Chargement…")
-        QApplication.processEvents()
-        branches = core.list_github_branches(url, token)
+
+        def job():
+            token, _error = self._resolve_token(typed, in_clear, has_global) if private else ("", "")
+            return core.list_github_branches(url, token)
+
+        self._start_task(job, self._on_branches_loaded)
+
+    def _on_branches_loaded(self, branches) -> None:
         self.btn_load_branches.setEnabled(True)
         self.btn_load_branches.setText("↻  Charger depuis GitHub")
         if not branches:
@@ -361,20 +414,10 @@ class GitDialog(QDialog):
             return
 
         if not self._repo_verified:
-            token = self._get_current_token() if self.chk_private.isChecked() else ""
-            self.btn_verify.setEnabled(False)
-            self.lbl_verify_result.setText("⏳  Vérification…")
-            QApplication.processEvents()
-            ok, msg = core.verify_github_repo(url, token)
-            self.lbl_verify_result.setText(msg)
-            self.btn_verify.setEnabled(True)
-            self._repo_verified = ok
-            if not ok:
-                QMessageBox.warning(
-                    self, "Voktora — Repo inaccessible",
-                    f"{msg}\n\nVérifiez l'URL et le token."
-                )
-                return
+            # Vérification réseau en arrière-plan ; la fenêtre se valide seule si elle réussit.
+            self._accept_after_verify = True
+            self._verify_repo()
+            return
 
         self.accept()
 

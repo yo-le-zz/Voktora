@@ -60,29 +60,17 @@ class ConfigDialog(QDialog):
         grp_storage = QGroupBox("📁 Stockage des projets")
         form_storage = QFormLayout()
 
-        self.instances_root_edit = QLineEdit()
-        self.instances_root_edit.setPlaceholderText("Chemin personnalisé (laisser vide = défaut)")
-        btn_inst_browse = QPushButton("…")
-        btn_inst_browse.setFixedWidth(32)
-        btn_inst_browse.clicked.connect(
-            lambda: self._browse_dir(self.instances_root_edit)
+        self.projects_root_edit = QLineEdit()
+        self.projects_root_edit.setPlaceholderText("Chemin personnalisé (laisser vide = défaut)")
+        btn_root_browse = QPushButton("…")
+        btn_root_browse.setFixedWidth(32)
+        btn_root_browse.clicked.connect(
+            lambda: self._browse_dir(self.projects_root_edit)
         )
-        row_inst = QHBoxLayout()
-        row_inst.addWidget(self.instances_root_edit)
-        row_inst.addWidget(btn_inst_browse)
-        form_storage.addRow("Instances :", row_inst)
-
-        self.intents_root_edit = QLineEdit()
-        self.intents_root_edit.setPlaceholderText("Chemin personnalisé (laisser vide = défaut)")
-        btn_int_browse = QPushButton("…")
-        btn_int_browse.setFixedWidth(32)
-        btn_int_browse.clicked.connect(
-            lambda: self._browse_dir(self.intents_root_edit)
-        )
-        row_int = QHBoxLayout()
-        row_int.addWidget(self.intents_root_edit)
-        row_int.addWidget(btn_int_browse)
-        form_storage.addRow("Intents :", row_int)
+        row_root = QHBoxLayout()
+        row_root.addWidget(self.projects_root_edit)
+        row_root.addWidget(btn_root_browse)
+        form_storage.addRow("Projets :", row_root)
 
         # Créer les dossiers immédiatement
         self.btn_create_dirs = QPushButton("📂 Créer les dossiers maintenant")
@@ -266,8 +254,7 @@ class ConfigDialog(QDialog):
 
     def _load_current_values(self) -> None:
         storage = core.get_storage_config()
-        self.instances_root_edit.setText(storage.get("instances_root") or "")
-        self.intents_root_edit.setText(storage.get("intents_root") or "")
+        self.projects_root_edit.setText(storage.get("projects_root") or "")
 
         cache = core.get_cache_config()
         idx   = self.cache_mode_combo.findData(cache["mode"])
@@ -366,25 +353,18 @@ class ConfigDialog(QDialog):
             line_edit.setText(path)
 
     def _create_install_dirs(self) -> None:
-        """Crée immédiatement les dossiers instances/intents configurés."""
-        inst_root = self.instances_root_edit.text().strip()
-        int_root  = self.intents_root_edit.text().strip()
+        """Crée immédiatement le dossier racine des projets configuré."""
+        root = self.projects_root_edit.text().strip()
 
         created = []
         errors  = []
 
-        for label, path_str in [("Instances", inst_root), ("Intents", int_root)]:
-            if path_str:
-                p = Path(path_str)
-            else:
-                # Utiliser le chemin par défaut
-                p = (core.get_instances_root()
-                     if label == "Instances" else core.get_intents_root())
-            try:
-                p.mkdir(parents=True, exist_ok=True)
-                created.append(f"✅ {label} : {p}")
-            except Exception as e:
-                errors.append(f"❌ {label} : {e}")
+        p = Path(root) if root else core.get_projects_root()
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+            created.append(f"✅ Projets : {p}")
+        except Exception as e:
+            errors.append(f"❌ Projets : {e}")
 
         # Créer aussi le dossier data
         try:
@@ -401,9 +381,7 @@ class ConfigDialog(QDialog):
 
     def _save(self) -> None:
         # Stockage
-        inst_root = self.instances_root_edit.text().strip() or None
-        int_root  = self.intents_root_edit.text().strip()  or None
-        core.set_storage_config(inst_root, int_root)
+        core.set_storage_config(self.projects_root_edit.text().strip() or None)
 
         # Cache
         cache_mode = self.cache_mode_combo.currentData()
@@ -441,7 +419,7 @@ class ConfigDialog(QDialog):
         reply = QMessageBox.question(
             self, "Réinitialiser",
             "Voulez-vous vraiment réinitialiser toute la configuration ?\n\n"
-            "⚠ Les listes d'instances et d'intents seront préservées.",
+            "⚠ Vos projets et catégories seront préservés.",
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No
         )
         if reply == QMessageBox.Yes:

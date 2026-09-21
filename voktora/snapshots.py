@@ -1,6 +1,5 @@
 """
 snapshots.py — Snapshot / Restore de projets Voktora
-Version : 1.0.2
 Capture l'état complet d'un projet (fichiers + métadonnées config)
 dans un .snap (zip structuré) et permet de le restaurer.
 """
@@ -61,7 +60,11 @@ def create(project_path: Path, label: str = "") -> Path:
             if f.is_file():
                 arc = SNAP_DATA_DIR + str(f.relative_to(project_path))
                 try:
-                    zf.write(f, arc)
+                    if f.relative_to(project_path).as_posix() == ".git/config":
+                        # Jamais d'identifiants (ancien remote « https://user:token@… ») dans un snapshot.
+                        zf.writestr(arc, core.strip_git_credentials(f.read_bytes()))
+                    else:
+                        zf.write(f, arc)
                 except (PermissionError, OSError):
                     pass
 

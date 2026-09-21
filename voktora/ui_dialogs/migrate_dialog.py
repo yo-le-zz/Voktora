@@ -219,18 +219,12 @@ class MigrateDialog(QDialog):
     def _build_export_summary(self) -> str:
         try:
             import core as _core
-            cfg  = _core._load_config()
-            inst = cfg.get("instances", [])
-            intn = cfg.get("intents",   [])
-            ok_i = sum(1 for e in inst if Path(e["path"]).exists())
-            ok_n = sum(1 for e in intn if Path(e["path"]).exists())
-            miss_i = len(inst) - ok_i
-            miss_n = len(intn) - ok_n
+            projects = _core._load_config().get("projects", [])
+            ok = sum(1 for e in projects if Path(e["path"]).exists())
+            missing = len(projects) - ok
             lines = [
-                f"  📦 Instances : {ok_i} valide(s)" +
-                (f", {miss_i} absente(s) du disque" if miss_i else ""),
-                f"  🌱 Intents   : {ok_n} valide(s)" +
-                (f", {miss_n} absent(s) du disque" if miss_n else ""),
+                f"  📦 Projets : {ok} valide(s)" +
+                (f", {missing} absent(s) du disque" if missing else ""),
             ]
             return "\n".join(lines)
         except Exception as e:
@@ -344,9 +338,8 @@ class MigrateDialog(QDialog):
         form_dst.addRow("Racine :", row_dst)
 
         hint = QLabel(
-            "Les projets seront extraits dans :\n"
-            "  <racine>/instances/<nom_projet>/\n"
-            "  <racine>/intents/<nom_projet>/"
+            "Les projets dont le chemin d'origine est introuvable seront\n"
+            "recherchés dans : <racine>/<nom_projet>/"
         )
         hint.setStyleSheet("font-size: 11px; color: #6c7086;")
         hint.setWordWrap(True)

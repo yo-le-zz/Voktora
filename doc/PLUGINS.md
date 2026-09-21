@@ -80,7 +80,7 @@ Déclenché automatiquement par les événements Voktora.
 
 | Hook | Déclencheur |
 |------|-------------|
-| `on_create` | Nouvelle instance créée |
+| `on_create` | Nouveau projet créé |
 | `on_open` | Projet ouvert dans le panneau |
 | `on_delete` | Projet supprimé |
 | `on_clone` | Dépôt Git cloné |

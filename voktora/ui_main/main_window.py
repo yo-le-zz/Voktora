@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import html
 import json
-from datetime import datetime
 from pathlib import Path
 
 import core
@@ -22,22 +21,17 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QFileDialog,
-    QFormLayout,
     QFrame,
-    QGroupBox,
     QHBoxLayout,
     QInputDialog,
     QLabel,
-    QListWidgetItem,
     QMainWindow,
     QMessageBox,
-    QProgressBar,
     QPushButton,
     QSizePolicy,
     QSplitter,
     QStackedWidget,
     QStatusBar,
-    QTextEdit,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -54,12 +48,16 @@ from ui_project_panel import ProjectPanel
 from ui_project_view import ProjectBrowser
 
 from . import (
+    clone_dialog,
     create_dialog,
     diagnostic_dialog,
     git_dialog,
+    github_dialog,
     github_login_dialog,
+    import_dialog,
     push_dialog,
     storage_dialog,
+    task_dialog,
     token_password_dialog,
     uninstall_dialog,
     workers,
@@ -70,24 +68,22 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Voktora — Project Instance Manager")
+        self.setWindowTitle("Voktora — Project Manager")
+        self.setAcceptDrops(True)   # glisser un dossier ou un .zip sur la fenêtre = importer
         self.setMinimumSize(1180, 720)
         
         # Appliquer le thème
         theme_manager.apply_theme_to_app(QApplication.instance())
         
         self._sel_path:   Path | None      = None
-        self._sel_kind:   str              = ""
         self._worker:     workers.Worker | None    = None
         self._git_worker: workers.GitWorker | None = None
         self._delete_worker: workers.DeleteWorker | None = None
-        self._last_saved_note: str = ""
         self._auto_save_timer = QTimer(self)
         self._auto_save_timer.timeout.connect(self._auto_save_note)
         
-        # Cache de performances pour les instances et intents
-        self._instances_cache: list[dict] | None = None
-        self._intents_cache: list[dict] | None = None
+        # Cache de performances pour la liste des projets
+        self._projects_cache: list[dict] | None = None
         self._cache_timestamp: float | None = None
         self._cache_ttl: float = 30.0  # Cache valide pendant 30 secondes
 
@@ -281,11 +277,11 @@ class MainWindow(QMainWindow):
     def _setup_shortcuts(self) -> None:
         # F5 — Actualiser
         QShortcut(QKeySequence("F5"), self).activated.connect(self._refresh_all)
-        # Ctrl+N — Nouvelle instance
-        QShortcut(QKeySequence("Ctrl+N"), self).activated.connect(
-            lambda: self.act_create("instance")
-        )
-        # Ctrl+F — Focus recherche instances
+        # Ctrl+N — Nouveau projet
+        QShortcut(QKeySequence("Ctrl+N"), self).activated.connect(self.act_create)
+        # Ctrl+I — Importer un dossier ou un ZIP
+        QShortcut(QKeySequence("Ctrl+I"), self).activated.connect(self.act_import)
+        # Ctrl+F — Focus recherche projets
         QShortcut(QKeySequence("Ctrl+F"), self).activated.connect(
             self._show_project_switcher
         )
@@ -294,22 +290,6 @@ class MainWindow(QMainWindow):
 
     def _clear_search(self) -> None:
         self._browser.get_search_widget().clear()
-
-    # ──────────────────────────────────────────────
-    #  FILTRES RECHERCHE
-    # ──────────────────────────────────────────────
-
-    def _filter_instance_list(self, text: str) -> None:
-        text = text.strip().lower()
-        for i in range(self.instance_list.count()):
-            item = self.instance_list.item(i)
-            item.setHidden(bool(text) and text not in item.text().lower())
-
-    def _filter_intent_list(self, text: str) -> None:
-        text = text.strip().lower()
-        for i in range(self.intent_list.count()):
-            item = self.intent_list.item(i)
-            item.setHidden(bool(text) and text not in item.text().lower())
 
     # ──────────────────────────────────────────────
     #  MENUBAR
@@ -329,12 +309,12 @@ class MainWindow(QMainWindow):
 
         # Menu Fichier
         menu_file = menubar.addMenu("📁 Fichier")
-        act_new_inst = QAction("📦 Nouvelle instance", self)
-        act_new_inst.triggered.connect(lambda: self.act_create("instance"))
-        act_new_int  = QAction("🧩 Nouvel intent", self)
-        act_new_int.triggered.connect(lambda: self.act_create("intent"))
-        act_import   = QAction("📂 Importer depuis ZIP...", self)
-        act_import.triggered.connect(self.act_import_zip)
+        act_new      = QAction("📦 Nouveau projet", self)
+        act_new.triggered.connect(self.act_create)
+        act_import   = QAction("📥 Importer un dossier ou un ZIP...", self)
+        act_import.triggered.connect(self.act_import)
+        act_clone_repo = QAction("🐙 Cloner un dépôt GitHub...", self)
+        act_clone_repo.triggered.connect(self.act_clone_repo)
         act_import_cfg = QAction("🔄 Importer config Meridian / Voktora...", self)
         act_import_cfg.setToolTip("Fusionne un config.json d'une ancienne version Meridian ou Voktora")
         act_import_cfg.triggered.connect(self.act_import_meridian_config)
@@ -345,10 +325,10 @@ class MainWindow(QMainWindow):
         act_quit     = QAction("✕ Quitter", self)
         act_quit.triggered.connect(self.close)
         
-        menu_file.addAction(act_new_inst)
-        menu_file.addAction(act_new_int)
-        menu_file.addSeparator()
+        menu_file.addAction(act_new)
         menu_file.addAction(act_import)
+        menu_file.addAction(act_clone_repo)
+        menu_file.addSeparator()
         menu_file.addAction(act_import_cfg)
         menu_file.addAction(act_export)
         menu_file.addSeparator()
@@ -358,8 +338,8 @@ class MainWindow(QMainWindow):
 
         # Menu Git
         menu_git = menubar.addMenu("🐙 Git")
-        act_clone    = QAction("📥 Git clone...", self)
-        act_clone.triggered.connect(self.act_git_clone)
+        act_clone    = QAction("📥 Cloner un dépôt...", self)
+        act_clone.triggered.connect(self.act_clone_repo)
         act_configure = QAction("🔗 Configurer le repo...", self)
         act_configure.triggered.connect(self.act_git_configure)
         act_init     = QAction("⚙ git init", self)
@@ -445,13 +425,13 @@ class MainWindow(QMainWindow):
         act_gh_login.triggered.connect(self.act_github_login)
         act_gh_logout = QAction("🚪 Se déconnecter", self)
         act_gh_logout.triggered.connect(self.act_github_logout)
-        act_gh_token = QAction("🔑 Gérer les tokens...", self)
-        act_gh_token.triggered.connect(self.act_manage_tokens)
+        act_gh_hub = QAction("🐙 Compte & organisations...", self)
+        act_gh_hub.triggered.connect(self.act_github_hub)
         
         menu_gh.addAction(act_gh_login)
         menu_gh.addAction(act_gh_logout)
         menu_gh.addSeparator()
-        menu_gh.addAction(act_gh_token)
+        menu_gh.addAction(act_gh_hub)
 
         # Menu Aide
         menu_help = menubar.addMenu("❓ Aide")
@@ -520,6 +500,15 @@ class MainWindow(QMainWindow):
         self._browser = ProjectBrowser()
         self._browser.project_selected.connect(self._on_project_selected)
         self._browser.create_requested.connect(self.act_create)
+        self._browser.import_requested.connect(self.act_import)
+        self._browser.clone_requested.connect(self.act_clone_repo)
+        self._browser.manage_categories_requested.connect(self.act_manage_categories)
+        self._browser.projects_modified.connect(self._on_projects_modified)
+        self._browser.view_state_changed.connect(self._save_view_state)
+        _cfg = core.get_app_config()
+        self._browser.set_view_state(_cfg.get("browser_mode", "list"),
+                                     _cfg.get("browser_group_by", core.DEFAULT_GROUP),
+                                     _cfg.get("browser_sort", core.DEFAULT_SORT))
         self._right_stack.addWidget(self._browser)     # idx 0
 
         self._project_panel = ProjectPanel()
@@ -534,9 +523,6 @@ class MainWindow(QMainWindow):
         self._main_splitter.setStretchFactor(1, 1)
 
         h.addWidget(self._main_splitter, stretch=1)
-
-        # Legacy widgets (pour les act_* qui les référencent encore)
-        self._legacy_content = self._build_content()
 
     # ── SIDEBAR ──────────────────────────────────
 
@@ -573,7 +559,7 @@ class MainWindow(QMainWindow):
         lbl_t.setObjectName("appTitle")
         v.addWidget(lbl_t)
 
-        lbl_s = QLabel("Project Instance Manager")
+        lbl_s = QLabel("Project Manager")
         lbl_s.setObjectName("appSub")
         v.addWidget(lbl_s)
 
@@ -636,8 +622,8 @@ class MainWindow(QMainWindow):
             sv.addLayout(row)
             setattr(self, attr, lbl_v)
 
-        _stat_row("📁 Instances",  "_stat_instances")
-        _stat_row("🎯 Intents",    "_stat_intents")
+        _stat_row("📁 Projets",    "_stat_projects")
+        _stat_row("📂 Catégories", "_stat_categories")
         _stat_row("💾 Disques",    "_stat_drives")
         _stat_row("✅ Sains",      "_stat_healthy")
         _stat_row("⚠️  Avertiss.", "_stat_warnings")
@@ -656,14 +642,11 @@ class MainWindow(QMainWindow):
     def _refresh_sidebar_stats(self) -> None:
         """Met à jour les compteurs de la zone stats de la sidebar."""
         try:
-            cfg       = core._load_config()
-            instances = cfg.get("instances", [])
-            intents   = cfg.get("intents", [])
-            self._stat_instances.setText(str(len(instances)))
-            self._stat_intents.setText(str(len(intents)))
+            self._stat_projects.setText(str(len(core.list_projects())))
+            self._stat_categories.setText(str(len(core.list_categories())))
         except Exception:
-            self._stat_instances.setText("—")
-            self._stat_intents.setText("—")
+            self._stat_projects.setText("—")
+            self._stat_categories.setText("—")
 
         try:
             self._stat_drives.setText(str(self.drive_combo.count()))
@@ -675,8 +658,7 @@ class MainWindow(QMainWindow):
 
             import dashboard as _dash
             cfg   = core._load_config()
-            paths = [_P(e["path"]) for e in
-                     cfg.get("instances", []) + cfg.get("intents", [])]
+            paths = [_P(e["path"]) for e in cfg.get("projects", [])]
             if paths:
                 health = [_dash.analyze_project(p) for p in paths]
                 healthy  = sum(1 for h in health if h.score >= 80)
@@ -803,316 +785,15 @@ class MainWindow(QMainWindow):
 
     # ── CONTENT ──────────────────────────────────
 
-    def _build_content(self) -> QWidget:
-        w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(24, 20, 24, 20)
-        v.setSpacing(12)
-
-        self.lbl_no_sel = QLabel("← Sélectionnez une instance ou un intent")
-        self.lbl_no_sel.setObjectName("noSel")
-        self.lbl_no_sel.setAlignment(Qt.AlignCenter)
-        v.addWidget(self.lbl_no_sel)
-
-        self.detail_widget = QWidget()
-        self.detail_widget.setVisible(False)
-        dv = QVBoxLayout(self.detail_widget)
-        dv.setContentsMargins(0, 0, 0, 0)
-        dv.setSpacing(10)
-
-        header_h = QHBoxLayout()
-        self.lbl_kind_tag = QLabel()
-        self.lbl_sel_name = QLabel()
-        self.lbl_sel_name.setObjectName("selTitle")
-        header_h.addWidget(self.lbl_kind_tag)
-        header_h.addWidget(self.lbl_sel_name)
-        header_h.addStretch()
-
-        btn_rename = QPushButton("✏  Renommer")
-        btn_rename.setObjectName("subtle")
-        btn_rename.clicked.connect(self.act_rename)
-        header_h.addWidget(btn_rename)
-        dv.addLayout(header_h)
-
-        path_grp = QGroupBox("📂  Chemin complet")
-        pg = QVBoxLayout(path_grp)
-        self.lbl_path = QLabel()
-        self.lbl_path.setObjectName("pathLabel")
-        self.lbl_path.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.lbl_path.setWordWrap(True)
-        pg.addWidget(self.lbl_path)
-
-        path_btns = QHBoxLayout()
-        btn_explorer = QPushButton("🗂  Explorateur")
-        btn_explorer.clicked.connect(self.act_open_explorer)
-        btn_terminal = QPushButton("⬛  Terminal")
-        btn_terminal.clicked.connect(self.act_open_terminal)
-        btn_vscode = QPushButton("💙  VS Code")
-        btn_vscode.setObjectName("teal")
-        btn_vscode.clicked.connect(self.act_open_vscode)
-        btn_open_with = QPushButton("📂  Ouvrir avec...")
-        btn_open_with.setObjectName("subtle")
-        btn_open_with.clicked.connect(self.act_open_with)
-        path_btns.addWidget(btn_explorer)
-        path_btns.addWidget(btn_terminal)
-        path_btns.addWidget(btn_vscode)
-        path_btns.addWidget(btn_open_with)
-        path_btns.addStretch()
-        pg.addLayout(path_btns)
-        dv.addWidget(path_grp)
-
-        details_toggle_row = QHBoxLayout()
-        self.btn_toggle_details = QPushButton("📌 Cacher les détails")
-        self.btn_toggle_details.setObjectName("subtle")
-        self.btn_toggle_details.setCheckable(True)
-        self.btn_toggle_details.setChecked(True)
-        self.btn_toggle_details.clicked.connect(self._toggle_details_panel)
-        details_toggle_row.addWidget(self.btn_toggle_details)
-        details_toggle_row.addStretch()
-        dv.addLayout(details_toggle_row)
-
-        splitter = QSplitter(Qt.Horizontal)
-        splitter.addWidget(self._build_actions_left())
-        self._project_details_panel = self._build_project_details_panel()
-        splitter.addWidget(self._project_details_panel)
-        splitter.addWidget(self._build_log_panel())
-        splitter.setSizes([420, 260, 320])
-        splitter.setChildrenCollapsible(False)  # Empêcher la fermeture complète
-        splitter.setHandleWidth(5)  # Rendre la poignée plus visible
-        dv.addWidget(splitter)
-
-        v.addWidget(self.detail_widget)
-        v.addStretch()
-
-        return w
-
-    def _build_actions_left(self) -> QWidget:
-        w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(0, 0, 8, 0)
-        v.setSpacing(10)
-
-        grp_note = QGroupBox("📝  Note")
-        gn = QVBoxLayout(grp_note)
-        gn.setSpacing(6)
-        self.note_edit = QTextEdit()
-        self.note_edit.setObjectName("noteEdit")
-        self.note_edit.setPlaceholderText("Description, remarques, to-do…")
-        self.note_edit.setMinimumHeight(60)
-        self.note_edit.setMaximumHeight(100)
-        gn.addWidget(self.note_edit)
-        btn_save_note = QPushButton("💾  Sauvegarder la note")
-        btn_save_note.setObjectName("subtle")
-        btn_save_note.clicked.connect(self.act_save_note)
-        gn.addWidget(btn_save_note, alignment=Qt.AlignRight)
-        v.addWidget(grp_note)
-
-        grp_zip = QGroupBox("📦  Export / Import")
-        gz = QVBoxLayout(grp_zip)
-        gz.setSpacing(6)
-        self.btn_export = QPushButton("💾  Exporter en .zip  (auto → data/backups/)")
-        self.btn_export.clicked.connect(self.act_export)
-        gz.addWidget(self.btn_export)
-        btn_export_custom = QPushButton("💾  Exporter en .zip  (choisir le dossier)")
-        btn_export_custom.clicked.connect(self.act_export_custom)
-        gz.addWidget(btn_export_custom)
-        h3 = QHBoxLayout()
-        btn_import_inst = QPushButton("📂  Importer une instance  (.zip)")
-        btn_import_inst.clicked.connect(lambda: self.act_import("instance"))
-        btn_import_int  = QPushButton("📂  Importer un intent  (.zip)")
-        btn_import_int.clicked.connect(lambda: self.act_import("intent"))
-        h3.addWidget(btn_import_inst)
-        h3.addWidget(btn_import_int)
-        gz.addLayout(h3)
-        v.addWidget(grp_zip)
-
-        grp_danger = QGroupBox("⚠  Gestion")
-        gd = QVBoxLayout(grp_danger)
-        self.btn_delete = QPushButton("🗑  Supprimer définitivement ce dossier")
-        self.btn_delete.setObjectName("danger")
-        self.btn_delete.clicked.connect(self.act_delete)
-        gd.addWidget(self.btn_delete)
-        self.delete_progress = QProgressBar()
-        self.delete_progress.setRange(0, 100)
-        self.delete_progress.setValue(0)
-        self.delete_progress.setTextVisible(True)
-        self.delete_progress.setVisible(False)
-        gd.addWidget(self.delete_progress)
-        v.addWidget(grp_danger)
-
-        self.grp_git = QGroupBox("🐙  GitHub & Git  (instances)")
-        gg = QVBoxLayout(self.grp_git)
-        gg.setSpacing(6)
-
-        self.lbl_repo = QLabel("Repo : (non lié)")
-        self.lbl_repo.setObjectName("repoLine")
-        self.lbl_repo.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        gg.addWidget(self.lbl_repo)
-
-        self.lbl_branch_info = QLabel("Branches : —")
-        self.lbl_branch_info.setObjectName("repoLine")
-        gg.addWidget(self.lbl_branch_info)
-
-        # Indicateur token actif (v1.0.1)
-        self.lbl_token_active = QLabel("")
-        self.lbl_token_active.setObjectName("sectionLbl")
-        self.lbl_token_active.setStyleSheet("color: #6c7086; font-size: 11px;")
-        gg.addWidget(self.lbl_token_active)
-
-        h_git1 = QHBoxLayout()
-        self.btn_git_clone = QPushButton("📥  Clone")
-        self.btn_git_cfg  = QPushButton("🔗  Configurer")
-        self.btn_git_init = QPushButton("⚙  git init")
-        self.btn_git_push = QPushButton("🚀  Push initial…")
-        h_git1.addWidget(self.btn_git_clone)
-        h_git1.addWidget(self.btn_git_cfg)
-        h_git1.addWidget(self.btn_git_init)
-        h_git1.addWidget(self.btn_git_push)
-        gg.addLayout(h_git1)
-
-        h_git2 = QHBoxLayout()
-        self.btn_git_pull     = QPushButton("⬇  Pull")
-        self.btn_git_merge    = QPushButton("🔀  Merge")
-        self.btn_git_status   = QPushButton("📋  Status")
-        self.btn_git_log      = QPushButton("📜  Log")
-        self.btn_git_checkout = QPushButton("🌿  Checkout")
-        h_git2.addWidget(self.btn_git_pull)
-        h_git2.addWidget(self.btn_git_merge)
-        h_git2.addWidget(self.btn_git_status)
-        h_git2.addWidget(self.btn_git_log)
-        h_git2.addWidget(self.btn_git_checkout)
-        gg.addLayout(h_git2)
-
-        h_git3 = QHBoxLayout()
-        self.btn_git_commit_push = QPushButton("✔  Commit & Push…")
-        self.btn_git_commit_push.setObjectName("success")
-        h_git3.addWidget(self.btn_git_commit_push)
-        gg.addLayout(h_git3)
-
-        self.lbl_git_busy = QLabel("")
-        self.lbl_git_busy.setObjectName("sectionLbl")
-        self.lbl_git_busy.setStyleSheet("color: #fab387;")
-        gg.addWidget(self.lbl_git_busy)
-
-        self.lbl_token_status = QLabel("")
-        self.lbl_token_status.setObjectName("sectionLbl")
-        gg.addWidget(self.lbl_token_status)
-
-        self.btn_git_cfg.clicked.connect(self.act_git_configure)
-        self.btn_git_clone.clicked.connect(self.act_git_clone)
-        self.btn_git_init.clicked.connect(self.act_git_init)
-        self.btn_git_push.clicked.connect(self.act_git_push)
-        self.btn_git_pull.clicked.connect(self.act_git_pull)
-        self.btn_git_merge.clicked.connect(self.act_git_merge)
-        self.btn_git_status.clicked.connect(self.act_git_status)
-        self.btn_git_log.clicked.connect(self.act_git_log)
-        self.btn_git_checkout.clicked.connect(self.act_git_checkout)
-        self.btn_git_commit_push.clicked.connect(self.act_git_commit_push)
-
-        v.addWidget(self.grp_git)
-
-        grp_build = QGroupBox("🔨  Project Builder")
-        gb = QVBoxLayout(grp_build)
-        self.btn_build = QPushButton("▶  Lancer Project Builder dans un terminal")
-        self.btn_build.setObjectName("success")
-        self.btn_build.clicked.connect(self.act_run_builder)
-        gb.addWidget(self.btn_build)
-        v.addWidget(grp_build)
-
-        v.addStretch()
-        return w
-
-    def _build_project_details_panel(self) -> QWidget:
-        w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(8, 0, 0, 0)
-        v.setSpacing(6)
-
-        grp = QGroupBox("📌  Détails du projet")
-        gl = QFormLayout(grp)
-        gl.setLabelAlignment(Qt.AlignLeft)
-        gl.setFormAlignment(Qt.AlignTop)
-        gl.setHorizontalSpacing(12)
-        gl.setVerticalSpacing(10)
-
-        self.detail_type = QLabel("—")
-        self.detail_type.setWordWrap(True)
-        gl.addRow("Type :", self.detail_type)
-
-        self.detail_status = QLabel("—")
-        self.detail_status.setWordWrap(True)
-        gl.addRow("Statut :", self.detail_status)
-
-        self.detail_language = QLabel("—")
-        self.detail_language.setWordWrap(True)
-        gl.addRow("Langage :", self.detail_language)
-
-        self.detail_category = QLabel("—")
-        self.detail_category.setWordWrap(True)
-        gl.addRow("Catégorie :", self.detail_category)
-
-        self.detail_repo = QLabel("—")
-        self.detail_repo.setWordWrap(True)
-        gl.addRow("Répertoire Git :", self.detail_repo)
-
-        self.detail_branch = QLabel("—")
-        self.detail_branch.setWordWrap(True)
-        gl.addRow("Branche :", self.detail_branch)
-
-        self.detail_token_source = QLabel("—")
-        self.detail_token_source.setWordWrap(True)
-        gl.addRow("Source token :", self.detail_token_source)
-
-        self.detail_created = QLabel("—")
-        self.detail_created.setWordWrap(True)
-        gl.addRow("Créé le :", self.detail_created)
-
-        self.detail_path = QLabel("—")
-        self.detail_path.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.detail_path.setWordWrap(True)
-        gl.addRow("Chemin :", self.detail_path)
-
-        v.addWidget(grp)
-        return w
-
-    def _build_log_panel(self) -> QWidget:
-        w = QWidget()
-        v = QVBoxLayout(w)
-        v.setContentsMargins(8, 0, 0, 0)
-        v.setSpacing(6)
-        grp = QGroupBox("📝  Journal")
-        gl = QVBoxLayout(grp)
-        self.log_area = QTextEdit()
-        self.log_area.setReadOnly(True)
-        gl.addWidget(self.log_area)
-        btn_clear = QPushButton("Effacer le journal")
-        btn_clear.setObjectName("subtle")
-        btn_clear.setFixedWidth(140)
-        btn_clear.clicked.connect(self.log_area.clear)
-        gl.addWidget(btn_clear, alignment=Qt.AlignRight)
-        v.addWidget(grp)
-        return w
-
-    # ──────────────────────────────────────────────
-    #  HELPERS
-    # ──────────────────────────────────────────────
-
     def _log(self, msg: str):
         # Déléguer au panneau projet si ouvert
         if hasattr(self, "_project_panel") and self._right_stack.currentIndex() == 1:
             self._project_panel.log(msg)
-        elif hasattr(self, "log_area"):
-            ts = datetime.now().strftime("%H:%M:%S")
-            self.log_area.append(
-                f'<span style="color:#6c7086">[{ts}]</span>  {msg}'
-            )
-            sb = self.log_area.verticalScrollBar()
-            sb.setValue(sb.maximum())
 
     def _need_sel(self) -> bool:
         if not self._sel_path:
             QMessageBox.warning(self, "Voktora",
-                "Sélectionnez d'abord une instance ou un intent.")
+                "Sélectionnez d'abord un projet.")
             return False
         return True
 
@@ -1121,36 +802,29 @@ class MainWindow(QMainWindow):
             self, title, text, QMessageBox.Yes | QMessageBox.No
         ) == QMessageBox.Yes
 
-    def _toggle_details_panel(self) -> None:
-        visible = not self._project_details_panel.isVisible()
-        self._project_details_panel.setVisible(visible)
-        self.btn_toggle_details.setText(
-            "📌 Cacher les détails" if visible else "📌 Afficher les détails"
-        )
-
     def _current_drive(self) -> str:
         return self.drive_combo.currentText()
 
     def _get_token_for_git(self) -> str:
         """
         Retourne le token le plus approprié pour une opération git.
-        Priorité : PAT instance > OAuth global.
+        Priorité : PAT du projet > OAuth global.
         Demande le mot de passe si le PAT est protégé.
         """
         if not self._sel_path:
             return ""
 
-        # Token PAT instance depuis le vault
-        token = core.get_instance_token(self._sel_path)
+        # Token PAT du projet depuis le vault
+        token = core.get_project_token(self._sel_path)
         if token:
             return token
 
-        # Token PAT instance protégé
+        # Token PAT du projet protégé
         if core.is_token_protected(self._sel_path):
             dlg = token_password_dialog.TokenPasswordDialog(mode="get", parent=self)
             if dlg.exec() == QDialog.Accepted:
                 pwd   = dlg.get_password()
-                token = core.get_instance_token(self._sel_path, pwd)
+                token = core.get_project_token(self._sel_path, pwd)
                 if not token:
                     QMessageBox.warning(self, "Voktora",
                         "Mot de passe incorrect — impossible de déchiffrer le token.")
@@ -1162,17 +836,6 @@ class MainWindow(QMainWindow):
             return session["token"]
 
         return ""
-
-    def _git_buttons(self) -> list[QPushButton]:
-        return [
-            self.btn_git_clone, self.btn_git_cfg, self.btn_git_init, self.btn_git_push,
-            self.btn_git_pull, self.btn_git_merge, self.btn_git_status, self.btn_git_log,
-            self.btn_git_checkout, self.btn_git_commit_push,
-        ]
-
-    def _set_git_buttons_enabled(self, enabled: bool) -> None:
-        for btn in self._git_buttons():
-            btn.setEnabled(enabled)
 
     def _start_worker(self, fn, *args):
         self._worker = workers.Worker(fn, *args)
@@ -1190,8 +853,7 @@ class MainWindow(QMainWindow):
                 "Attendez qu'elle se termine avant d'en lancer une autre.")
             return
 
-        self._set_git_buttons_enabled(False)
-        self.lbl_git_busy.setText("⏳  Opération en cours…")
+        self._project_panel.set_git_busy(True)
 
         self._git_worker = workers.GitWorker(fn, *args, **kwargs)
         self._git_worker.log_line.connect(self._log)
@@ -1199,8 +861,7 @@ class MainWindow(QMainWindow):
         self._git_worker.start()
 
     def _on_git_worker_finished(self, success: bool) -> None:
-        self._set_git_buttons_enabled(True)
-        self.lbl_git_busy.setText("")
+        self._project_panel.set_git_busy(False)
         if success:
             self._log(
                 '<span style="color:#a6e3a1; font-weight:600">✅  Opération git terminée.</span>'
@@ -1217,20 +878,9 @@ class MainWindow(QMainWindow):
             self._auto_save_timer.stop()
 
     def _auto_save_note(self) -> None:
-        if not self._sel_path or not self._sel_kind:
-            return
-        current = self.note_edit.toPlainText()
-        if current == self._last_saved_note:
-            return
-        try:
-            if self._sel_kind == "instance":
-                core.set_instance_note(self._sel_path, current)
-            else:
-                core.set_intent_note(self._sel_path, current)
-            self._last_saved_note = current
-            self._log("📝  Note sauvegardée automatiquement.")
-        except Exception as e:
-            self._log(f"<span style='color:#f38ba8;'>[ERREUR] Impossible de sauvegarder la note automatique : {html.escape(str(e))}</span>")
+        """Sauvegarde périodique de la note du projet affiché (si activée dans la config)."""
+        if self._sel_path and self._right_stack.currentIndex() == 1:
+            self._project_panel.autosave_note()
 
     # ──────────────────────────────────────────────
     #  GESTION DU CACHE DE PERFORMANCES
@@ -1245,27 +895,16 @@ class MainWindow(QMainWindow):
 
     def _invalidate_cache(self) -> None:
         """Invalide le cache pour forcer le rechargement."""
-        self._instances_cache = None
-        self._intents_cache = None
+        self._projects_cache = None
         self._cache_timestamp = None
 
-    def _get_cached_instances(self) -> list[dict]:
-        """Retourne les instances depuis le cache ou les charge si nécessaire."""
-        if not self._is_cache_valid() or self._instances_cache is None:
-            self._instances_cache = core.list_instances()
-            self._intents_cache = core.list_intents()
+    def _get_cached_projects(self) -> list[dict]:
+        """Retourne les projets depuis le cache ou les charge si nécessaire."""
+        if not self._is_cache_valid() or self._projects_cache is None:
+            self._projects_cache = list(core.list_projects())
             import time
             self._cache_timestamp = time.time()
-        return self._instances_cache
-
-    def _get_cached_intents(self) -> list[dict]:
-        """Retourne les intents depuis le cache ou les charge si nécessaire."""
-        if not self._is_cache_valid() or self._intents_cache is None:
-            self._instances_cache = core.list_instances()
-            self._intents_cache = core.list_intents()
-            import time
-            self._cache_timestamp = time.time()
-        return self._intents_cache
+        return self._projects_cache
 
     # ──────────────────────────────────────────────
     #  CHARGEMENT / RAFRAÎCHISSEMENT
@@ -1287,43 +926,29 @@ class MainWindow(QMainWindow):
         self.drive_combo.blockSignals(False)
 
     def _refresh_lists(self):
-        # Utiliser le cache pour un accès instantané
-        instances = self._get_cached_instances()
-        intents = self._get_cached_intents()
-
-        # Mise à jour statusbar
-        n_inst = len(instances)
-        n_int  = len(intents)
+        projects = self._get_cached_projects()
+        n = len(projects)
         if hasattr(self, "_status_lbl"):
-            self._set_status(
-                f"{n_inst} instance{'s' if n_inst != 1 else ''}  ·  "
-                f"{n_int} intent{'s' if n_int != 1 else ''}"
-            )
+            self._set_status(f"{n} projet{'s' if n != 1 else ''}")
+        self._browser.populate(projects)
 
-        # Mise à jour du ProjectBrowser (liste + grille)
-        self._browser.populate(instances, intents)
-        # Compat legacy : aussi maintenir instance_list / intent_list si utilisés ailleurs
-        if hasattr(self, "instance_list"):
-            self.instance_list.clear()
-            for e in instances:
-                item = QListWidgetItem(e.get("name", e["path"]))
-                item.setData(Qt.UserRole, e["path"])
-                self.instance_list.addItem(item)
-        if hasattr(self, "intent_list"):
-            self.intent_list.clear()
-            for e in intents:
-                item = QListWidgetItem(e.get("name", e["path"]))
-                item.setData(Qt.UserRole, e["path"])
-                self.intent_list.addItem(item)
+    def _on_projects_modified(self) -> None:
+        """Un classement (catégorie, ordre, statut) a changé : tout recharger."""
+        self._invalidate_cache()
+        self._refresh_all()
 
     def _on_drive_changed(self, _):
         pass
 
-    def _on_project_selected(self, path: str, kind: str) -> None:
+    def _refresh_project_panel(self) -> None:
+        """Recharge le panneau projet s'il est affiché (après un changement de configuration)."""
+        if self._sel_path and self._right_stack.currentIndex() == 1:
+            self._project_panel.show_project(str(self._sel_path), on_action=self._dispatch_action)
+
+    def _on_project_selected(self, path: str) -> None:
         """Appelé par ProjectBrowser quand l'utilisateur clique sur un projet."""
         self._sel_path = Path(path)
-        self._sel_kind = kind
-        self._project_panel.show_project(path, kind, on_action=self._dispatch_action)
+        self._project_panel.show_project(path, on_action=self._dispatch_action)
         self._right_stack.setCurrentIndex(1)   # switcher vers le panneau projet
         # Mettre à jour statusbar
         if hasattr(self, "_status_lbl"):
@@ -1338,7 +963,6 @@ class MainWindow(QMainWindow):
         """Retour à la liste/grille des projets."""
         self._right_stack.setCurrentIndex(0)
         self._sel_path = None
-        self._sel_kind = None
         if hasattr(self, "_status_lbl"):
             self._set_status("Pret")
 
@@ -1348,10 +972,9 @@ class MainWindow(QMainWindow):
         self._browser.get_search_widget().setFocus()
         self._browser.get_search_widget().selectAll()
 
-    def _dispatch_action(self, action: str, path: Path, kind: str) -> None:
+    def _dispatch_action(self, action: str, path: Path) -> None:
         """Pont entre ProjectPanel et les méthodes act_* de MainWindow."""
         self._sel_path = path
-        self._sel_kind = kind
         dispatch = {
             "open_explorer":  self.act_open_explorer,
             "open_terminal":  self.act_open_terminal,
@@ -1361,11 +984,10 @@ class MainWindow(QMainWindow):
             "delete":         self.act_delete,
             "export":         self.act_export,
             "export_custom":  self.act_export_custom,
-            "import_instance": lambda: self.act_import("instance"),
-            "import_intent":   lambda: self.act_import("intent"),
+            "import_project": self.act_import,
+            "clone_repo":     self.act_clone_repo,
             "run_builder":    self.act_run_builder,
             "git_init":       self.act_git_init,
-            "git_clone":      self.act_git_clone,
             "git_configure":  self.act_git_configure,
             "git_status":     self.act_git_status,
             "git_pull":       self.act_git_pull,
@@ -1374,127 +996,10 @@ class MainWindow(QMainWindow):
             "git_checkout":   self.act_git_checkout,
             "git_commit_push": self.act_git_commit_push,
             "git_merge":      self.act_git_merge,
-            "transfer_kind":  self.act_transfer_kind,
         }
         fn = dispatch.get(action)
         if fn:
             fn()
-
-    def _on_select(self, item: QListWidgetItem | None, kind: str):
-        """Compatibilité legacy — redirige vers _on_project_selected."""
-        if item is None:
-            return
-        self._on_project_selected(item.data(Qt.UserRole), kind)
-        self._sel_kind = kind
-        self._sel_path = Path(item.data(Qt.UserRole))
-
-        if kind == "instance":
-            self.intent_list.blockSignals(True)
-            self.intent_list.clearSelection()
-            self.intent_list.setCurrentItem(None)
-            self.intent_list.blockSignals(False)
-        else:
-            self.instance_list.blockSignals(True)
-            self.instance_list.clearSelection()
-            self.instance_list.setCurrentItem(None)
-            self.instance_list.blockSignals(False)
-
-        self._update_detail_panel()
-
-    def _update_detail_panel(self):
-        # Le ProjectPanel gère l'affichage — cette méthode ne fait rien si le panneau est actif
-        if self._right_stack.currentIndex() == 1:
-            return
-        if not self._sel_path:
-            self.lbl_no_sel.setVisible(True)
-            self.detail_widget.setVisible(False)
-            return
-
-        self.lbl_no_sel.setVisible(False)
-        self.detail_widget.setVisible(True)
-
-        if self._sel_kind == "instance":
-            self.lbl_kind_tag.setText("INSTANCE")
-            self.lbl_kind_tag.setObjectName("kindTag")
-            self.grp_git.setVisible(True)
-
-            repo      = core.get_instance_repo(self._sel_path)
-            branches  = core.get_instance_branches(self._sel_path)
-            protected = core.is_token_protected(self._sel_path)
-
-            self.lbl_repo.setText(f"Repo : {repo or '(non lié)'}")
-            self.lbl_branch_info.setText(
-                f"Branches : {', '.join(branches) if branches else '—'}"
-            )
-            self.lbl_token_status.setText(
-                "🔐  Token PAT protégé par mot de passe (AES-256)" if protected else ""
-            )
-
-            # Affiche la source du token qui sera utilisé (v1.0.1)
-            pat_raw = core.get_instance_token_raw(self._sel_path)
-            session = core.get_github_session()
-            if pat_raw:
-                src = "🔑  Token PAT spécifique à cette instance"
-                if protected:
-                    src += " (chiffré)"
-            elif session and session.get("token"):
-                login = session.get("login", "")
-                src = f"🐙  Token OAuth du compte @{login}"
-            else:
-                src = "⚠  Aucun token — repos publics uniquement"
-            self.lbl_token_active.setText(src)
-
-            self.note_edit.setPlainText(core.get_instance_note(self._sel_path))
-            self._last_saved_note = self.note_edit.toPlainText()
-            self.detail_type.setText("Instance")
-            project_entry = core._find_entry(core._load_config(), "instances", self._sel_path)
-            project_status = "—"
-            if project_entry:
-                status_id = project_entry.get("status", "")
-                status_obj = core.get_project_status_by_id(status_id)
-                project_status = status_obj.name if status_obj else "—"
-            self.detail_status.setText(project_status)
-            self.detail_language.setText(
-                core.get_instance_language(self._sel_path) or core.guess_project_language(self._sel_path)
-            )
-            self.detail_category.setText(
-                project_entry.get("category") or "—" if project_entry else "—"
-            )
-            self.detail_repo.setText(repo or "—")
-            self.detail_branch.setText(branches[0] if branches else "—")
-            self.detail_token_source.setText(src)
-            self.detail_created.setText(
-                project_entry.get("created", "—") if project_entry else "—"
-            )
-            self.detail_path.setText(str(self._sel_path))
-        else:
-            self.lbl_kind_tag.setText("INTENT")
-            self.lbl_kind_tag.setObjectName("kindTagIntent")
-            self.grp_git.setVisible(False)
-            self.note_edit.setPlainText(core.get_intent_note(self._sel_path))
-            self._last_saved_note = self.note_edit.toPlainText()
-            self.detail_type.setText("Intent")
-            intent_entry = core._find_entry(core._load_config(), "intents", self._sel_path)
-            self.detail_status.setText("—")
-            self.detail_language.setText(
-                core.get_intent_language(self._sel_path) or core.guess_project_language(self._sel_path)
-            )
-            self.detail_category.setText(
-                intent_entry.get("category") or "—" if intent_entry else "—"
-            )
-            self.detail_repo.setText("—")
-            self.detail_branch.setText("—")
-            self.detail_token_source.setText("—")
-            self.detail_created.setText(
-                intent_entry.get("created", "—") if intent_entry else "—"
-            )
-            self.detail_path.setText(str(self._sel_path))
-
-        self.lbl_kind_tag.style().unpolish(self.lbl_kind_tag)
-        self.lbl_kind_tag.style().polish(self.lbl_kind_tag)
-
-        self.lbl_sel_name.setText(f"  {self._sel_path.name}")
-        self.lbl_path.setText(str(self._sel_path))
 
     # ══════════════════════════════════════════════
     #  ACTIONS — GitHub OAuth (v1.0.1)
@@ -1534,7 +1039,7 @@ class MainWindow(QMainWindow):
             self._log(f"🐙  Compte GitHub @{login} connecté.")
 
         self._update_github_account_card()
-        self._update_detail_panel()
+        self._refresh_project_panel()
 
     def act_github_logout(self) -> None:
         """Déconnecte le compte GitHub."""
@@ -1547,36 +1052,37 @@ class MainWindow(QMainWindow):
             "Déconnexion GitHub",
             f"Déconnecter le compte @{login} ?\n\n"
             "Le token OAuth sera supprimé de la configuration.\n"
-            "Les tokens PAT spécifiques aux instances ne seront pas affectés.",
+            "Les tokens PAT spécifiques aux projets ne seront pas affectés.",
         ):
             return
 
         core.clear_github_account()
         self._log(f"🚪  Compte GitHub @{login} déconnecté.")
         self._update_github_account_card()
-        self._update_detail_panel()
+        self._refresh_project_panel()
 
     # ══════════════════════════════════════════════
     #  ACTIONS — Général
     # ══════════════════════════════════════════════
 
-    def act_create(self, kind: str):
-        dlg = create_dialog.CreateDialog(kind, self)
+    def _after_project_added(self, path: Path, label: str) -> None:
+        """Rafraîchit la liste, sélectionne le nouveau projet et l'annonce dans le journal."""
+        self._log(f"{label}  →  <span style='color:#89dceb'>{path}</span>")
+        self._invalidate_cache()
+        self._refresh_all()
+        self._browser.select(str(path))
+        self._set_status(f"Projet ajouté : {Path(path).name}", 5000)
+
+    def act_create(self, *_args) -> None:
+        dlg = create_dialog.CreateDialog(self)
         if dlg.exec() != QDialog.Accepted:
             return
-        drive, name = dlg.get_data()
         try:
-            path = (core.create_instance(drive, name)
-                    if kind == "instance"
-                    else core.create_intent(drive, name))
-            self._log(
-                f"{'📦' if kind == 'instance' else '🧩'}  "
-                f"<b>{name}</b> créé  →  <span style='color:#89dceb'>{path}</span>"
-            )
-            self._invalidate_cache()  # Invalider le cache pour refléter les changements
-            self._refresh_lists()
+            path = core.create_project(**dlg.get_data())
         except Exception as e:
             QMessageBox.critical(self, "Erreur", str(e))
+            return
+        self._after_project_added(path, f"📦  <b>{path.name}</b> créé")
 
     def act_rename(self):
         if not self._need_sel():
@@ -1588,108 +1094,75 @@ class MainWindow(QMainWindow):
         if not ok or not new_name.strip() or new_name.strip() == old_name:
             return
         try:
-            new_path = (core.rename_instance(self._sel_path, new_name.strip())
-                        if self._sel_kind == "instance"
-                        else core.rename_intent(self._sel_path, new_name.strip()))
+            new_path = core.rename_project(self._sel_path, new_name.strip())
             self._log(f"✏  Renommé : <b>{old_name}</b> → <b>{new_path.name}</b>")
             self._sel_path = new_path
             self._invalidate_cache()  # Invalider le cache pour refléter les changements
             self._refresh_lists()
-            self._update_detail_panel()
+            self._refresh_project_panel()
         except Exception as e:
             QMessageBox.critical(self, "Erreur renommage", str(e))
-
-    def act_transfer_kind(self):
-        """Bascule le projet sélectionné entre Instance et Intent."""
-        if not self._need_sel():
-            return
-        from_kind = self._sel_kind
-        to_kind   = "intent" if from_kind == "instance" else "instance"
-        label     = "Intent" if to_kind == "intent" else "Instance"
-        if not self._confirm(
-            f"Transférer vers {label}",
-            f"Transférer « {self._sel_path.name} » de "
-            f"{'Instance' if from_kind == 'instance' else 'Intent'} vers {label} ?\n\n"
-            "Le dossier sera déplacé physiquement vers l'emplacement correspondant.",
-        ):
-            return
-        try:
-            new_path = core.transfer_project(self._sel_path, from_kind, to_kind)
-            self._log(f"🔀  <b>{new_path.name}</b> transféré vers {label}.")
-            self._sel_path = new_path
-            self._sel_kind = to_kind
-            self._invalidate_cache()
-            self._refresh_lists()
-            self._update_detail_panel()
-        except Exception as e:
-            QMessageBox.critical(self, "Erreur de transfert", str(e))
-
-    def act_save_note(self):
-        if not self._need_sel():
-            return
-        note = self.note_edit.toPlainText()
-        try:
-            if self._sel_kind == "instance":
-                core.set_instance_note(self._sel_path, note)
-            else:
-                core.set_intent_note(self._sel_path, note)
-            self._log("📝  Note sauvegardée.")
-        except Exception as e:
-            QMessageBox.critical(self, "Erreur", str(e))
 
     def act_delete(self):
         if not self._need_sel():
             return
-        if not self._confirm(
-            "Supprimer définitivement",
-            f"Supprimer :\n\n{self._sel_path}\n\nCette action est irréversible.",
-        ):
-            return
+        path = self._sel_path
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Supprimer le projet")
+        box.setText(f"Que faire de « {path.name} » ?")
+        box.setInformativeText(
+            f"{path}\n\n"
+            "• Retirer de Voktora : le projet disparaît de la liste, ses fichiers restent sur le disque.\n"
+            "• Supprimer le dossier : les fichiers sont effacés définitivement (irréversible)."
+        )
+        btn_forget = box.addButton("📤 Retirer de Voktora", QMessageBox.AcceptRole)
+        btn_delete = box.addButton("🗑 Supprimer le dossier", QMessageBox.DestructiveRole)
+        box.addButton("Annuler", QMessageBox.RejectRole)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is btn_forget:
+            core.forget_project(path)
+            self._log(f"📤  <b>{path.name}</b> retiré de Voktora (dossier conservé).")
+            self._after_project_removed()
+        elif clicked is btn_delete:
+            if not self._confirm("Supprimer définitivement",
+                                 f"Supprimer définitivement :\n\n{path}\n\nCette action est irréversible."):
+                return
+            done = task_dialog.run_task(
+                self, "Suppression du projet",
+                lambda ctx: core.delete_project(path, on_progress=ctx.progress, cancel=ctx.is_cancelled),
+                headline=f"Suppression de {path.name}")
+            if done.outcome == task_dialog.OUTCOME_ERROR:
+                QMessageBox.critical(self, "Erreur suppression",
+                                     f"Impossible de supprimer entièrement le dossier :\n{done.error}")
+                self._log(f"<span style='color:#f38ba8;'>[ERREUR] Suppression échouée : {html.escape(done.error)}</span>")
+            elif done.outcome == task_dialog.OUTCOME_OK:
+                self._log(f"🗑  <b>{path.name}</b> supprimé.")
+                self._after_project_removed()
 
-        self.btn_delete.setEnabled(False)
-        self.delete_progress.setValue(0)
-        self.delete_progress.setVisible(True)
-        self._delete_worker = workers.DeleteWorker(self._sel_path)
-        self._delete_worker.progress.connect(self.delete_progress.setValue)
-        self._delete_worker.finished.connect(self._on_delete_finished)
-        self._delete_worker.start()
-
-    def _on_delete_finished(self, success: bool, error: str) -> None:
-        self.delete_progress.setVisible(False)
-        self.btn_delete.setEnabled(True)
-
-        if not success:
-            QMessageBox.critical(
-                self,
-                "Erreur suppression",
-                f"Impossible de supprimer le dossier :\n{html.escape(error)}"
-            )
-            self._log(f"<span style='color:#f38ba8;'>[ERREUR] Suppression échouée : {html.escape(error)}</span>")
-            return
-
-        if self._sel_path:
-            name, path, kind = self._sel_path.name, self._sel_path, self._sel_kind
-            if kind == "instance":
-                core.delete_instance(path)
-            else:
-                core.delete_intent(path)
-            self._log(f"🗑  <b>{name}</b> supprimé.")
-
+    def _after_project_removed(self) -> None:
         self._sel_path = None
-        self.lbl_no_sel.setVisible(True)
-        self.detail_widget.setVisible(False)
-        self._invalidate_cache()  # Invalider le cache pour refléter les changements
-        self._refresh_lists()
+        self._invalidate_cache()
+        self._refresh_all()
+        self._show_welcome()
+
+    def _run_export(self, job, title: str, headline: str, success_label: str) -> None:
+        """Lance un export dans une fenêtre de progression (l'interface ne se fige pas)."""
+        done = task_dialog.run_task(self, title, job, headline=headline)
+        if done.outcome == task_dialog.OUTCOME_OK:
+            self._log(f"💾  Exporté  →  <span style='color:#89dceb'>{done.result}</span>")
+            QMessageBox.information(self, "Export réussi", f"{success_label} :\n{done.result}")
+        elif done.outcome == task_dialog.OUTCOME_ERROR:
+            QMessageBox.critical(self, "Erreur export", done.error)
 
     def act_export(self):
         if not self._need_sel():
             return
-        try:
-            zip_path = core.export_to_zip(self._sel_path)
-            self._log(f"💾  Exporté  →  <span style='color:#89dceb'>{zip_path}</span>")
-            QMessageBox.information(self, "Export réussi", f"Archive sauvegardée :\n{zip_path}")
-        except Exception as e:
-            QMessageBox.critical(self, "Erreur export", str(e))
+        folder = self._sel_path
+        self._run_export(
+            lambda ctx: core.export_to_zip(folder, None, on_progress=ctx.progress, cancel=ctx.is_cancelled),
+            "Export du projet", f"Export de {folder.name}", "Archive sauvegardée")
 
     def act_export_custom(self):
         if not self._need_sel():
@@ -1697,54 +1170,59 @@ class MainWindow(QMainWindow):
         out_dir = QFileDialog.getExistingDirectory(self, "Choisir le dossier de destination")
         if not out_dir:
             return
-        try:
-            zip_path = core.export_to_zip(self._sel_path, Path(out_dir))
-            self._log(f"💾  Exporté  →  <span style='color:#89dceb'>{zip_path}</span>")
-            QMessageBox.information(self, "Export réussi", f"Archive créée :\n{zip_path}")
-        except Exception as e:
-            QMessageBox.critical(self, "Erreur export", str(e))
+        folder = self._sel_path
+        self._run_export(
+            lambda ctx: core.export_to_zip(folder, Path(out_dir), on_progress=ctx.progress,
+                                           cancel=ctx.is_cancelled),
+            "Export du projet", f"Export de {folder.name}", "Archive créée")
 
-    def act_import(self, kind: str):
-        label = "instance" if kind == "instance" else "intent"
-        drive = self._current_drive()
-        if drive.startswith("("):
-            QMessageBox.warning(self, "Voktora", "Aucun disque externe sélectionné.")
+    # ── Import / clone ───────────────────────────
+
+    def act_import(self, *_args) -> None:
+        """Importer un dossier ou une archive ZIP (dialogue avec progression)."""
+        self._open_import_dialog()
+
+    def _open_import_dialog(self, source_path: str = "", source_kind: str = import_dialog.SOURCE_FOLDER) -> None:
+        dlg = import_dialog.ImportDialog(self._current_drive(), self, source_path, source_kind)
+        if dlg.exec() == QDialog.Accepted and dlg.imported_path:
+            self._after_project_added(dlg.imported_path, "📥  Import")
+
+    def act_clone_repo(self, *_args) -> None:
+        """Cloner un dépôt GitHub (liste de ses dépôts par organisation, ou URL)."""
+        dlg = clone_dialog.CloneDialog(self._current_drive(), self)
+        if dlg.exec() == QDialog.Accepted and dlg.cloned_path:
+            self._after_project_added(dlg.cloned_path, "🐙  Cloné")
+
+    @staticmethod
+    def _dropped_sources(mime) -> list[tuple[str, str]]:
+        """(chemin, type) des dossiers et archives ZIP d'un glisser-déposer externe."""
+        found = []
+        if mime.hasUrls():
+            for url in mime.urls():
+                if url.isLocalFile():
+                    local = url.toLocalFile()
+                    kind = import_dialog.classify_path(local)
+                    if kind:
+                        found.append((local, kind))
+        return found
+
+    def dragEnterEvent(self, event) -> None:
+        if self._dropped_sources(event.mimeData()):
+            event.acceptProposedAction()
+
+    def dropEvent(self, event) -> None:
+        sources = self._dropped_sources(event.mimeData())
+        if not sources:
             return
+        event.acceptProposedAction()
+        # Les dialogues sont ouverts après le retour du gestionnaire de dépôt,
+        # un par un dans l'ordre : chacun peut être annulé séparément.
+        QTimer.singleShot(0, lambda: [self._open_import_dialog(p, k) for p, k in sources])
 
-        choice = QMessageBox.question(
-            self, f"Importer une {label}",
-            "Importer depuis un fichier .zip ou directement un dossier existant ?\n\n"
-            "Oui = choisir un dossier   ·   Non = choisir un fichier .zip",
-            QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
-            QMessageBox.No,
-        )
-        if choice == QMessageBox.Cancel:
-            return
-
-        try:
-            if choice == QMessageBox.Yes:
-                folder = QFileDialog.getExistingDirectory(
-                    self, f"Sélectionner le dossier à importer ({label})"
-                )
-                if not folder:
-                    return
-                path = core.import_from_folder(Path(folder), drive, kind)
-            else:
-                zip_file, _ = QFileDialog.getOpenFileName(
-                    self, f"Sélectionner le .zip ({label})",
-                    filter="Archives ZIP (*.zip)"
-                )
-                if not zip_file:
-                    return
-                path = core.import_from_zip(Path(zip_file), drive, kind)
-
-            self._log(
-                f"📂  Import {label}  →  <span style='color:#89dceb'>{path}</span>"
-            )
-            self._invalidate_cache()  # Invalider le cache pour refléter les changements
-            self._refresh_lists()
-        except Exception as e:
-            QMessageBox.critical(self, "Erreur import", str(e))
+    def _save_view_state(self, mode: str, group_by: str, sort: str) -> None:
+        cfg = core.get_app_config()
+        cfg.update(browser_mode=mode, browser_group_by=group_by, browser_sort=sort)
+        core.set_app_config(cfg)
 
     def act_open_explorer(self):
         if not self._need_sel():
@@ -1793,13 +1271,8 @@ class MainWindow(QMainWindow):
     def act_git_configure(self):
         if not self._need_sel():
             return
-        if self._sel_kind != "instance":
-            QMessageBox.information(self, "Voktora",
-                "GitHub est disponible uniquement pour les instances.")
-            return
-
-        current_url     = core.get_instance_repo(self._sel_path)
-        current_branch  = core.get_instance_branch(self._sel_path)
+        current_url     = core.get_project_repo(self._sel_path)
+        current_branch  = core.get_project_branch(self._sel_path)
         token_protected = core.is_token_protected(self._sel_path)
         session         = core.get_github_session()
         has_global      = bool(session and session.get("token"))
@@ -1814,7 +1287,7 @@ class MainWindow(QMainWindow):
             parent=self,
         )
 
-        token_in_vault = core.get_instance_token(self._sel_path)
+        token_in_vault = core.get_project_token(self._sel_path)
         if token_in_vault:
             dlg.token_edit.setText(token_in_vault)
             dlg._token_in_clear = token_in_vault
@@ -1832,22 +1305,27 @@ class MainWindow(QMainWindow):
         token_password = data["token_password"]
 
         if url:
-            core.set_instance_repo(self._sel_path, url)
+            try:
+                url = core.validate_clone_url(url)   # retire aussi d'éventuels identifiants de l'URL
+            except ValueError as exc:
+                QMessageBox.warning(self, "Voktora — Dépôt invalide", str(exc))
+                return
+            core.set_project_repo(self._sel_path, url)
             self._log(f"🔗  GitHub lié  →  {url}")
 
-        core.set_instance_branch(self._sel_path, branch)
-        saved = core.get_instance_branches(self._sel_path)
+        core.set_project_branch(self._sel_path, branch)
+        saved = core.get_project_branches(self._sel_path)
         if branch not in saved:
-            core.set_instance_branches(self._sel_path, [branch])
+            core.set_project_branches(self._sel_path, [branch])
         self._log(f"🌿  Branche principale  →  <b>{branch}</b>")
 
         if token:
             if protect and token_password:
-                core.set_instance_token(self._sel_path, token, token_password)
+                core.set_project_token(self._sel_path, token, token_password)
                 algo = "AES-256 (Fernet, PBKDF2-HMAC-SHA256)"
                 self._log(f"🔐  Token PAT chiffré et sauvegardé  (algo : {algo})")
             elif not protect:
-                core.set_instance_token(self._sel_path, token, "")
+                core.set_project_token(self._sel_path, token, "")
                 self._log("🔑  Token PAT sauvegardé (non protégé).")
 
         if do_init:
@@ -1861,7 +1339,7 @@ class MainWindow(QMainWindow):
             self._open_push_dialog(mode="initial")
             return
 
-        self._update_detail_panel()
+        self._refresh_project_panel()
 
     def act_git_init(self):
         if not self._need_sel():
@@ -1872,29 +1350,25 @@ class MainWindow(QMainWindow):
     def act_git_push(self):
         if not self._need_sel():
             return
-        url = core.get_instance_repo(self._sel_path)
+        url = core.get_project_repo(self._sel_path)
         if not url:
             QMessageBox.warning(self, "Voktora",
-                "Aucun repo GitHub lié à cette instance.\nConfigurez GitHub d'abord.")
+                "Aucun repo GitHub lié à ce projet.\nConfigurez GitHub d'abord.")
             return
         self._open_push_dialog(mode="initial")
 
     def act_git_commit_push(self):
         if not self._need_sel():
             return
-        url = core.get_instance_repo(self._sel_path)
+        url = core.get_project_repo(self._sel_path)
         if not url:
-            QMessageBox.warning(self, "Voktora", "Aucun repo GitHub lié à cette instance.")
+            QMessageBox.warning(self, "Voktora", "Aucun repo GitHub lié à ce projet.")
             return
         self._open_push_dialog(mode="commit")
 
     def act_git_merge(self):
         if not self._need_sel():
             return
-        if self._sel_kind != "instance":
-            QMessageBox.information(self, "Voktora", "Git merge est disponible uniquement pour les instances.")
-            return
-        
         # Demander la branche à merger
         branch, ok = QInputDialog.getText(
             self, "Git Merge", 
@@ -1932,17 +1406,16 @@ class MainWindow(QMainWindow):
         follow_tags = data["follow_tags"]
         no_verify   = data["no_verify"]
 
-        core.set_instance_branches(self._sel_path, branches)
+        core.set_project_branches(self._sel_path, branches)
 
-        url      = core.get_instance_repo(self._sel_path)
+        url      = core.get_project_repo(self._sel_path)
         token    = self._get_token_for_git()
-        push_url = self._build_push_url(url, token)
 
         # Log de la source du token utilisé
-        pat_raw = core.get_instance_token_raw(self._sel_path)
+        pat_raw = core.get_project_token_raw(self._sel_path)
         session = core.get_github_session()
         if pat_raw:
-            self._log("🔑  Authentification : token PAT de l'instance")
+            self._log("🔑  Authentification : token PAT du projet")
         elif session and session.get("token"):
             self._log(f"🐙  Authentification : compte GitHub @{session.get('login', '')}")
         else:
@@ -1957,7 +1430,7 @@ class MainWindow(QMainWindow):
         self._start_git_worker(
             core.git_push_advanced,
             self._sel_path,
-            push_url,
+            url,
             branches,
             message=message,
             description=description,
@@ -1965,45 +1438,37 @@ class MainWindow(QMainWindow):
             follow_tags=follow_tags,
             no_verify=no_verify,
             is_initial=(mode == "initial"),
+            token=token,   # transmis par l'environnement de git : jamais dans l'URL du remote
         )
 
-        self._update_detail_panel()
+        self._refresh_project_panel()
 
     def act_git_pull(self):
         if not self._need_sel():
             return
-        url = core.get_instance_repo(self._sel_path)
+        url = core.get_project_repo(self._sel_path)
         if not url:
-            QMessageBox.warning(self, "Voktora", "Aucun repo GitHub lié à cette instance.")
+            QMessageBox.warning(self, "Voktora", "Aucun repo GitHub lié à ce projet.")
             return
-        branch = core.get_instance_branch(self._sel_path)
+        branch = core.get_project_branch(self._sel_path)
         self._log(f"⬇  git pull → branche <b>{branch}</b>…")
-        self._start_worker(core.git_pull, self._sel_path, branch)
+        self._start_worker(core.git_pull, self._sel_path, branch, self._get_token_for_git())
 
     def act_git_status(self):
         if not self._need_sel():
             return
-        out = core.git_status(self._sel_path)
-        self._log(
-            f"<pre style='color:#cdd6f4; margin:0'>{html.escape(out)}</pre>"
-        )
+        self._start_worker(core.git_status, self._sel_path)   # peut être long sur un gros dépôt
 
     def act_git_log(self):
         if not self._need_sel():
             return
-        out = core.git_log(self._sel_path)
-        if out:
-            self._log(
-                f"<pre style='color:#b4befe; margin:0'>{html.escape(out)}</pre>"
-            )
-        else:
-            self._log("📜  Aucun commit trouvé (ou dépôt non initialisé).")
+        self._start_worker(core.git_log, self._sel_path)
 
     def act_git_checkout(self):
         if not self._need_sel():
             return
         local_branches = core.git_list_local_branches(self._sel_path)
-        current_branch = core.get_instance_branch(self._sel_path)
+        current_branch = core.get_project_branch(self._sel_path)
 
         items  = local_branches if local_branches else ["main", "develop"]
         branch, ok = QInputDialog.getItem(
@@ -2015,19 +1480,14 @@ class MainWindow(QMainWindow):
         if not ok or not branch.strip():
             return
         branch = branch.strip()
-        out    = core.git_checkout(self._sel_path, branch)
+        try:
+            out = core.git_checkout(self._sel_path, branch)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Voktora", str(exc))
+            return
         self._log(f"🌿  git checkout <b>{branch}</b> : {html.escape(out)}")
-        core.set_instance_branch(self._sel_path, branch)
-        self._update_detail_panel()
-
-    @staticmethod
-    def _build_push_url(repo_url: str, token: str) -> str:
-        if not token:
-            return repo_url
-        url = repo_url.rstrip("/")
-        if url.startswith("https://"):
-            url = "https://" + token + "@" + url[len("https://"):]
-        return url
+        core.set_project_branch(self._sel_path, branch)
+        self._refresh_project_panel()
 
     def act_run_builder(self):
         if not self._need_sel():
@@ -2097,108 +1557,11 @@ class MainWindow(QMainWindow):
     #  NOUVELLES ACTIONS v1.0.1
     # ──────────────────────────────────────────────
 
-    def act_git_clone(self):
-        """Action pour cloner un repo GitHub."""
-        from PySide6.QtWidgets import QInputDialog
-        
-        url, ok = QInputDialog.getText(
-            self, "Git Clone", "URL du repository GitHub :"
-        )
-        if not ok or not url.strip():
-            return
-            
-        # Demander le disque de destination
-        drives = core.get_available_drives()
-        if not drives:
-            QMessageBox.warning(self, "Voktora", "Aucun disque disponible.")
-            return
-            
-        drive, ok = QInputDialog.getItem(
-            self, "Git Clone", "Disque de destination :", drives
-        )
-        if not ok:
-            return
-            
-        # Demander le nom du projet
-        project_name, ok = QInputDialog.getText(
-            self, "Git Clone", "Nom du projet :", text="cloned-repo"
-        )
-        if not ok or not project_name.strip():
-            return
-            
-        try:
-            target_path = core.get_instances_root(drive) / project_name.strip()
-            self._log(f"📥 Clone de {url} vers {target_path}...")
-            
-            # Utiliser le token effectif si disponible
-            token = core.get_effective_token()
-            out = core.git_clone(url.strip(), target_path, token)
-            
-            self._log(f"✅ Clone terminé : {html.escape(out)}")
-            
-            # Ajouter aux instances si le dossier existe
-            if target_path.exists():
-                cfg = core._load_config()
-                cfg["instances"].append({
-                    "name": project_name.strip(),
-                    "path": str(target_path),
-                    "drive": drive,
-                    "created": datetime.now().isoformat(),
-                    "github_repo": url.strip(),
-                    "github_branches": ["main"],
-                    "github_branch": "main",
-                    "github_token": "",
-                    "github_token_protected": False,
-                    "note": f"Cloné depuis {url}",
-                    "status": core.DEFAULT_PROJECT_STATUS,
-                    "color": None,
-                    "emoji": "📥",
-                    "category": None,
-                })
-                core._save_config(cfg)
-                self._refresh_all()
-                self._log(f"📦 Instance '{project_name}' ajoutée à la liste")
-                
-        except Exception as e:
-            QMessageBox.critical(self, "Erreur", f"Impossible de cloner le repo :\n{e}")
-
-    def act_import_zip(self):
-        """Action pour importer depuis un ZIP."""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Importer depuis ZIP", "", "Fichiers ZIP (*.zip)"
-        )
-        if not file_path:
-            return
-            
-        drives = core.get_available_drives()
-        if not drives:
-            QMessageBox.warning(self, "Voktora", "Aucun disque disponible.")
-            return
-            
-        drive, ok = QInputDialog.getItem(
-            self, "Importer", "Disque de destination :", drives
-        )
-        if not ok:
-            return
-            
-        kind, ok = QInputDialog.getItem(
-            self, "Importer", "Type :", ["instance", "intent"], 0
-        )
-        if not ok:
-            return
-            
-        try:
-            path = core.import_from_zip(Path(file_path), drive, kind)
-            self._log(f"📂 Importé : {path}")
-            self._refresh_all()
-        except Exception as e:
-            QMessageBox.critical(self, "Erreur", f"Impossible d'importer :\n{e}")
-
     def act_import_meridian_config(self) -> None:
         """
         Importe un config.json provenant de l'ancienne version Meridian
-        (ou d'une autre instance Voktora) et fusionne les instances/intents
-        sans écraser les données existantes.
+        (ou d'une autre installation Voktora, ancien ou nouveau format) et
+        fusionne les projets sans écraser les données existantes.
         """
         file_path, _ = QFileDialog.getOpenFileName(
             self,
@@ -2209,58 +1572,43 @@ class MainWindow(QMainWindow):
         if not file_path:
             return
 
-        # Lire et valider le JSON
         try:
             with open(file_path, encoding="utf-8") as f:
                 legacy_cfg = json.load(f)
+            if not isinstance(legacy_cfg, dict):
+                raise ValueError("la racine du fichier n'est pas un objet JSON")
         except Exception as e:
             QMessageBox.critical(self, "Erreur de lecture",
                                  f"Impossible de lire le fichier :\n{e}")
             return
 
-        # Compter ce qu'on va importer
-        instances = legacy_cfg.get("instances", [])
-        intents   = legacy_cfg.get("intents",   [])
-        categories = legacy_cfg.get("categories", [])
-        custom_statuses = legacy_cfg.get("custom_statuses", {})
-        storage   = legacy_cfg.get("storage",   {})
-
-        if not instances and not intents:
+        projects = core.extract_external_projects(legacy_cfg)
+        if not projects:
             QMessageBox.warning(
                 self, "Rien à importer",
-                "Le fichier ne contient ni 'instances' ni 'intents'.\n"
+                "Le fichier ne contient aucun projet ('projects', 'instances' ou 'intents').\n"
                 "Vérifiez qu'il s'agit bien d'un config.json Meridian / Voktora."
             )
             return
 
-        # Résumé de prévisualisation
-        preview_lines = []
-        if instances:
-            preview_lines.append(f"  • {len(instances)} instance(s) :")
-            for e in instances[:5]:
-                preview_lines.append(f"      - {e.get('name','?')}  [{e.get('language','?')}]  {e.get('status','')}")
-            if len(instances) > 5:
-                preview_lines.append(f"      … +{len(instances)-5} autres")
-        if intents:
-            preview_lines.append(f"  • {len(intents)} intent(s) :")
-            for e in intents[:5]:
-                preview_lines.append(f"      - {e.get('name','?')}  [{e.get('language','?')}]  {e.get('status','')}")
-            if len(intents) > 5:
-                preview_lines.append(f"      … +{len(intents)-5} autres")
+        preview_lines = [f"  • {len(projects)} projet(s) :"]
+        for e in projects[:5]:
+            preview_lines.append(f"      - {e.get('name', '?')}  [{e.get('language') or '?'}]")
+        if len(projects) > 5:
+            preview_lines.append(f"      … +{len(projects) - 5} autres")
+        categories = legacy_cfg.get("categories") or []
         if categories:
             preview_lines.append(f"  • {len(categories)} catégorie(s)")
-        if custom_statuses:
-            preview_lines.append(f"  • {len(custom_statuses)} statut(s) personnalisé(s)")
-        if storage:
-            preview_lines.append(f"  • Racines : {storage.get('instances_root','?')}")
+        if legacy_cfg.get("custom_statuses"):
+            preview_lines.append(f"  • {len(legacy_cfg['custom_statuses'])} statut(s) personnalisé(s)")
 
         msg = QMessageBox(self)
         msg.setWindowTitle("Confirmer l'import")
         msg.setIcon(QMessageBox.Question)
         msg.setText(
-            f"<b>Fichier :</b> {Path(file_path).name}<br><br>"
+            f"<b>Fichier :</b> {html.escape(Path(file_path).name)}<br><br>"
             f"Contenu détecté :<br>"
-            + "<br>".join(f"<code>{ln}</code>" for ln in preview_lines)
+            + "<br>".join(f"<code>{html.escape(ln)}</code>" for ln in preview_lines)
             + "<br><br>Les entrées déjà présentes (même chemin) seront <b>ignorées</b>.<br>"
               "Les nouvelles seront <b>ajoutées</b> sans rien supprimer."
         )
@@ -2270,117 +1618,64 @@ class MainWindow(QMainWindow):
         if msg.exec() != QMessageBox.Ok:
             return
 
-        # Fusion dans le config courant
         try:
-            current_cfg = core._load_config()
-
-            # Instances — déduplique par chemin
-            existing_paths = {e["path"] for e in current_cfg.get("instances", [])}
-            added_inst = 0
-            for entry in instances:
-                if entry.get("path") not in existing_paths:
-                    current_cfg.setdefault("instances", []).append(entry)
-                    existing_paths.add(entry["path"])
-                    added_inst += 1
-
-            # Intents — déduplique par chemin
-            existing_paths_i = {e["path"] for e in current_cfg.get("intents", [])}
-            added_int = 0
-            for entry in intents:
-                if entry.get("path") not in existing_paths_i:
-                    current_cfg.setdefault("intents", []).append(entry)
-                    existing_paths_i.add(entry["path"])
-                    added_int += 1
-
-            # Catégories — union
-            if categories:
-                existing_cats = set(current_cfg.get("categories", []))
-                for cat in categories:
-                    if cat not in existing_cats:
-                        current_cfg.setdefault("categories", []).append(cat)
-                        existing_cats.add(cat)
-
-            # Statuts personnalisés — merge sans écraser
-            if custom_statuses:
-                current_cfg.setdefault("custom_statuses", {}).update(
-                    {k: v for k, v in custom_statuses.items()
-                     if k not in current_cfg.get("custom_statuses", {})}
-                )
-
-            # Racines storage — uniquement si vides
-            if storage:
-                cfg_storage = current_cfg.setdefault("storage", {})
-                if not cfg_storage.get("instances_root") and storage.get("instances_root"):
-                    cfg_storage["instances_root"] = storage["instances_root"]
-                if not cfg_storage.get("intents_root") and storage.get("intents_root"):
-                    cfg_storage["intents_root"] = storage["intents_root"]
-
-            core._save_config(current_cfg)
-
+            added = core.merge_external_config(legacy_cfg)
         except Exception as e:
             QMessageBox.critical(self, "Erreur de fusion",
                                  f"La fusion a échoué :\n{e}")
             return
 
+        self._invalidate_cache()
         self._refresh_all()
-
         QMessageBox.information(
             self, "Import terminé",
             f"✅ Import réussi !\n\n"
-            f"  +{added_inst} instance(s) ajoutée(s)\n"
-            f"  +{added_int} intent(s) ajouté(s)\n\n"
-            f"L'app a été rechargée."
+            f"  +{added['projects']} projet(s) ajouté(s)\n"
+            f"  +{added['categories']} catégorie(s) ajoutée(s)\n"
+            f"  +{added['statuses']} statut(s) ajouté(s)"
         )
 
     def act_export_all(self):
-        """Action pour exporter tous les projets en ZIP."""
-        try:
-            zip_path = core.export_all_to_zip()
-            QMessageBox.information(
-                self, "Export complet", 
-                f"Tous les projets ont été exportés avec succès.\n\n"
-                f"Fichier : {zip_path}\n\n"
-                "L'export contient toutes les instances, intents et la configuration."
-            )
-        except Exception as e:
-            QMessageBox.critical(self, "Erreur", f"Impossible d'exporter :\n{e}")
+        """Exporte tous les projets et la configuration (sans secrets) dans un ZIP."""
+        self._run_export(
+            lambda ctx: core.export_all_to_zip(on_progress=ctx.progress, cancel=ctx.is_cancelled),
+            "Export complet", "Export de tous les projets",
+            "Tous les projets et la configuration (sans compte GitHub ni tokens) ont été exportés")
 
     def act_customize_selection(self):
         """Action pour personnaliser la sélection."""
         if not self._need_sel():
             return
             
-        dlg = CustomizeProjectDialog(str(self._sel_path), self._sel_kind, self)
+        dlg = CustomizeProjectDialog(str(self._sel_path), self)
         dlg.exec()
+        self._invalidate_cache()
         self._refresh_all()
-        # Rafraîchir le panneau si ouvert
-        if (hasattr(self, "_project_panel") and
-                self._right_stack.currentIndex() == 1 and self._sel_path):
-            self._project_panel.show_project(
-                str(self._sel_path), self._sel_kind,
-                on_action=self._dispatch_action,
-            )
+        self._refresh_project_panel()
 
     def act_encrypt_project(self):
         """Action pour chiffrer/déchiffrer un projet."""
         if not self._need_sel():
             return
             
-        dlg = EncryptProjectDialog(str(self._sel_path), self._sel_kind, self)
+        dlg = EncryptProjectDialog(str(self._sel_path), self)
         dlg.exec()
         self._refresh_all()
 
-    def act_manage_categories(self):
-        """Action pour gérer les catégories."""
+    def act_manage_categories(self, *_args) -> None:
+        """Ouvre la gestion des catégories (création, couleur, ordre, classement GitHub)."""
         dlg = CategoriesDialog(self)
-        if dlg.exec() == QDialog.Accepted:
-            categories = dlg.get_categories()
-            # Sauvegarder les catégories dans la configuration
-            cfg = core._load_config()
-            cfg["categories"] = categories
-            core._save_config(cfg)
-            QMessageBox.information(self, "Catégories", "Les catégories ont été mises à jour avec succès.")
+        dlg.exec()
+        if dlg.has_changes():
+            self._invalidate_cache()
             self._refresh_all()
+            self._refresh_project_panel()
+
+    def act_github_hub(self, *_args) -> None:
+        """Compte GitHub, organisations et classement automatique des projets."""
+        dlg = github_dialog.GitHubDialog(self)
+        dlg.projects_changed.connect(self._on_projects_modified)
+        dlg.exec()
 
     def act_manage_statuses(self):
         """Action pour gérer les statuts personnalisés."""
@@ -2429,13 +1724,6 @@ class MainWindow(QMainWindow):
         dlg = ThemeSettingsDialog(self)
         dlg.exec()
 
-    def act_manage_tokens(self):
-        """Action pour gérer les tokens GitHub."""
-        QMessageBox.information(
-            self, "Gestion des tokens",
-            "Fonctionnalité à venir dans une future version."
-        )
-
     def act_open_docs(self):
         """Action pour ouvrir la documentation."""
         core.open_url_in_browser("https://github.com/yo-le-zz/voktora")
@@ -2446,7 +1734,7 @@ class MainWindow(QMainWindow):
             self,
             "À propos de Voktora",
             f"""<b>Voktora v{core.APP_VERSION}</b><br><br>
-Project Instance Manager pour Windows<br><br>
+Project Manager pour Windows<br><br>
 Auteur : <a href='https://github.com/yo-le-zz'>yo-le-zz</a><br><br>
 Gestionnaire de projets avec intégration GitHub,<br>
 personnalisation avancée et chiffrement.<br><br>

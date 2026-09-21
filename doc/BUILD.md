@@ -107,10 +107,10 @@ Copy-Item src\version.txt     dist\windows\main.dist\version.txt
 
 ```bash
 # Script automatique (compile + package en .deb)
-bash "Installers/DEB installer/build_deb.sh" 1.0.2
+bash "Installers/DEB installer/build_deb.sh" 1.0.3
 
 # Résultat
-ls dist/linux/voktora_1.0.2_amd64.deb
+ls dist/linux/voktora_1.0.3_amd64.deb
 ```
 
 Le script :
@@ -127,10 +127,10 @@ Le script :
 
 ```powershell
 # Script automatique (compile + package en .msi via WiX)
-python "Installers\MSI installer\build_msi.py" 1.0.2
+python "Installers\MSI installer\build_msi.py" 1.0.3
 
 # Résultat
-dir dist\windows\Voktora_1.0.2_x64.msi
+dir dist\windows\Voktora_1.0.3_x64.msi
 ```
 
 Le script :

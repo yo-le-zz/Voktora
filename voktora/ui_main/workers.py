@@ -1,19 +1,22 @@
 """
 Voktora — ui_main.workers
-Fragment de ui_main.py extrait lors du découpage v1.0.2 en package.
+Threads de travail : tout ce qui peut durer (import, export, clone, réseau)
+s'exécute ici pour ne jamais figer l'interface.
 """
 
 from __future__ import annotations
 
 import html
 import threading
-from pathlib import Path
 
 import core
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (
     QFrame,
 )
+from task_worker import TaskContext, TaskWorker
+
+__all__ = ["TaskContext", "TaskWorker"]
 
 
 class Worker(QThread):
@@ -64,47 +67,6 @@ class GitWorker(QThread):
                 f'white-space:pre-wrap; font-size:11px">'
                 f'{html.escape(output.strip())}</pre>'
             )
-
-
-class DeleteWorker(QThread):
-    """Worker non bloquant pour la suppression de gros dossiers."""
-    progress = Signal(int)
-    finished = Signal(bool, str)
-
-    def __init__(self, path: Path):
-        super().__init__()
-        self._path = path
-
-    def run(self):
-        try:
-            if not self._path.exists():
-                self.finished.emit(True, "")
-                return
-
-            paths = [p for p in self._path.rglob("*")]
-            total = len(paths) + 1
-            removed = 0
-
-            for child in sorted(paths, key=lambda p: p.is_dir(), reverse=True):
-                try:
-                    if child.is_file() or child.is_symlink():
-                        child.unlink()
-                    elif child.is_dir():
-                        child.rmdir()
-                except Exception:
-                    pass
-                removed += 1
-                self.progress.emit(int(removed / total * 100))
-
-            try:
-                self._path.rmdir()
-            except Exception:
-                pass
-            removed += 1
-            self.progress.emit(100)
-            self.finished.emit(True, "")
-        except Exception as e:
-            self.finished.emit(False, str(e))
 
 
 class UpdateCheckWorker(QThread):

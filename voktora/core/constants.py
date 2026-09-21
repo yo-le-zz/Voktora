@@ -13,10 +13,9 @@ from dataclasses import dataclass
 from . import config_store
 
 """
-Voktora — Project Instance Manager
-Voktora v1.0.2
-core.py : Logique métier — config, instances, intents, Git, chiffrement AES-256 (Fernet+PBKDF2), auth GitHub
-Version : 1.0.2  —  Windows + Linux compatible
+Voktora — Project Manager
+core : logique métier — config, projets, catégories, Git, chiffrement AES-256 (Fernet+PBKDF2), auth GitHub
+Windows + Linux compatible
 """
 
 
@@ -25,10 +24,9 @@ Version : 1.0.2  —  Windows + Linux compatible
 # ──────────────────────────────────────────────
 
 APP_NAME              = "Voktora"
-APP_VERSION           = "1.0.2"
+APP_VERSION           = "1.0.3"
 CONTAINER_NAME        = "Voktora"
-INSTANCES_DIR         = "Instances"
-INTENTS_DIR           = "Intents"
+PROJECTS_DIR          = "Projects"
 PROJECT_BUILDER       = r"D:\my programme\Project_builder\ProjectsBuilder.exe"
 
 PBKDF2_ITERATIONS     = 480_000   # NIST recommandation 2023
@@ -39,9 +37,10 @@ CONFIG_FILENAME       = "config.json"
 BACKUPS_DIRNAME       = "backups"
 
 MAX_NAME_LENGTH       = 128
+MAX_CATEGORY_NAME_LENGTH = 48
 _NAME_FORBIDDEN_RE    = re.compile(r'[\\/:*?"<>|\x00-\x1f]|^\.|\.{2,}')
 
-CONFIG_SCHEMA_VERSION = 8
+CONFIG_SCHEMA_VERSION = 9
 
 # ── Compatibilité Windows / Linux ──
 IS_WINDOWS = sys.platform == "win32"
@@ -123,3 +122,15 @@ class ConfigCorruptedError(RuntimeError):
 
 class OAuthError(RuntimeError):
     """Levée lors d'un échec du flux OAuth GitHub."""
+
+
+class OperationCancelled(Exception):
+    """Levée quand l'utilisateur annule une opération longue (import, export…)."""
+
+
+class ArchiveError(RuntimeError):
+    """Levée quand une archive ZIP est invalide, dangereuse ou inutilisable."""
+
+
+class GitHubAPIError(RuntimeError):
+    """Levée lors d'un échec d'appel à l'API REST GitHub (message déjà lisible)."""

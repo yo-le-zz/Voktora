@@ -1,7 +1,7 @@
 """
 Test d'intégration : vérifie que le découpage de core.py en package
 (core/constants, paths, config_store, drives, crypto, github_auth,
-projects, git_ops, system, diagnostics) n'a rien cassé de bout en bout —
+projects, categories, archive, organize, git_ops, system, diagnostics) n'a rien cassé de bout en bout —
 en particulier les références croisées entre sous-modules qualifiées
 automatiquement pendant le découpage (config_store.paths.get_data_dir(),
 projects.config_store._load_config(), etc.).
@@ -11,21 +11,21 @@ import core
 
 
 class TestCorePackageIntegration:
-    def test_create_list_delete_instance_round_trip(self, isolated_data_dir, tmp_path):
+    def test_create_list_delete_project_round_trip(self, isolated_data_dir, tmp_path):
         drive = str(tmp_path)
-        core.set_storage_config(str(tmp_path / "Instances"), str(tmp_path / "Intents"))
+        core.set_storage_config(str(tmp_path / "Projects"))
 
-        path = core.create_instance(drive, "MonProjetTest")
+        path = core.create_project(drive, "MonProjetTest")
         assert path.exists()
 
-        names = [i["name"] for i in core.list_instances()]
+        names = [i["name"] for i in core.list_projects()]
         assert "MonProjetTest" in names
 
-        core.set_instance_note(path, "une note de test")
-        assert core.get_instance_note(path) == "une note de test"
+        core.set_project_note(path, "une note de test")
+        assert core.get_project_note(path) == "une note de test"
 
-        core.delete_instance(path)
-        names_after = [i["name"] for i in core.list_instances()]
+        core.delete_project(path)
+        names_after = [i["name"] for i in core.list_projects()]
         assert "MonProjetTest" not in names_after
 
     def test_health_check_runs_across_all_submodules(self, isolated_data_dir):
@@ -69,7 +69,3 @@ class TestCorePackageIntegration:
             assert core.APP_VERSION == "9.9.9-test"
         finally:
             core.constants.APP_VERSION = original
-
-class TestAppVersion:
-    def test_app_version_is_1_0_2(self):
-        assert core.APP_VERSION == "1.0.2"

@@ -1,6 +1,5 @@
 """
 Voktora — main.py
-Version : 1.0.2
 Point d'entrée de l'application.
 """
 

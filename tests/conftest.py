@@ -63,3 +63,13 @@ def isolated_data_dir(tmp_path, monkeypatch):
 
     core.paths.get_app_dir.cache_clear()
     core.paths.get_backups_dir.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def fail_on_unhandled_qt_slot_exception(monkeypatch):
+    """Une exception dans un slot Qt est seulement affichée, jamais propagée : le test
+    passerait à tort. On la transforme en échec."""
+    caught: list = []
+    monkeypatch.setattr(sys, "excepthook", lambda exc_type, exc, tb: caught.append(exc))
+    yield
+    assert not caught, f"exception non gérée dans un slot/callback Qt : {caught[0]!r}"

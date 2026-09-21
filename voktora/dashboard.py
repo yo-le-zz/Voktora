@@ -1,6 +1,5 @@
 """
 dashboard.py — Health & Usage Analytics local Voktora
-Version : 1.0.2
 Analyse l'état des projets : repos cassés, branches en retard,
 .gitignore manquant, inactivité, stats d'usage.
 """
@@ -167,11 +166,11 @@ def analyze_project(project_path: Path) -> ProjectHealth:
 def generate_report(paths: list[Path] | None = None) -> DashboardReport:
     """
     Génère un rapport complet.
-    Si `paths` est None, analyse toutes les instances et intents connus.
+    Si `paths` est None, analyse tous les projets connus.
     """
     if paths is None:
         cfg    = core._load_config()
-        all_p  = cfg.get("instances", []) + cfg.get("intents", [])
+        all_p  = cfg.get("projects", [])
         paths  = [Path(e["path"]) for e in all_p]
 
     health     = [analyze_project(p) for p in paths]

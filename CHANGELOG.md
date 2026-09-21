@@ -5,6 +5,82 @@ Format : [Semantic Versioning](https://semver.org/) — `MAJEUR.MINEUR.CORRECTIF
 
 ---
 
+## [1.0.3] — 2026-09-21
+
+### Changé
+
+- **Instances et intents fusionnés en « projets ».** Une seule liste, une seule racine de
+  stockage (`Voktora/Projects` par défaut). La config passe en schéma 9 : la migration est
+  automatique et une copie de l'ancien fichier est conservée dans `config.pre-v9.json`.
+  Les projets existants gardent leur emplacement. Les anciens bundles `.mpack` et les
+  `config.json` Meridian / Voktora restent importables.
+- **Catégories gérées par l'utilisateur** (nom, emoji, couleur, ordre). Les catégories
+  imposées (Web, Desktop…) disparaissent ; celles déjà attribuées à un projet sont conservées.
+  Renommer une catégorie met à jour ses projets ; la supprimer les laisse « sans catégorie ».
+- **Regroupement de la liste et de la grille** par catégorie, organisation GitHub, langage ou
+  statut (choix mémorisé). Glisser des projets sur une catégorie les y classe ; clic droit →
+  « Catégorie » fonctionne aussi en vue grille. La recherche couvre désormais catégorie et
+  organisation GitHub.
+- **Export global** : n'exclut plus `.git/objects` (un dépôt restauré depuis l'archive avait
+  perdu son historique) ; ne contient plus le compte GitHub ni les tokens de projet.
+- Le tri « Type » est remplacé par « Catégorie » et « Ordre manuel ».
+
+### Ajouté
+
+- **Import sans blocage.** Le dézippage, la copie, le déplacement, l'export et la suppression
+  s'exécutent dans un thread avec une fenêtre de progression (octets, fichier courant) et un
+  bouton Annuler. L'annulation ne laisse aucun demi-projet et n'altère jamais la source.
+- **Import de dossiers non compressés** : *déplacer* (défaut), *copier* ou *ajouter sur place*.
+  Le glisser-déposer d'un dossier ou d'un `.zip` sur la fenêtre ouvre l'import (Ctrl+I aussi).
+  Le dépôt GitHub d'un projet importé est repris depuis son `.git`.
+- **Clone GitHub** : choix parmi vos dépôts et ceux de vos organisations (filtre par
+  propriétaire, recherche), ou par URL ; branche et catégorie au choix, journal en direct.
+- **Compte & organisations** (menu GitHub) : propriétaires de vos dépôts et de vos projets,
+  ouverture sur GitHub, classement automatique des projets par organisation.
+- Création de projet : catégorie, `git init` et dépôt GitHub en une étape.
+- Suppression : choix entre « Retirer de Voktora » (fichiers conservés) et « Supprimer le dossier ».
+- Menu contextuel, glisser-déposer multi-sélection, badges de catégorie sur les cartes.
+- `doc/PROJECTS.md` et `doc/SECURITY.md`.
+
+### Corrigé
+
+- Fige de l'interface pendant l'import d'un ZIP (extraction dans le thread graphique).
+- Un ZIP sans dossier racine unique était extrait « en vrac » à la racine des projets.
+- Une suppression partielle « oubliait » le projet alors que des fichiers restaient sur disque.
+- La migration de fichiers de config hérités pouvait boucler, et absorbait puis supprimait
+  un `settings.json` sans rapport avec Voktora.
+- L'auto-sauvegarde des notes visait un widget caché : elle n'enregistrait rien.
+- Mises à jour de widgets depuis un thread non graphique (ping des projets).
+- `git status`, `git log`, `git pull`, push automatique et clone ne bloquent plus l'interface.
+- Détection du langage beaucoup plus rapide (dossiers de dépendances ignorés, plafond de fichiers).
+- README : structure et liens de documentation alignés sur le dépôt.
+
+### Sécurité
+
+- **Le token GitHub n'est plus jamais écrit dans l'URL d'un remote** (donc plus dans
+  `.git/config`, ni dans les exports et snapshots), ni passé en argument de ligne de commande :
+  il est transmis à git par variables d'environnement, limité à `https://github.com/`. Les
+  anciens remotes contenant un token sont nettoyés au prochain push.
+- Exports, bundles de migration et snapshots retirent les identifiants de `.git/config`.
+- Extraction ZIP : chemins `..`/absolus/lecteurs refusés, liens symboliques ignorés, espace
+  disque vérifié, tailles annoncées contrôlées.
+- **Injection de commande corrigée** : un nom de projet venant d'une archive (`'; cmd; '`,
+  `$(cmd)`…) pouvait s'exécuter via « Ouvrir un terminal » / « Ouvrir avec ». Plus aucun chemin
+  n'est interpolé dans un shell.
+- URL de clone et noms de branche validés (`ext::`, `--option`, `..` refusés) ; `--` protège
+  les opérandes git.
+- `config.json` est créé en `0600` sous Linux.
+- Déplacement refusé pour une racine de disque ou le dossier personnel.
+
+### Tests
+
+- 330+ tests (contre 117) : archive, import, catégories, regroupement, migration, API GitHub
+  simulée, authentification git, sécurité, dialogues et fenêtre principale (Qt hors écran).
+  Un test vérifie que la version est identique dans `pyproject.toml`, `version.txt`,
+  `constants.py` et ce fichier.
+
+---
+
 ## [1.0.2] — 2026-08-24
 
 ### Architecture

@@ -1,6 +1,5 @@
 """
 git.py — Git automation Voktora
-Version : 1.0.2
 Auto-commit, auto-push, smart commit messages (Conventional Commits sans IA).
 """
 
@@ -10,6 +9,8 @@ import re
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
+
+import core
 
 # ── Smart commit message ───────────────────────────────────────────────────────
 
@@ -98,20 +99,12 @@ def auto_push(project_path: Path, log_cb: Callable | None = None,
               token: str = "") -> bool:
     """
     Push vers la remote origin.
-    Injecte le token dans l'URL si fourni.
+    Le token est transmis par l'environnement (jamais dans l'URL ni dans la
+    ligne de commande) — voir core.git_ops._auth_env.
     """
     if not (project_path / ".git").exists():
         return False
-
-    if token:
-        # Récupérer l'URL remote et injecter le token
-        remote = _git_output(project_path, ["git", "remote", "get-url", "origin"]).strip()
-        if remote.startswith("https://"):
-            # https://github.com/user/repo → https://token@github.com/user/repo
-            authed = remote.replace("https://", f"https://{token}@")
-            return _run_git(project_path, ["git", "push", authed], log_cb)
-
-    return _run_git(project_path, ["git", "push"], log_cb)
+    return _run_git(project_path, ["git", "push"], log_cb, env=core.git_ops._auth_env(token))
 
 
 # ── Git status helpers ─────────────────────────────────────────────────────────
@@ -148,20 +141,21 @@ def push(project_path: Path, log_cb: Callable | None = None,
 
 def clone(url: str, dest: Path, token: str = "",
           log_cb: Callable | None = None) -> bool:
-    if token and url.startswith("https://"):
-        url = url.replace("https://", f"https://{token}@")
+    url = core.git_ops.validate_clone_url(url)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    return _run_git(dest.parent, ["git", "clone", url, str(dest.name)], log_cb)
+    # « -- » : l'URL est un opérande, jamais une option de git.
+    return _run_git(dest.parent, ["git", "clone", "--", url, str(dest.name)], log_cb,
+                    env=core.git_ops._auth_env(token))
 
 
 # ── Internals ─────────────────────────────────────────────────────────────────
 
 def _run_git(cwd: Path, cmd: list[str],
-             log_cb: Callable | None) -> bool:
+             log_cb: Callable | None, env: dict | None = None) -> bool:
     try:
         r = subprocess.run(
             cmd, cwd=str(cwd),
-            capture_output=True, text=True, timeout=60, check=False,
+            capture_output=True, text=True, timeout=60, check=False, env=env,
         )
         if log_cb:
             out = (r.stdout + r.stderr).strip()

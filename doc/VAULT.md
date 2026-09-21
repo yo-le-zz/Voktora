@@ -26,7 +26,7 @@ Au premier lancement, Voktora crée un **master password** :
 2. Un **verifier PBKDF2** est calculé et stocké (jamais le mot de passe lui-même)
 3. La clé maître est gardée **en mémoire uniquement** pendant la session
 
-Si vous oubliez le mot de passe maître, les secrets chiffrés sont **irrécupérables** (c'est voulu). Les données de projet (instances, intents, config) restent accessibles.
+Si vous oubliez le mot de passe maître, les secrets chiffrés sont **irrécupérables** (c'est voulu). Les données de projet (projets, catégories, config) restent accessibles.
 
 ---
 
