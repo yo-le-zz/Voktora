@@ -64,12 +64,23 @@ jobs:
             tests/test_validation.py \
             tests/test_vault.py \
             tests/test_version_consistency.py
-      
+
           for test_file in \
             tests/test_customize_dialog_ollama.py \
             tests/test_emoji_picker.py \
-            tests/test_readme_markdown_preview.py \
-            tests/test_ui_main_window.py \
+            tests/test_readme_markdown_preview.py
+          do
+            echo "=== $test_file ==="
+            pytest "$test_file" || exit $?
+          done
+
+          echo "=== tests/test_ui_main_window.py ==="
+          for test_name in $(pytest --collect-only -q tests/test_ui_main_window.py | grep '^tests/test_ui_main_window.py::'); do
+            echo "--- $test_name ---"
+            pytest "$test_name" || exit $?
+          done
+
+          for test_file in \
             tests/test_ui_project_dialogs.py \
             tests/test_ui_project_view_groups.py \
             tests/test_ui_project_view_search.py
