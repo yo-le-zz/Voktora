@@ -1,6 +1,6 @@
 """
 ui_project_panel.py — Panneau détaillé d'un projet Voktora
-Version : 1.0.1
+Version : 1.0.2
 Nouveau panneau centré, plein écran, avec :
   • Header : icône personnalisable, nom, badges, bouton retour
   • 5 onglets : Actions / Git / Outils / Snapshots / Profils
@@ -13,26 +13,36 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore    import Qt, Signal, QTimer
-from PySide6.QtGui     import QColor, QFont, QIcon, QPixmap, QPainter
-from PySide6.QtWidgets import (
-    QFileDialog, QFormLayout, QFrame, QGroupBox, QHBoxLayout,
-    QInputDialog, QLabel, QLineEdit, QMessageBox, QProgressBar,
-    QPushButton, QScrollArea, QSizePolicy, QSplitter, QTabWidget,
-    QTextEdit, QVBoxLayout, QWidget,
-)
-
 import core
 import git as git_module
 import profiles
 import snapshots
-import dashboard
-import hooks as hooks_module
-from ui_dialogs import (
-    ProfilesDialog, SnapshotDialog, HooksDialog,
-    VaultDialog, DashboardDialog,
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QFormLayout,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSplitter,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
-
+from ui_dialogs import (
+    DashboardDialog,
+    HooksDialog,
+    ProfilesDialog,
+    SnapshotDialog,
+    VaultDialog,
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -233,16 +243,29 @@ class ProjectPanel(QWidget):
 
         # Groupe : Note
         self._note_edit = QTextEdit()
-        self._note_edit.setPlaceholderText("Notes, to-do, remarques…")
+        self._note_edit.setPlaceholderText("Notes, to-do, remarques… (Markdown supporté)")
         self._note_edit.setMinimumHeight(80)
         self._note_edit.setMaximumHeight(140)
+        self._note_raw_text = ""
+        self._note_preview_active = False
+        self._note_is_readme_fallback = False
+
+        self._note_source_lbl = QLabel("")
+        self._note_source_lbl.setStyleSheet("font-size: 10px; color:#6c7086;")
+        self._note_source_lbl.setVisible(False)
 
         self._btn_save_note = _btn("💾 Sauvegarder", "subtle")
+        self._btn_toggle_note_preview = _btn("👁 Aperçu Markdown", "subtle")
 
         grp_note = QGroupBox("📝 Note")
         gn = QVBoxLayout(grp_note)
         gn.addWidget(self._note_edit)
-        gn.addWidget(self._btn_save_note, alignment=Qt.AlignRight)
+        gn.addWidget(self._note_source_lbl)
+        note_btn_row = QHBoxLayout()
+        note_btn_row.addWidget(self._btn_toggle_note_preview)
+        note_btn_row.addStretch()
+        note_btn_row.addWidget(self._btn_save_note)
+        gn.addLayout(note_btn_row)
         v.addWidget(grp_note)
 
         # Groupe : Profils d'exécution
@@ -256,8 +279,9 @@ class ProjectPanel(QWidget):
         v.addWidget(_group("🪝 Hooks", self._btn_hooks))
 
         # Groupe : Gestion
-        self._btn_rename  = _btn("✏ Renommer", "subtle")
-        self._btn_delete  = _btn("🗑 Supprimer définitivement", "danger")
+        self._btn_rename   = _btn("✏ Renommer", "subtle")
+        self._btn_transfer = _btn("🔀 Transférer Instance ↔ Intent", "subtle")
+        self._btn_delete   = _btn("🗑 Supprimer définitivement", "danger")
         self._delete_prog = QProgressBar()
         self._delete_prog.setRange(0, 100)
         self._delete_prog.setVisible(False)
@@ -266,6 +290,7 @@ class ProjectPanel(QWidget):
         gm = QVBoxLayout(grp_mgmt)
         row_mgmt = QHBoxLayout()
         row_mgmt.addWidget(self._btn_rename)
+        row_mgmt.addWidget(self._btn_transfer)
         row_mgmt.addWidget(self._btn_delete)
         row_mgmt.addStretch()
         gm.addLayout(row_mgmt)
@@ -484,7 +509,7 @@ class ProjectPanel(QWidget):
     # =========================================================================
 
     def show_project(self, path: str, kind: str,
-                     on_action: "callable | None" = None) -> None:
+                     on_action: callable | None = None) -> None:
         """
         Charge un projet dans le panneau.
         `on_action` est un callback(action_name, path, kind) fourni par MainWindow
@@ -558,7 +583,9 @@ class ProjectPanel(QWidget):
             pix = QPixmap(size, size)
             pix.fill(QColor(color))
             painter = QPainter(pix)
-            font = QFont(); font.setPixelSize(22); font.setBold(True)
+            font = QFont()
+            font.setPixelSize(22)
+            font.setBold(True)
             painter.setFont(font)
             painter.setPen(QColor("#cdd6f4"))
             painter.drawText(pix.rect(), Qt.AlignCenter, name[0].upper())
@@ -575,7 +602,33 @@ class ProjectPanel(QWidget):
             note = core.get_instance_note(self._path)
         else:
             note = core.get_intent_note(self._path) if hasattr(core, "get_intent_note") else ""
-        self._note_edit.setPlainText(note or "")
+
+        self._note_preview_active = False
+        self._btn_toggle_note_preview.setText("👁 Aperçu Markdown")
+        if note:
+            self._note_is_readme_fallback = False
+            self._note_raw_text = note
+            self._note_source_lbl.setVisible(False)
+        else:
+            readme_path = core.find_readme(self._path)
+            if readme_path is not None:
+                try:
+                    readme_text = readme_path.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    readme_text = ""
+                self._note_is_readme_fallback = True
+                self._note_raw_text = readme_text
+                self._note_source_lbl.setText(
+                    f"📄 Aucune note — contenu affiché depuis {readme_path.name} "
+                    "(non sauvegardé tant que vous n'enregistrez pas)."
+                )
+                self._note_source_lbl.setVisible(True)
+            else:
+                self._note_is_readme_fallback = False
+                self._note_raw_text = ""
+                self._note_source_lbl.setVisible(False)
+        self._note_edit.setReadOnly(False)
+        self._note_edit.setPlainText(self._note_raw_text)
 
         # Infos git
         if self._kind == "instance":
@@ -630,10 +683,9 @@ class ProjectPanel(QWidget):
             return
 
         row = QHBoxLayout()
-        for i, (info, btn_info) in enumerate(all_btns[:5]):
+        for info, btn_info in all_btns[:5]:
             b = QPushButton(btn_info.label)
             b.setToolTip(btn_info.tooltip or f"Plugin : {info.name}")
-            import plugins as _p
             from plugins import PluginContext
             handler = btn_info.handler
             path    = self._path
@@ -653,7 +705,9 @@ class ProjectPanel(QWidget):
         # Déconnecter tous les signaux avant de reconnecter (évite les doublons)
         _all_btns = [
             self._btn_explorer, self._btn_terminal, self._btn_vscode,
-            self._btn_open_with, self._btn_save_note, self._btn_rename,
+            self._btn_open_with, self._btn_save_note, self._btn_toggle_note_preview,
+            self._btn_rename,
+            self._btn_transfer,
             self._btn_delete, self._btn_profiles, self._btn_run_prof,
             self._btn_hooks, self._btn_git_init, self._btn_git_clone,
             self._btn_git_cfg, self._btn_git_status, self._btn_git_pull,
@@ -682,7 +736,9 @@ class ProjectPanel(QWidget):
         self._btn_vscode.clicked.connect(act("open_vscode"))
         self._btn_open_with.clicked.connect(act("open_with"))
         self._btn_save_note.clicked.connect(self._save_note)
+        self._btn_toggle_note_preview.clicked.connect(self._toggle_note_preview)
         self._btn_rename.clicked.connect(act("rename"))
+        self._btn_transfer.clicked.connect(act("transfer_kind"))
         self._btn_delete.clicked.connect(act("delete"))
         self._btn_profiles.clicked.connect(self._open_profiles)
         self._btn_run_prof.clicked.connect(self._run_default_profile)
@@ -722,13 +778,33 @@ class ProjectPanel(QWidget):
     def _save_note(self) -> None:
         if not self._path:
             return
+        if self._note_preview_active:
+            self._toggle_note_preview()  # revenir en édition avant de sauvegarder
         note = self._note_edit.toPlainText()
         if self._kind == "instance":
             core.set_instance_note(self._path, note)
         else:
             if hasattr(core, "set_intent_note"):
                 core.set_intent_note(self._path, note)
+        self._note_is_readme_fallback = False
+        self._note_source_lbl.setVisible(False)
         self.log("Note sauvegardée.")
+
+    def _toggle_note_preview(self) -> None:
+        if not self._note_preview_active:
+            # Passer en aperçu : capturer le texte brut édité, puis rendre.
+            self._note_raw_text = self._note_edit.toPlainText()
+            self._note_edit.setMarkdown(self._note_raw_text)
+            self._note_edit.setReadOnly(True)
+            self._btn_toggle_note_preview.setText("✏ Retour à l'édition")
+            self._btn_save_note.setEnabled(False)
+            self._note_preview_active = True
+        else:
+            self._note_edit.setReadOnly(False)
+            self._note_edit.setPlainText(self._note_raw_text)
+            self._btn_toggle_note_preview.setText("👁 Aperçu Markdown")
+            self._btn_save_note.setEnabled(True)
+            self._note_preview_active = False
 
     def _change_icon(self) -> None:
         if not self._path:

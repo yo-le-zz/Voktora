@@ -5,6 +5,78 @@ Format : [Semantic Versioning](https://semver.org/) — `MAJEUR.MINEUR.CORRECTIF
 
 ---
 
+## [1.0.2] — 2026-08-24
+
+### Architecture
+
+- **Compilation via Docker.** Les paquets `.deb` (Linux) et `.msi` (Windows) se compilent
+  désormais dans des images Docker dédiées (`docker/linux.Dockerfile`,
+  `docker/windows.Dockerfile`), pour un build identique en local, entre contributeurs et en
+  CI. Voir `docker/README.md`, y compris une note sur la signature de code (le `.msi` reste
+  non signé — Docker ne résout pas ce point, seul un certificat de signature le peut).
+- **Découpage des trois plus gros fichiers en packages par domaine** (~75 % du code) :
+  - `core.py` (2533 lignes) → package `core/` : `constants`, `paths`, `config_store`,
+    `drives`, `crypto`, `github_auth`, `projects`, `git_ops`, `system`, `diagnostics`.
+  - `ui_dialogs.py` (3226 lignes) → package `ui_dialogs/`, un fichier par boîte de dialogue.
+  - `ui_main.py` (4491 lignes) → package `ui_main/` (workers, dialogues annexes,
+    `main_window.py`).
+  - Compatibilité totale préservée (`import core`, `core.get_data_dir()`, etc. inchangés).
+- **Tests.** Suite pytest ajoutée (auparavant inexistante) : 112 tests couvrant la config,
+  le chiffrement, le vault, Git, les migrations, le nouveau package `core/`, et l'UI Qt
+  (import réel avec PySide6, `QT_QPA_PLATFORM=offscreen`). Nouveau job CI `test` (lint ruff +
+  pytest) sur chaque push/PR.
+
+### Ajouté
+
+- **Système de tags** : champ `tags` sur les instances/intents, éditable dans le dialogue de
+  personnalisation, utilisable dans la recherche.
+- **Recherche par tags**, en plus du nom et du chemin.
+- **Bascule Instance ↔ Intent** directement depuis le panneau de projet (la logique backend
+  existait déjà mais n'était appelée nulle part).
+- **Import de dossier non compressé** (en plus du `.zip`), sans jamais modifier ni supprimer
+  le dossier source.
+- **Sélecteur d'emoji** dédié (menu par catégories avec recherche), en plus du champ existant.
+- **Markdown dans les descriptions de projet**, avec bascule aperçu/édition ; et **repli
+  automatique sur le premier `README.md`** du dossier quand aucune note n'existe encore.
+- **Éditeur JSON avancé de `config.json`**, réservé au dépannage : avertissement explicite,
+  validation de syntaxe séparée, sauvegarde automatique horodatée avant tout écrasement.
+- **Génération via Ollama (local)** : description de projet et suggestion d'emoji, via un
+  serveur Ollama local configurable (réglages → section "🤖 Ollama"). Aucune donnée envoyée
+  en dehors de la machine de l'utilisateur.
+
+### Corrigé
+
+- **Notification "GitHub non connecté" à chaque lancement, même connecté** — le diagnostic de
+  démarrage confondait "Client ID OAuth non configuré" avec "compte non connecté".
+- **Recherche invisible en mode grille/bloc** — la barre de recherche vivait dans la vue
+  liste, entièrement masquée en mode grille. Déplacée au niveau partagé, active dans les deux
+  modes désormais. Le nombre de cartes par ligne en mode grille a aussi été augmenté.
+- **`Échap` provoquait un plantage** (`AttributeError` sur des attributs jamais définis).
+- **Déverrouillage du vault totalement cassé** (`NameError: name 'hmac' is not defined` —
+  import manquant) : toute tentative de déverrouillage avec mot de passe maître échouait.
+- **Deux `NameError` dans `ui_dialogs.py`** (`hashlib`, `shutil` non importés) affectant le
+  chiffrement de projet et la copie de snapshots.
+- **Fonctionnalité de migration multi-ordinateur entièrement cassée** (`mc.py`, module
+  référencé partout mais absent du dépôt) : reconstruite, en excluant délibérément tout secret
+  (token GitHub, vault) du bundle exporté.
+- **`core._whirlpool_available()` inexistante** appelée à 3 endroits (plantage juste après un
+  chiffrement réussi) ; au passage, 4 libellés d'interface annonçant à tort un chiffrement
+  "Whirlpool + XOR" ont été corrigés pour refléter l'algorithme réellement utilisé (AES-256 /
+  Fernet, PBKDF2-HMAC-SHA256).
+- **Méthodes dupliquées** dans `MainWindow` (`act_open_terminal`, `act_open_explorer`,
+  `act_open_vscode`) — la définition dupliquée, qui l'emportait silencieusement, avait perdu
+  la gestion d'erreur de la version originale.
+- **Écrasement possible du `.git` d'un projet existant** lors d'un clone dans un dossier déjà
+  suivi par Git — le filtrage prévu n'était pas appliqué.
+- **Header HTTP `X-GitHub-Api-Version` corrompu** en `X-GitHub-Api-constants.Version` sur les
+  requêtes GitHub App (régression introduite puis détectée et corrigée pendant le découpage
+  en package).
+- Constante de schéma de configuration obsolète (`CONFIG_SCHEMA_VERSION`), messages de commit
+  Conventional Commits mal classés pour les fichiers de test, plusieurs imports inutilisés ou
+  mal ordonnés, variables et code mort divers.
+
+---
+
 ## [1.0.1] — 2025-01-01
 
 ### Corrigé

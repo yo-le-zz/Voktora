@@ -1,6 +1,6 @@
 """
 theme_manager.py — Gestionnaire de thèmes Voktora
-Version : 1.0.1
+Version : 1.0.2
 Thèmes built-in : default (dark), light, crt_cyberpunk.
 Thèmes personnalisés stockés dans data/themes/*.json.
 
@@ -377,14 +377,8 @@ def _c(theme: dict, key: str, fallback: str = "#888888") -> str:
 
 
 def _build_qss(theme: dict) -> str:
-    c = lambda key, fb="#888888": _c(theme, key, fb)
-
-    base_hex = c("base", "#1e1e2e").lstrip("#")
-    try:
-        r, g, b = int(base_hex[0:2], 16), int(base_hex[2:4], 16), int(base_hex[4:6], 16)
-        is_light = (r * 0.299 + g * 0.587 + b * 0.114) > 127
-    except Exception:
-        is_light = False
+    def c(key, fb="#888888"):
+        return _c(theme, key, fb)
 
     is_terminal = "crt" in theme.get("name", "").lower() or "terminal" in theme.get("name", "").lower()
     font_family = "'JetBrains Mono', 'Consolas', 'DejaVu Sans Mono', monospace" if is_terminal else "sans-serif"

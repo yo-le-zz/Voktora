@@ -11,10 +11,10 @@ Usage :
     python "Installers/MSI installer/build_msi.py" [VERSION]
 """
 
-import sys
-import uuid
 import shutil
 import subprocess
+import sys
+import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -25,6 +25,9 @@ if hasattr(sys.stderr, "reconfigure"):
 
 ROOT    = Path(__file__).resolve().parent.parent.parent
 VERSION = sys.argv[1] if len(sys.argv) > 1 else (ROOT / "voktora" / "version.txt").read_text().strip()
+# WiX/MSI exige un ProductVersion purement numerique (major.minor.build) —
+# on retire un eventuel prefixe "v"/"V" (convention de tag git courante).
+VERSION = VERSION.lstrip("vV")
 DIST    = ROOT / "dist" / "windows"
 WXS_DIR = ROOT / "Installers" / "MSI installer"
 
@@ -212,7 +215,7 @@ def main():
     ])
 
     size_mb = msi_out.stat().st_size / 1_048_576
-    print(f"\n=== Succes ===")
+    print("\n=== Succes ===")
     print(f"MSI    : {msi_out}")
     print(f"Taille : {size_mb:.1f} MB")
     if size_mb < 50:

@@ -4,6 +4,18 @@
 
 ---
 
+> 🐳 **Docker : usage local optionnel uniquement.** La CI GitHub Actions
+> compile directement sur les runners (voir `.github/workflows/build-release.yml`),
+> pas via Docker — Windows notamment ne peut pas compiler via Docker sur les
+> runners GitHub hébergés (Docker Desktop n'y est pas installé). Les
+> `Dockerfile` dans `docker/` restent disponibles pour qui veut un
+> environnement reproductible en local. Voir [`docker/README.md`](../docker/README.md)
+> (y compris un problème connu non résolu sur le build Linux via Docker).
+> Le reste de ce guide décrit la compilation manuelle directe, la méthode
+> utilisée par la CI.
+
+---
+
 ## Prérequis
 
 | Outil | Version | Installation |
@@ -95,10 +107,10 @@ Copy-Item src\version.txt     dist\windows\main.dist\version.txt
 
 ```bash
 # Script automatique (compile + package en .deb)
-bash packaging/build_deb.sh 1.0.0
+bash "Installers/DEB installer/build_deb.sh" 1.0.2
 
 # Résultat
-ls dist/linux/voktora_1.0.0_amd64.deb
+ls dist/linux/voktora_1.0.2_amd64.deb
 ```
 
 Le script :
@@ -115,10 +127,10 @@ Le script :
 
 ```powershell
 # Script automatique (compile + package en .msi via WiX)
-python packaging\build_msi.py 1.0.0
+python "Installers\MSI installer\build_msi.py" 1.0.2
 
 # Résultat
-dir dist\windows\Voktora_1.0.0_x64.msi
+dir dist\windows\Voktora_1.0.2_x64.msi
 ```
 
 Le script :

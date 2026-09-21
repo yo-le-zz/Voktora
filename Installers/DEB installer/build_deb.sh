@@ -33,6 +33,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 VERSION="${1:-$(cat "$ROOT/voktora/version.txt" | tr -d '[:space:]')}"
+# Le numero de version Debian DOIT commencer par un chiffre (regle dpkg-deb) —
+# on retire un eventuel prefixe "v"/"V" (convention de tag git courante,
+# ex. "v1.0.2") sans toucher au tag/titre de PR original.
+VERSION="${VERSION#v}"
+VERSION="${VERSION#V}"
 ARCH="amd64"
 PKG_NAME="voktora"
 DIST_DIR="$ROOT/dist/linux"

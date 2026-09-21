@@ -2,9 +2,9 @@ name: Build & Release Voktora
 
 on:
   push:
-    branches: [dev]
+    branches: [dev, main]
   pull_request:
-    types: [closed]
+    types: [opened, synchronize, reopened, closed]
     branches: [main]
 
 permissions:
@@ -13,8 +13,39 @@ permissions:
 
 jobs:
 
+  # -- JOB 0 : lint + tests -- sur tout push et toute pull request -----------
+  test:
+    if: github.event_name == 'push' || github.event.pull_request.merged != true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.13" }
+
+      - name: Dépendances système Qt (offscreen)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-xkb1 libxkbcommon-x11-0 libgl1 libglib2.0-0 \
+            libopengl0 libxcb-cursor0
+
+      - name: Installer les dépendances de test
+        run: pip install pytest pytest-cov ruff cryptography pyside6
+
+      - name: Lint (ruff)
+        run: ruff check voktora tests
+
+      - name: Tests unitaires (pytest)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pytest --cov=voktora --cov-report=term-missing
+
   # -- JOB 1 : push dev -> PR automatique vers main --------------------------
   open_pr:
+    needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     steps:
@@ -37,7 +68,13 @@ jobs:
             **Version :** `${{ steps.ci.outputs.title }}`
             -> Faites **Squash & Merge** pour declencher le build et la release.
 
-  # -- JOB 2 : merge PR sur main -> build DEB + MSI -------------------------
+  # -- JOB 2 : merge PR sur main -> build DEB + MSI ---------------------------
+  # Compilation directe sur les runners (pas de Docker) : les runners
+  # heberges par GitHub incluent deja gcc/build-essential pour Linux, et
+  # Docker Desktop n'est de toute facon PAS installe sur windows-latest
+  # (donc inutilisable pour un build Windows via conteneur, meme en local
+  # sur Windows -- voir docker/README.md pour une compilation Docker
+  # optionnelle sur une vraie machine, hors CI).
   build:
     if: >
       github.event_name == 'pull_request' &&
@@ -62,12 +99,10 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.13" }
 
-      - name: Installer dependances Python
-        run: |
-          pip install uv
-          pip install nuitka pyside6 cryptography
+      - name: Installer les dependances Python
+        run: pip install nuitka pyside6 cryptography
 
-      # -- Linux --------------------------------------------------------------
+      # -- Linux ----------------------------------------------------------------
       - name: Dependances systeme Linux
         if: matrix.platform == 'linux'
         run: |
@@ -76,13 +111,14 @@ jobs:
             libxcb-xinerama0 libxcb-icccm4 libxcb-image0 \
             libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
             libxcb-xkb1 libxkbcommon-x11-0 libgl1 libglib2.0-0 \
+            libegl1 libopengl0 libxcb-cursor0 \
             patchelf dpkg-dev
 
       - name: Build Linux (.deb)
         if: matrix.platform == 'linux'
         run: bash "Installers/DEB installer/build_deb.sh" "${{ github.event.pull_request.title }}"
 
-      # -- Windows ------------------------------------------------------------
+      # -- Windows ----------------------------------------------------------------
       - name: Installer WiX Toolset (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh

@@ -10,10 +10,10 @@
 
 ```bash
 # 1. Télécharger le .deb depuis la dernière release
-wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora_1.0.0_amd64.deb
+wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora_1.0.2_amd64.deb
 
 # 2. Installer
-sudo dpkg -i voktora_1.0.0_amd64.deb
+sudo dpkg -i voktora_1.0.2_amd64.deb
 
 # 3. Si des dépendances manquent
 sudo apt-get install -f
@@ -39,12 +39,20 @@ Les données utilisateur (`~/.voktora/`) ne sont **pas** supprimées.
 
 ### Via le .msi (recommandé)
 
-1. Télécharger `Voktora_1.0.0_x64.msi` depuis [les releases GitHub](https://github.com/yo-le-zz/Voktora/releases/latest)
+1. Télécharger `Voktora_1.0.2_x64.msi` depuis [les releases GitHub](https://github.com/yo-le-zz/Voktora/releases/latest)
 2. Double-cliquer sur le `.msi`
 3. Suivre l'assistant d'installation (Next → Install → Finish)
 4. Voktora est disponible dans le menu Démarrer et sur le Bureau
 
 **Dossier d'installation :** `C:\Program Files\Voktora\`
+
+> ⚠️ **Avertissement Windows SmartScreen / antivirus.** Ce `.msi` n'est
+> pas signé numériquement (pas de certificat de signature de code pour
+> ce projet), ce qui peut faire apparaître un avertissement « éditeur
+> non reconnu ». Ce n'est pas un signe de logiciel malveillant — le
+> code source est public — mais restez prudent avec tout exécutable non
+> signé et vérifiez la provenance (releases GitHub officielles
+> uniquement).
 
 ### Désinstallation Windows
 

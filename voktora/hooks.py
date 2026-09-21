@@ -1,6 +1,6 @@
 """
 hooks.py — Système de hooks Voktora
-Version : 1.0.1
+Version : 1.0.2
 Chaque hook peut lancer un script Python ou une commande shell.
 Hooks disponibles : on_create, on_open, on_delete, on_clone,
                     on_git_push, on_git_commit, on_git_pull
@@ -11,8 +11,8 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 import core
 
@@ -110,19 +110,19 @@ def _run_handler(kind: str, cmd: str, cwd: Path | None,
             result = subprocess.run(
                 [sys.executable, str(script_path)],
                 cwd=str(cwd) if cwd else None,
-                env=env, capture_output=True, text=True, timeout=60,
+                env=env, capture_output=True, text=True, timeout=60, check=False,
             )
         else:
             result = subprocess.run(
                 [sys.executable, "-c", cmd],
                 cwd=str(cwd) if cwd else None,
-                env=env, capture_output=True, text=True, timeout=60,
+                env=env, capture_output=True, text=True, timeout=60, check=False,
             )
     else:  # shell
         result = subprocess.run(
             cmd, shell=True,
             cwd=str(cwd) if cwd else None,
-            env=env, capture_output=True, text=True, timeout=60,
+            env=env, capture_output=True, text=True, timeout=60, check=False,
         )
 
     if log_cb:
