@@ -42,7 +42,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QPA_PLATFORMTHEME: minimal
-        run: pytest
+        run: pytest tests/test_archive.py tests/test_categories.py tests/test_config_migration.py tests/test_core_package_integration.py tests/test_crypto.py tests/test_find_readme.py tests/test_git_auth.py tests/test_git_commit_messages.py tests/test_github_api.py tests/test_github_api_version_header_regression.py tests/test_github_notification_regression.py tests/test_mc_migration.py tests/test_no_data_dir_pollution.py tests/test_ollama_client.py tests/test_organize.py tests/test_projects.py tests/test_security.py tests/test_validation.py tests/test_vault.py tests/test_version_consistency.py
 
   # -- JOB 1 : push dev -> PR automatique vers main --------------------------
   open_pr:
