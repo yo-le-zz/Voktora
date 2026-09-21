@@ -16,7 +16,9 @@ from PySide6.QtCore import QMimeData, QUrl  # noqa: E402
 from PySide6.QtWidgets import QApplication, QMessageBox  # noqa: E402
 from ui_main import MainWindow, import_dialog  # noqa: E402
 
-_app = QApplication.instance() or QApplication(sys.argv)
+_app = QApplication.instance()
+if _app is None:
+    _app = QApplication(sys.argv)
 
 
 @pytest.fixture
@@ -25,10 +27,16 @@ def window(isolated_data_dir, tmp_path, monkeypatch):
     monkeypatch.setattr(MainWindow, "_run_startup_health_check", lambda self: None)
     monkeypatch.setattr(MainWindow, "_show_migration_summary", lambda self: None)
     monkeypatch.setattr(MainWindow, "_run_update_check", lambda self: None)
+
     core.set_storage_config(str(tmp_path / "Projects"))
+
     w = MainWindow()
     yield w
+
     w.close()
+    w.deleteLater()
+    _app.processEvents()
+    del w
 
 
 def _mime(*paths) -> QMimeData:
