@@ -20,7 +20,7 @@ la méthode utilisée pour produire les releases.
 
 ```bash
 docker build -f docker/linux.Dockerfile -t voktora-build-linux .
-docker run --rm -v "$PWD/dist:/app/dist" voktora-build-linux 1.0.2
+docker run --rm -v "$PWD/dist:/app/dist" voktora-build-linux 1.0.3
 ```
 
 > ⚠️ Ce Dockerfile a un problème connu non résolu : sur l'image officielle
@@ -40,10 +40,10 @@ Necessite un hote Docker configure en mode "Windows containers"
 
 ```powershell
 docker build -f docker/windows.Dockerfile -t voktora-build-windows .
-docker run --rm -v "$PWD\dist:C:\app\dist" voktora-build-windows 1.0.2
+docker run --rm -v "$PWD\dist:C:\app\dist" voktora-build-windows 1.0.3
 ```
 
-Le paquet est ecrit dans `dist\windows\Voktora_1.0.2_x64.msi`.
+Le paquet est ecrit dans `dist\windows\Voktora_1.0.3_x64.msi`.
 
 ## Pourquoi Docker (pour Linux) ?
 

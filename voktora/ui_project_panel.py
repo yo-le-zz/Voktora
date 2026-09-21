@@ -1,6 +1,5 @@
 """
 ui_project_panel.py — Panneau détaillé d'un projet Voktora
-Version : 1.0.2
 Nouveau panneau centré, plein écran, avec :
   • Header : icône personnalisable, nom, badges, bouton retour
   • 5 onglets : Actions / Git / Outils / Snapshots / Profils
@@ -11,6 +10,7 @@ Le panneau est instancié une fois dans MainWindow et affiché via show_project(
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import core
@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from task_worker import TaskWorker
 from ui_dialogs import (
     DashboardDialog,
     HooksDialog,
@@ -96,7 +97,7 @@ class ProjectPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._path: Path | None = None
-        self._kind: str         = "instance"
+        self._push_worker: TaskWorker | None = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -175,12 +176,12 @@ class ProjectPanel(QWidget):
         badges = QHBoxLayout()
         badges.setSpacing(8)
 
-        self._badge_kind = QLabel()
-        self._badge_kind.setStyleSheet(
+        self._badge_category = QLabel()
+        self._badge_category.setStyleSheet(
             "background:#89b4fa; color:#1e1e2e; border-radius:4px;"
             " font-size:11px; font-weight:600; padding:2px 8px;"
         )
-        badges.addWidget(self._badge_kind)
+        badges.addWidget(self._badge_category)
 
         self._badge_lang = QLabel()
         self._badge_lang.setStyleSheet(
@@ -280,7 +281,6 @@ class ProjectPanel(QWidget):
 
         # Groupe : Gestion
         self._btn_rename   = _btn("✏ Renommer", "subtle")
-        self._btn_transfer = _btn("🔀 Transférer Instance ↔ Intent", "subtle")
         self._btn_delete   = _btn("🗑 Supprimer définitivement", "danger")
         self._delete_prog = QProgressBar()
         self._delete_prog.setRange(0, 100)
@@ -290,7 +290,6 @@ class ProjectPanel(QWidget):
         gm = QVBoxLayout(grp_mgmt)
         row_mgmt = QHBoxLayout()
         row_mgmt.addWidget(self._btn_rename)
-        row_mgmt.addWidget(self._btn_transfer)
         row_mgmt.addWidget(self._btn_delete)
         row_mgmt.addStretch()
         gm.addLayout(row_mgmt)
@@ -372,11 +371,11 @@ class ProjectPanel(QWidget):
         # Groupe : Export / Import
         self._btn_export_auto   = _btn("💾 Exporter .zip (auto)")
         self._btn_export_custom = _btn("💾 Exporter .zip (choisir dossier)", "subtle")
-        self._btn_import_inst   = _btn("📂 Importer instance .zip")
-        self._btn_import_int    = _btn("📂 Importer intent .zip")
+        self._btn_import        = _btn("📥 Importer un projet (dossier ou .zip)…")
+        self._btn_clone_repo    = _btn("🐙 Cloner un dépôt GitHub…")
         v.addWidget(_group("Export / Import",
             self._btn_export_auto, self._btn_export_custom,
-            self._btn_import_inst, self._btn_import_int))
+            self._btn_import, self._btn_clone_repo))
 
         # Groupe : Vault
         self._btn_vault = _btn("🔐 Vault — secrets", "subtle")
@@ -460,7 +459,7 @@ class ProjectPanel(QWidget):
         self._det_path.setStyleSheet("font-family:Consolas,'DejaVu Sans Mono',monospace; font-size:11px;")
 
         for label, widget in [
-            ("Type :",          self._det_type),
+            ("Organisation :",  self._det_type),
             ("Statut :",        self._det_status),
             ("Langage :",       self._det_lang),
             ("Catégorie :",     self._det_cat),
@@ -508,15 +507,14 @@ class ProjectPanel(QWidget):
     # API publique
     # =========================================================================
 
-    def show_project(self, path: str, kind: str,
+    def show_project(self, path: str,
                      on_action: callable | None = None) -> None:
         """
         Charge un projet dans le panneau.
-        `on_action` est un callback(action_name, path, kind) fourni par MainWindow
+        `on_action` est un callback(action_name, path) fourni par MainWindow
         pour déléguer les actions Git/FS sans dupliquer la logique.
         """
         self._path     = Path(path)
-        self._kind     = kind
         self._on_action = on_action
 
         self._refresh_header()
@@ -552,12 +550,9 @@ class ProjectPanel(QWidget):
         self._render_icon(em, icon_p, entry.get("color","#313244") if entry else "#313244", name)
 
         # Badges
-        self._badge_kind.setText(self._kind.upper())
-        self._badge_kind.setStyleSheet(
-            f"background:{'#89b4fa' if self._kind=='instance' else '#cba6f7'};"
-            " color:#1e1e2e; border-radius:4px; font-size:11px;"
-            " font-weight:600; padding:2px 8px;"
-        )
+        category = (entry.get("category") or "") if entry else ""
+        self._badge_category.setText(category)
+        self._badge_category.setVisible(bool(category))
         self._badge_lang.setText(lang or "—")
         self._badge_lang.setVisible(bool(lang))
 
@@ -598,10 +593,7 @@ class ProjectPanel(QWidget):
         entry = self._get_entry()
 
         # Note
-        if self._kind == "instance":
-            note = core.get_instance_note(self._path)
-        else:
-            note = core.get_intent_note(self._path) if hasattr(core, "get_intent_note") else ""
+        note = core.get_project_note(self._path)
 
         self._note_preview_active = False
         self._btn_toggle_note_preview.setText("👁 Aperçu Markdown")
@@ -631,39 +623,37 @@ class ProjectPanel(QWidget):
         self._note_edit.setPlainText(self._note_raw_text)
 
         # Infos git
-        if self._kind == "instance":
-            repo     = core.get_instance_repo(self._path)
-            branches = core.get_instance_branches(self._path)
-            self._lbl_repo.setText(repo or "(non lié)")
-            self._lbl_branch.setText(", ".join(branches) if branches else "—")
-            session = core.get_github_session()
-            pat_raw = core.get_instance_token_raw(self._path)
-            if pat_raw:
-                token_src = "Token PAT spécifique"
-            elif session and session.get("token"):
-                token_src = f"OAuth @{session.get('login','')}"
-            else:
-                token_src = "Aucun token"
-            self._lbl_token.setText(token_src)
+        repo     = core.get_project_repo(self._path)
+        branches = core.get_project_branches(self._path)
+        self._lbl_repo.setText(repo or "(non lié)")
+        self._lbl_branch.setText(", ".join(branches) if branches else "—")
+        session = core.get_github_session()
+        pat_raw = core.get_project_token_raw(self._path)
+        if pat_raw:
+            token_src = "Token PAT spécifique"
+        elif session and session.get("token"):
+            token_src = f"OAuth @{session.get('login','')}"
+        else:
+            token_src = "Aucun token"
+        self._lbl_token.setText(token_src)
 
         # Détails
         lang  = (entry.get("language") or core.guess_project_language(self._path)) if entry else ""
         cat   = entry.get("category", "—") if entry else "—"
-        repo  = core.get_instance_repo(self._path) if self._kind == "instance" else "—"
-        brs   = core.get_instance_branches(self._path) if self._kind == "instance" else []
+        brs   = branches
         crd   = entry.get("created", "—") if entry else "—"
 
         sid    = entry.get("status", "") if entry else ""
         so     = core.get_project_status_by_id(sid)
         status = so.name if so else "—"
 
-        self._det_type.setText(self._kind.capitalize())
+        self._det_type.setText(core.github_owner(repo) or "—")
         self._det_status.setText(status)
         self._det_lang.setText(lang or "—")
         self._det_cat.setText(cat or "—")
         self._det_repo.setText(repo or "—")
         self._det_branch.setText(brs[0] if brs else "—")
-        self._det_token_s.setText(self._lbl_token.text() if self._kind == "instance" else "—")
+        self._det_token_s.setText(self._lbl_token.text())
         self._det_created.setText(crd)
         self._det_path.setText(str(self._path))
 
@@ -707,27 +697,29 @@ class ProjectPanel(QWidget):
             self._btn_explorer, self._btn_terminal, self._btn_vscode,
             self._btn_open_with, self._btn_save_note, self._btn_toggle_note_preview,
             self._btn_rename,
-            self._btn_transfer,
             self._btn_delete, self._btn_profiles, self._btn_run_prof,
             self._btn_hooks, self._btn_git_init, self._btn_git_clone,
             self._btn_git_cfg, self._btn_git_status, self._btn_git_pull,
             self._btn_git_push_i, self._btn_git_log, self._btn_git_co,
             self._btn_commit_push, self._btn_merge, self._btn_smart_msg,
             self._btn_auto_push, self._btn_export_auto, self._btn_export_custom,
-            self._btn_import_inst, self._btn_import_int, self._btn_vault,
+            self._btn_import, self._btn_clone_repo, self._btn_vault,
             self._btn_dashboard, self._btn_builder,
             self._btn_snapshot_manage, self._btn_snapshot_create,
         ]
         for b in _all_btns:
-            try:
-                b.clicked.disconnect()
-            except RuntimeError:
-                pass  # pas encore connecté
+            # Un bouton encore jamais connecté fait lever RuntimeError / avertir PySide : sans gravité.
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                try:
+                    b.clicked.disconnect()
+                except RuntimeError:
+                    pass
 
         def act(name):
             def _slot(*_):
                 if self._on_action:
-                    self._on_action(name, self._path, self._kind)
+                    self._on_action(name, self._path)
             return _slot
 
         # Actions
@@ -738,7 +730,6 @@ class ProjectPanel(QWidget):
         self._btn_save_note.clicked.connect(self._save_note)
         self._btn_toggle_note_preview.clicked.connect(self._toggle_note_preview)
         self._btn_rename.clicked.connect(act("rename"))
-        self._btn_transfer.clicked.connect(act("transfer_kind"))
         self._btn_delete.clicked.connect(act("delete"))
         self._btn_profiles.clicked.connect(self._open_profiles)
         self._btn_run_prof.clicked.connect(self._run_default_profile)
@@ -746,7 +737,7 @@ class ProjectPanel(QWidget):
 
         # Git
         self._btn_git_init.clicked.connect(act("git_init"))
-        self._btn_git_clone.clicked.connect(act("git_clone"))
+        self._btn_git_clone.clicked.connect(act("clone_repo"))
         self._btn_git_cfg.clicked.connect(act("git_configure"))
         self._btn_git_status.clicked.connect(act("git_status"))
         self._btn_git_pull.clicked.connect(act("git_pull"))
@@ -761,8 +752,8 @@ class ProjectPanel(QWidget):
         # Outils
         self._btn_export_auto.clicked.connect(act("export"))
         self._btn_export_custom.clicked.connect(act("export_custom"))
-        self._btn_import_inst.clicked.connect(lambda: act("import_instance")())
-        self._btn_import_int.clicked.connect(lambda: act("import_intent")())
+        self._btn_import.clicked.connect(act("import_project"))
+        self._btn_clone_repo.clicked.connect(act("clone_repo"))
         self._btn_vault.clicked.connect(lambda: VaultDialog(self).exec())
         self._btn_dashboard.clicked.connect(lambda: DashboardDialog(self).exec())
         self._btn_builder.clicked.connect(act("run_builder"))
@@ -775,17 +766,33 @@ class ProjectPanel(QWidget):
     # Slots locaux
     # =========================================================================
 
+    def set_git_busy(self, busy: bool) -> None:
+        """Désactive les boutons Git pendant une opération en cours."""
+        for btn in (self._btn_git_init, self._btn_git_clone, self._btn_git_cfg, self._btn_git_status,
+                    self._btn_git_pull, self._btn_git_push_i, self._btn_git_log, self._btn_git_co,
+                    self._btn_commit_push, self._btn_merge):
+            btn.setEnabled(not busy)
+
+    def autosave_note(self) -> bool:
+        """Enregistre la note si elle a changé depuis son chargement / dernier enregistrement."""
+        if not self._path or self._note_preview_active or self._note_is_readme_fallback:
+            return False
+        text = self._note_edit.toPlainText()
+        if text == self._note_raw_text:
+            return False
+        core.set_project_note(self._path, text)
+        self._note_raw_text = text
+        self.log("📝 Note sauvegardée automatiquement.")
+        return True
+
     def _save_note(self) -> None:
         if not self._path:
             return
         if self._note_preview_active:
             self._toggle_note_preview()  # revenir en édition avant de sauvegarder
         note = self._note_edit.toPlainText()
-        if self._kind == "instance":
-            core.set_instance_note(self._path, note)
-        else:
-            if hasattr(core, "set_intent_note"):
-                core.set_intent_note(self._path, note)
+        core.set_project_note(self._path, note)
+        self._note_raw_text = note
         self._note_is_readme_fallback = False
         self._note_source_lbl.setVisible(False)
         self.log("Note sauvegardée.")
@@ -818,7 +825,7 @@ class ProjectPanel(QWidget):
             return
         # Sauvegarder dans la config de l'entrée
         cfg = core._load_config()
-        entry = core._find_entry(cfg, f"{self._kind}s", self._path)
+        entry = core._find_entry(cfg, self._path)
         if entry:
             entry["icon_path"] = path
             core._save_config(cfg)
@@ -870,11 +877,25 @@ class ProjectPanel(QWidget):
         self.log(f"Message suggéré : {msg}")
 
     def _auto_push(self) -> None:
-        if not self._path:
+        """Push en arrière-plan : l'interface reste utilisable pendant l'envoi réseau."""
+        if not self._path or (self._push_worker is not None and self._push_worker.isRunning()):
             return
-        token = core.get_effective_token(self._path)
-        ok = git_module.push(self._path, log_cb=self.log, token=token)
-        self.log("Push OK" if ok else "Push échoué (voir terminal)")
+        path = self._path
+
+        def job(ctx):
+            # La résolution du token peut appeler l'API GitHub (GitHub App) : hors thread GUI.
+            token = core.get_effective_token(path)
+            return git_module.push(path, log_cb=ctx.log, token=token)
+
+        self._btn_auto_push.setEnabled(False)
+        self.log("Push en cours…")
+        worker = TaskWorker(job)
+        worker.log.connect(self.log)
+        worker.succeeded.connect(lambda ok: self.log("Push OK" if ok else "Push échoué (voir journal)"))
+        worker.failed.connect(lambda message: self.log(f"Erreur de push : {message}"))
+        worker.finished.connect(lambda: self._btn_auto_push.setEnabled(True))
+        self._push_worker = worker
+        worker.start()
 
     # =========================================================================
     # Helpers
@@ -884,4 +905,4 @@ class ProjectPanel(QWidget):
         if not self._path:
             return None
         cfg = core._load_config()
-        return core._find_entry(cfg, f"{self._kind}s", self._path)
+        return core._find_entry(cfg, self._path)

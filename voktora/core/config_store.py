@@ -1,11 +1,16 @@
 """
 Voktora — core.config_store
-Fragment de core.py extrait lors du découpage v1.0.2 en package.
+Lecture / écriture / migration de config.json.
+
+Schéma 9 : les anciennes listes « instances » et « intents » sont fusionnées
+dans une seule liste « projects » ; les catégories deviennent des objets
+{name, emoji, color} gérés par l'utilisateur.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -21,12 +26,129 @@ def invalidate_cache() -> None:
     _config_cache = None
 
 # ──────────────────────────────────────────────
+# NORMALISATION DES ENTRÉES (projets, catégories)
+# ──────────────────────────────────────────────
+
+def _path_basename(raw_path: str) -> str:
+    """Dernier segment d'un chemin, quel que soit le séparateur (Windows ou POSIX).
+
+    Un chemin exporté depuis Windows doit rester lisible sous Linux, où pathlib
+    ne reconnaît pas l'antislash comme séparateur.
+    """
+    return raw_path.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
+
+
+def normalize_entry(entry: dict) -> bool:
+    """Complète une entrée de projet avec les champs par défaut manquants.
+
+    Retourne True si l'entrée a été modifiée. Source unique des valeurs par
+    défaut : création, import et clone n'ont plus à les dupliquer.
+    """
+    changed = False
+    defaults: list[tuple[str, object]] = [
+        ("note", ""),
+        ("status", constants.DEFAULT_PROJECT_STATUS),
+        ("color", None),
+        ("emoji", None),
+        ("category", None),
+        ("language", None),
+        ("tags", []),
+        ("github_repo", None),
+        ("github_branch", "main"),
+        ("github_branches", [entry.get("github_branch") or "main"]),
+        ("github_token", ""),
+        ("github_token_protected", False),
+    ]
+    for key, default in defaults:
+        if key not in entry:
+            entry[key] = default
+            changed = True
+    if entry.get("tags") is None:
+        entry["tags"] = []
+        changed = True
+    return changed
+
+
+def normalize_categories(raw: object, used_names: list[str] | tuple[str, ...] = ()) -> list[dict]:
+    """Convertit la liste de catégories en objets {name, emoji, color}.
+
+    Accepte l'ancien format (liste de chaînes) comme le nouveau, dédoublonne
+    sans tenir compte de la casse et ajoute les catégories référencées par des
+    projets (`used_names`) mais absentes de la liste — pour qu'aucune catégorie
+    déjà attribuée ne disparaisse lors de la migration.
+    """
+    result: list[dict] = []
+    seen: set[str] = set()
+
+    def _add(name: object, emoji: object = "", color: object = "") -> None:
+        if not isinstance(name, str):
+            return
+        name = name.strip()
+        if not name or name.lower() in seen:
+            return
+        seen.add(name.lower())
+        result.append({
+            "name": name[: constants.MAX_CATEGORY_NAME_LENGTH],
+            "emoji": emoji if isinstance(emoji, str) else "",
+            "color": color if isinstance(color, str) else "",
+        })
+
+    for item in raw if isinstance(raw, list) else []:
+        if isinstance(item, str):
+            _add(item)
+        elif isinstance(item, dict):
+            _add(item.get("name"), item.get("emoji", ""), item.get("color", ""))
+    for name in used_names:
+        _add(name)
+    return result
+
+
+def _fold_legacy_kinds(cfg: dict) -> bool:
+    """Fusionne les anciennes listes « instances » / « intents » dans « projects ».
+
+    Idempotent : sans clé héritée, ne fait rien. Les instances passent avant les
+    intents, donc leurs champs GitHub priment en cas de doublon de chemin.
+    """
+    legacy_keys = [key for key in ("instances", "intents") if key in cfg]
+    if not legacy_keys:
+        return False
+    projects = cfg.setdefault("projects", [])
+    known = {e.get("path") for e in projects if isinstance(e, dict)}
+    for key in legacy_keys:
+        for entry in cfg.pop(key) or []:
+            if not isinstance(entry, dict) or not entry.get("path") or entry["path"] in known:
+                continue
+            known.add(entry["path"])
+            entry.setdefault("name", _path_basename(entry["path"]))
+            projects.append(entry)
+    return True
+
+
+def _migrate_storage(cfg: dict) -> bool:
+    """Remplace les racines instances/intents par une racine unique « projects_root »."""
+    storage = cfg.get("storage")
+    if not isinstance(storage, dict):
+        storage = cfg["storage"] = {}
+    changed = False
+    if "instances_root" in storage or "intents_root" in storage:
+        instances_root = storage.pop("instances_root", None)
+        intents_root = storage.pop("intents_root", None)
+        if not storage.get("projects_root"):
+            storage["projects_root"] = instances_root or intents_root or None
+        changed = True
+    if "projects_root" not in storage:
+        storage["projects_root"] = None
+        changed = True
+    return changed
+
+
+# ──────────────────────────────────────────────
 
 def _migrate_config(cfg: dict) -> tuple:
     changed = False
 
     if "_schema_version" not in cfg or cfg["_schema_version"] < 2:
-        cfg.setdefault("storage", {"instances_root": None, "intents_root": None})
+        cfg.setdefault("storage", {"projects_root": None})
         cfg["_schema_version"] = 2
         changed = True
 
@@ -38,19 +160,10 @@ def _migrate_config(cfg: dict) -> tuple:
         cfg["_schema_version"] = 3
         changed = True
 
+    # Schémas 4 à 8 : les champs des entrées sont désormais garantis par
+    # normalize_entry() (appelé plus bas), on ne conserve que les étapes qui
+    # touchent le reste de la configuration.
     if cfg.get("_schema_version", 0) < 4:
-        for entry in cfg.get("instances", []):
-            for field_name, default in [("status", constants.DEFAULT_PROJECT_STATUS), ("color", None),
-                                         ("emoji", None), ("category", None), ("language", None)]:
-                if field_name not in entry:
-                    entry[field_name] = default
-                    changed = True
-        for entry in cfg.get("intents", []):
-            for field_name, default in [("color", None), ("emoji", None),
-                                         ("category", None), ("language", None)]:
-                if field_name not in entry:
-                    entry[field_name] = default
-                    changed = True
         cfg["_schema_version"] = 4
 
     if cfg.get("_schema_version", 0) < 5:
@@ -93,15 +206,26 @@ def _migrate_config(cfg: dict) -> tuple:
         cfg.setdefault("vault", {})
         cfg["_schema_version"] = 8
 
+    if cfg.get("_schema_version", 0) < 9:
+        # v1.0.3 : instances + intents → projets, racines de stockage unifiées
+        cfg["_schema_version"] = 9
+        changed = True
+
+    # Ces deux fusions sont idempotentes et volontairement HORS du bloc de
+    # version : elles rattrapent aussi une config déjà en schéma 9 dans
+    # laquelle un import (Meridian, mpack, ancien fichier) a réintroduit des
+    # clés « instances » / « intents ».
+    if _fold_legacy_kinds(cfg):
+        changed = True
+    if _migrate_storage(cfg):
+        changed = True
+
     # Garanties clés obligatoires
-    cfg.setdefault("instances", [])
-    cfg.setdefault("intents", [])
-    cfg.setdefault("storage", {"instances_root": None, "intents_root": None})
+    cfg.setdefault("projects", [])
     cfg.setdefault("github_account", {
         "login": None, "name": None, "avatar_url": None,
         "token_encrypted": None, "token_protected": False,
     })
-    cfg.setdefault("categories", [])
     cfg.setdefault("custom_statuses", {})
     cfg.setdefault("app_config", {
         "theme": "default",
@@ -129,26 +253,18 @@ def _migrate_config(cfg: dict) -> tuple:
             app_cfg[key] = val
             changed = True
 
-    # Migration entrées instances
-    for entry in cfg["instances"]:
-        for field_name, default in [
-            ("github_branches", [entry.get("github_branch") or "main"]),
-            ("github_token_protected", False), ("note", ""),
-            ("status", constants.DEFAULT_PROJECT_STATUS), ("color", None),
-            ("emoji", None), ("category", None), ("language", None),
-        ]:
-            if field_name not in entry:
-                entry[field_name] = default
-                changed = True
+    # Entrées de projets : champs par défaut + noms de catégories utilisés
+    used_categories: list[str] = []
+    for entry in cfg["projects"]:
+        if normalize_entry(entry):
+            changed = True
+        if isinstance(entry.get("category"), str) and entry["category"].strip():
+            used_categories.append(entry["category"].strip())
 
-    for entry in cfg["intents"]:
-        for field_name, default in [
-            ("note", ""), ("color", None), ("emoji", None),
-            ("category", None), ("language", None),
-        ]:
-            if field_name not in entry:
-                entry[field_name] = default
-                changed = True
+    categories = normalize_categories(cfg.get("categories", []), used_categories)
+    if categories != cfg.get("categories"):
+        cfg["categories"] = categories
+        changed = True
 
     return cfg, changed
 
@@ -156,9 +272,8 @@ def _migrate_config(cfg: dict) -> tuple:
 def _get_default_config() -> dict:
     return {
         "_schema_version": constants.CONFIG_SCHEMA_VERSION,
-        "instances": [],
-        "intents": [],
-        "storage": {"instances_root": None, "intents_root": None},
+        "projects": [],
+        "storage": {"projects_root": None},
         "github_account": {
             "login": None, "name": None, "avatar_url": None,
             "token_encrypted": None, "token_protected": False,
@@ -197,8 +312,6 @@ def _load_config() -> dict:
     paths.ensure_app_dirs()
     cfg_path = paths.get_config_path()
 
-    _migrate_legacy_configs(cfg_path.parent)
-
     if cfg_path.exists():
         try:
             with open(cfg_path, encoding="utf-8") as f:
@@ -208,55 +321,129 @@ def _load_config() -> dict:
                 cfg = _get_default_config()
             else:
                 raise constants.ConfigCorruptedError(f"config.json illisible : {exc}") from exc
+        if not isinstance(cfg, dict):
+            raise constants.ConfigCorruptedError("config.json illisible : la racine n'est pas un objet JSON.")
     else:
         cfg = _get_default_config()
 
+    # Sauvegarde de sécurité AVANT la première migration vers les projets :
+    # la fusion instances/intents est à sens unique.
+    raw_version = cfg.get("_schema_version", 0)
+    if cfg_path.exists() and isinstance(raw_version, int) and raw_version < 9:
+        _backup_before_projects_migration(cfg_path)
+
+    legacy_files, legacy_log = _absorb_legacy_files(cfg_path.parent, cfg)
+
     cfg, changed = _migrate_config(cfg)
-    if changed:
+    if changed or legacy_files:
         try:
             _save_config(cfg)
         except OSError:
-            pass
+            # Sauvegarde impossible : on garde les anciens fichiers intacts,
+            # ils seront réabsorbés au prochain lancement.
+            legacy_files, legacy_log = [], []
+    _retire_legacy_files(cfg_path.parent, legacy_files, legacy_log)
 
     _config_cache = cfg
     return cfg
 
 
-def _migrate_legacy_configs(data_dir: Path) -> None:
-    migrations_made = []
-    legacy_patterns = ["voktora_config.json", "instances.json",
-                       "intents.json", "projects.json", "settings.json"]
-    search_dirs = [data_dir.parent, data_dir]
+def _backup_before_projects_migration(cfg_path: Path) -> None:
+    """Copie config.json vers config.pre-v9.json (une seule fois)."""
+    backup = cfg_path.with_name("config.pre-v9.json")
+    if backup.exists():
+        return
+    try:
+        shutil.copy2(cfg_path, backup)
+    except OSError:
+        pass  # sauvegarde best-effort : ne doit jamais empêcher le démarrage
 
-    for search_dir in search_dirs:
+
+# Anciens fichiers de configuration (avant config.json unique). Un fichier
+# n'est absorbé que s'il ressemble vraiment à une config Voktora : les noms
+# « settings.json » / « projects.json » sont génériques et peuvent appartenir
+# à un tout autre programme dans le dossier parent.
+_LEGACY_FILENAMES = ("voktora_config.json", "instances.json",
+                     "intents.json", "projects.json", "settings.json")
+_LEGACY_KEYS = ("instances", "intents", "projects", "storage", "github_account")
+
+
+def _absorb_legacy_files(data_dir: Path, cfg: dict) -> tuple[list[Path], list[str]]:
+    """Fusionne dans `cfg` les anciens fichiers de config reconnus.
+
+    Ne supprime rien : retourne (fichiers absorbés, lignes de journal). La
+    suppression n'a lieu qu'après écriture réussie de config.json (voir
+    _retire_legacy_files), pour ne jamais perdre de données.
+    """
+    absorbed: list[Path] = []
+    log: list[str] = []
+    seen: set[Path] = set()
+    for search_dir in (data_dir.parent, data_dir):
         if not search_dir.exists():
             continue
-        for pattern in legacy_patterns:
-            legacy_file = search_dir / pattern
-            if legacy_file == paths.get_config_path():
+        for filename in _LEGACY_FILENAMES:
+            legacy_file = search_dir / filename
+            if legacy_file in seen or legacy_file == paths.get_config_path() or not legacy_file.is_file():
                 continue
-            if legacy_file.exists():
-                try:
-                    with open(legacy_file, encoding="utf-8") as f:
-                        legacy_cfg = json.load(f)
-                    _merge_legacy_config(legacy_cfg, legacy_file.name, migrations_made)
-                    backup_path = legacy_file.with_suffix(".json.legacy")
-                    shutil.copy2(legacy_file, backup_path)
-                    legacy_file.unlink()
-                    migrations_made.append(f"✅ {legacy_file.name} → config.json")
-                except Exception as e:
-                    migrations_made.append(f"❌ {legacy_file.name} → erreur: {e}")
+            seen.add(legacy_file)
+            try:
+                with open(legacy_file, encoding="utf-8") as f:
+                    legacy = json.load(f)
+            except (OSError, ValueError):
+                continue  # illisible : pas à nous de le traiter
+            if not isinstance(legacy, dict) or not any(key in legacy for key in _LEGACY_KEYS):
+                continue
+            try:
+                _merge_legacy_config(cfg, legacy)
+            except Exception as exc:
+                log.append(f"❌ {legacy_file.name} → erreur: {exc}")
+                continue
+            absorbed.append(legacy_file)
+            log.append(f"✅ {legacy_file.name} → config.json")
+    return absorbed, log
 
-    if migrations_made:
+
+def _merge_legacy_config(cfg: dict, legacy: dict) -> None:
+    """Ajoute à `cfg` les projets et réglages d'un ancien fichier (sans doublon de chemin)."""
+    known = {e.get("path") for key in ("instances", "intents", "projects") for e in cfg.get(key, [])
+             if isinstance(e, dict)}
+    for key in ("instances", "intents", "projects"):
+        for entry in legacy.get(key) or []:
+            if isinstance(entry, dict) and entry.get("path") and entry["path"] not in known:
+                known.add(entry["path"])
+                cfg.setdefault(key, []).append(entry)
+
+    legacy_storage = legacy.get("storage")
+    if isinstance(legacy_storage, dict):
+        storage = cfg.setdefault("storage", {})
+        current = storage.get("projects_root") or storage.get("instances_root")
+        if not current:
+            storage.update(legacy_storage)
+
+    legacy_account = legacy.get("github_account")
+    if (isinstance(legacy_account, dict) and legacy_account.get("login")
+            and not (cfg.get("github_account") or {}).get("login")):
+        cfg["github_account"] = legacy_account
+
+
+def _retire_legacy_files(data_dir: Path, files: list[Path], log: list[str]) -> None:
+    """Sauvegarde puis supprime les anciens fichiers absorbés, et écrit le journal."""
+    for legacy_file in files:
         try:
-            log_file = data_dir / "migration.log"
-            with open(log_file, "a", encoding="utf-8") as f:
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                f.write(f"\n=== Migration du {timestamp} ===\n")
-                for line in migrations_made:
-                    f.write(f"{line}\n")
-        except Exception:
-            pass
+            shutil.copy2(legacy_file, legacy_file.with_suffix(".json.legacy"))
+            legacy_file.unlink()
+        except OSError as exc:
+            log.append(f"❌ {legacy_file.name} → suppression impossible: {exc}")
+    if not log:
+        return
+    try:
+        with open(data_dir / "migration.log", "a", encoding="utf-8") as f:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            f.write(f"\n=== Migration du {timestamp} ===\n")
+            for line in log:
+                f.write(f"{line}\n")
+    except OSError:
+        pass
 
 
 def show_migration_summary() -> list:
@@ -286,30 +473,6 @@ def clear_migration_log() -> None:
         pass
 
 
-def _merge_legacy_config(legacy_cfg: dict, filename: str, migrations_made: list) -> None:
-    try:
-        current_cfg = _load_config() if paths.get_config_path().exists() else _get_default_config()
-        if filename == "instances.json":
-            if "instances" in legacy_cfg:
-                current_cfg["instances"].extend(legacy_cfg["instances"])
-        elif filename == "intents.json":
-            if "intents" in legacy_cfg:
-                current_cfg["intents"].extend(legacy_cfg["intents"])
-        elif filename in ["voktora_config.json", "projects.json", "settings.json"]:
-            for key in ["instances", "intents", "storage", "github_account"]:
-                if key in legacy_cfg:
-                    if key in ["instances", "intents"]:
-                        existing_paths = {item["path"] for item in current_cfg.get(key, [])}
-                        for item in legacy_cfg[key]:
-                            if item.get("path") not in existing_paths:
-                                current_cfg.setdefault(key, []).append(item)
-                    else:
-                        current_cfg[key] = legacy_cfg[key]
-        _save_config(current_cfg)
-    except Exception as e:
-        migrations_made.append(f"❌ Erreur fusion {filename}: {e}")
-
-
 def _save_config(cfg: dict) -> None:
     global _config_cache
     cfg_path = paths.get_config_path()
@@ -324,6 +487,11 @@ def _save_config(cfg: dict) -> None:
     try:
         with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(cfg, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        if os.name == "posix":
+            # config.json peut contenir des tokens : lisible par le seul propriétaire.
+            os.chmod(tmp_path, 0o600)
         tmp_path.replace(cfg_path)
     except OSError as e:
         tmp_path.unlink(missing_ok=True)
@@ -333,16 +501,17 @@ def _save_config(cfg: dict) -> None:
     _config_cache = cfg
 
 
-def _find_entry(cfg: dict, key: str, path: Path) -> dict | None:
+def _find_entry(cfg: dict, path: Path | str) -> dict | None:
+    """Retrouve l'entrée d'un projet par son chemin."""
     target = str(path)
-    for entry in cfg.get(key, []):
+    for entry in cfg.get("projects", []):
         if entry["path"] == target:
             return entry
     return None
 
 
-def _update_entry(cfg: dict, key: str, path: Path, **fields) -> bool:
-    entry = _find_entry(cfg, key, path)
+def _update_entry(cfg: dict, path: Path | str, **fields) -> bool:
+    entry = _find_entry(cfg, path)
     if entry is None:
         return False
     entry.update(fields)
@@ -352,6 +521,61 @@ def _update_entry(cfg: dict, key: str, path: Path, **fields) -> bool:
 # ──────────────────────────────────────────────
 # STOCKAGE PERSONNALISÉ
 # ──────────────────────────────────────────────
+
+def extract_external_projects(data: dict) -> list[dict]:
+    """Projets d'une config externe (Meridian, ancienne ou récente Voktora), tous formats confondus."""
+    staging = {key: list(data.get(key) or []) for key in ("projects", "instances", "intents")
+               if isinstance(data.get(key), list)}
+    _fold_legacy_kinds(staging)
+    return [e for e in staging.get("projects", []) if isinstance(e, dict) and e.get("path")]
+
+
+def merge_external_config(data: dict) -> dict[str, int]:
+    """Fusionne une config externe dans la config courante, sans rien écraser.
+
+    Les projets déjà connus (même chemin) sont ignorés, les catégories sont
+    réunies (sans tenir compte de la casse), les statuts personnalisés et la
+    racine de stockage ne sont repris que s'ils n'existent pas déjà.
+    Retourne {"projects": n, "categories": n, "statuses": n} (éléments ajoutés).
+    """
+    import copy
+
+    cfg = _load_config()
+    known = {e["path"] for e in cfg["projects"]}
+    added_projects = 0
+    incoming = copy.deepcopy(extract_external_projects(data))
+    for entry in incoming:
+        if entry["path"] in known:
+            continue
+        entry.setdefault("name", _path_basename(entry["path"]))
+        normalize_entry(entry)
+        cfg["projects"].append(entry)
+        known.add(entry["path"])
+        added_projects += 1
+
+    before = {c["name"].lower() for c in cfg["categories"]}
+    used = [e["category"] for e in cfg["projects"] if e.get("category")]
+    merged = normalize_categories(cfg["categories"] + normalize_categories(data.get("categories") or []), used)
+    added_categories = sum(1 for c in merged if c["name"].lower() not in before)
+    cfg["categories"] = merged
+
+    added_statuses = 0
+    incoming_statuses = data.get("custom_statuses")
+    if isinstance(incoming_statuses, dict):
+        current = cfg.setdefault("custom_statuses", {})
+        for key, value in incoming_statuses.items():
+            if key not in current:
+                current[key] = value
+                added_statuses += 1
+
+    storage = data.get("storage")
+    if isinstance(storage, dict) and not cfg["storage"].get("projects_root"):
+        cfg["storage"]["projects_root"] = (
+            storage.get("projects_root") or storage.get("instances_root") or storage.get("intents_root") or None)
+
+    _save_config(cfg)
+    return {"projects": added_projects, "categories": added_categories, "statuses": added_statuses}
+
 
 def get_app_config() -> dict:
     return _load_config().get("app_config", {})
@@ -364,15 +588,12 @@ def set_app_config(config: dict) -> None:
 
 
 def get_storage_config() -> dict:
-    return _load_config().get("storage", {"instances_root": None, "intents_root": None})
+    return _load_config().get("storage", {"projects_root": None})
 
 
-def set_storage_config(instances_root, intents_root) -> None:
+def set_storage_config(projects_root) -> None:
     cfg = _load_config()
-    cfg["storage"] = {
-        "instances_root": str(instances_root) if instances_root else None,
-        "intents_root":   str(intents_root)   if intents_root   else None,
-    }
+    cfg["storage"] = {"projects_root": str(projects_root) if projects_root else None}
     _save_config(cfg)
 
 
@@ -422,28 +643,25 @@ def set_quick_apps(apps: list) -> None:
     _save_config(cfg)
 
 
-def get_instance_language(path: Path) -> str:
+def get_project_language(path: Path) -> str:
     cfg = _load_config()
-    entry = _find_entry(cfg, "instances", path)
+    entry = _find_entry(cfg, path)
     return (entry.get("language") if entry else None) or ""
 
 
-def set_instance_language(path: Path, language: str) -> None:
+def set_project_language(path: Path, language: str) -> None:
     cfg = _load_config()
-    _update_entry(cfg, "instances", path, language=language or None)
+    _update_entry(cfg, path, language=language or None)
     _save_config(cfg)
 
 
-def get_intent_language(path: Path) -> str:
-    cfg = _load_config()
-    entry = _find_entry(cfg, "intents", path)
-    return (entry.get("language") if entry else None) or ""
-
-
-def set_intent_language(path: Path, language: str) -> None:
-    cfg = _load_config()
-    _update_entry(cfg, "intents", path, language=language or None)
-    _save_config(cfg)
+# Dossiers ignorés lors de la détection du langage : dépendances et artefacts
+# de build, qui fausseraient le décompte et ralentiraient énormément le scan.
+_LANG_SKIP_DIRS = frozenset({
+    ".git", ".hg", ".svn", "node_modules", ".venv", "venv", "env", "__pycache__",
+    "target", "build", "dist", ".idea", ".vscode", ".tox", ".mypy_cache",
+})
+_LANG_MAX_FILES = 20_000  # plafond de fichiers examinés (gros monorepos)
 
 
 def guess_project_language(path: Path) -> str:
@@ -457,13 +675,16 @@ def guess_project_language(path: Path) -> str:
         ".cpp": "C++", ".c": "C", ".html": "HTML", ".css": "CSS", ".json": "JSON",
     }
     counts: dict = {}
-    for entry in path.rglob("*"):
-        if entry.is_file():
-            lang = ext_map.get(entry.suffix.lower())
+    scanned = 0
+    for _root, dirnames, filenames in os.walk(path):
+        dirnames[:] = [d for d in dirnames if d not in _LANG_SKIP_DIRS]
+        for filename in filenames:
+            lang = ext_map.get(os.path.splitext(filename)[1].lower())
             if lang:
                 counts[lang] = counts.get(lang, 0) + 1
+        scanned += len(filenames)
+        if scanned >= _LANG_MAX_FILES:
+            break
     if not counts:
         return "Indéfini"
     return max(counts.items(), key=lambda pair: pair[1])[0]
-
-

@@ -1,6 +1,6 @@
 """
 Voktora — core.drives
-Fragment de core.py extrait lors du découpage v1.0.2 en package.
+Disques disponibles et dossier racine des projets.
 """
 
 from __future__ import annotations
@@ -66,28 +66,18 @@ def get_available_drives() -> list:
 
 
 # ──────────────────────────────────────────────
-# CHEMINS CONTENEURS
+# CHEMIN CONTENEUR
 # ──────────────────────────────────────────────
 
-def get_instances_root(drive: str = "") -> Path:
-    custom = config_store.get_storage_config().get("instances_root")
+def get_projects_root(drive: str = "") -> Path:
+    """Dossier dans lequel les nouveaux projets sont créés.
+
+    Un dossier personnalisé (réglages de stockage) prime sur le disque choisi.
+    """
+    custom = config_store.get_storage_config().get("projects_root")
     if custom:
         return Path(custom)
     if constants.IS_WINDOWS:
-        return Path(f"{drive}\\{constants.CONTAINER_NAME}\\{constants.INSTANCES_DIR}")
-    else:
-        base = Path(drive) if drive and Path(drive).is_absolute() else Path.home()
-        return base / constants.CONTAINER_NAME / constants.INSTANCES_DIR
-
-
-def get_intents_root(drive: str = "") -> Path:
-    custom = config_store.get_storage_config().get("intents_root")
-    if custom:
-        return Path(custom)
-    if constants.IS_WINDOWS:
-        return Path(f"{drive}\\{constants.CONTAINER_NAME}\\{constants.INTENTS_DIR}")
-    else:
-        base = Path(drive) if drive and Path(drive).is_absolute() else Path.home()
-        return base / constants.CONTAINER_NAME / constants.INTENTS_DIR
-
-
+        return Path(f"{drive}\\{constants.CONTAINER_NAME}\\{constants.PROJECTS_DIR}")
+    base = Path(drive) if drive and Path(drive).is_absolute() else Path.home()
+    return base / constants.CONTAINER_NAME / constants.PROJECTS_DIR

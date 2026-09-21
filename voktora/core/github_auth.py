@@ -342,13 +342,13 @@ def fetch_github_app_installations(app_id: str, private_key_pem: str) -> list[di
 def get_effective_token_unified(path: Path | None = None, password: str = "") -> str:
     """
     Retourne le meilleur token disponible selon la méthode d'auth configurée :
-      1. Token spécifique à l'instance (priorité max)
+      1. Token spécifique au projet (priorité max)
       2. GitHub App installation token (si auth_method == github_app)
       3. OAuth token de session
     """
-    # 1. Token par instance
+    # 1. Token par projet
     if path:
-        tok = projects.get_instance_token(path)
+        tok = projects.get_project_token(path)
         if tok:
             return tok
 

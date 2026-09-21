@@ -213,10 +213,9 @@ class CopyWorker(QThread):
 class EncryptProjectDialog(QDialog):
     """Dialogue pour chiffrer/déchiffrer un projet avec barre de progression."""
 
-    def __init__(self, project_path: str, project_kind: str, parent=None):
+    def __init__(self, project_path: str, parent=None):
         super().__init__(parent)
         self.project_path  = Path(project_path)
-        self.project_kind  = project_kind
         self._worker: EncryptWorker | None = None
         self._copy_worker: CopyWorker | None = None
 

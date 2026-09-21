@@ -1,17 +1,19 @@
 """
 Voktora — core (package)
-Version : 1.0.2
-
-Anciennement un unique fichier core.py (2533 lignes). Découpé en modules
+Anciennement un unique fichier core.py. Découpé en modules
 par domaine pour être plus lisible et plus facile à maintenir :
 
   constants.py    — constantes globales, statuts de projet, exceptions
   paths.py        — dossiers de l'application, validation de nom
   config_store.py — lecture/écriture/migration de config.json
-  drives.py       — disques disponibles, racines Instances/Intents
+  drives.py       — disques disponibles, racine des projets
   crypto.py       — chiffrement AES-256 (Fernet+PBKDF2), vault
   github_auth.py  — OAuth device flow, GitHub App, sessions
-  projects.py     — CRUD instances/intents, transfert, archives
+  projects.py     — CRUD projets, import (zip/dossier/clone), export
+  archive.py      — extraction/copie/déplacement/export avec progression
+  categories.py   — catégories créées par l'utilisateur
+  organize.py     — recherche, tri, regroupement (logique pure)
+  github_api.py   — dépôts et organisations GitHub (lecture)
   git_ops.py      — opérations Git (clone, push, pull, branches...)
   system.py       — lancement d'applications externes, mises à jour
   diagnostics.py  — health-check, réparation, désinstallation
@@ -35,13 +37,17 @@ sans aucune modification.
 from __future__ import annotations
 
 from . import (
+    archive,
+    categories,
     config_store,
     constants,
     crypto,
     diagnostics,
     drives,
     git_ops,
+    github_api,
     github_auth,
+    organize,
     paths,
     projects,
     system,
@@ -53,8 +59,12 @@ _SUBMODULES = (
     config_store,
     drives,
     crypto,
+    archive,
+    categories,
+    organize,
     projects,
     git_ops,
+    github_api,
     github_auth,
     system,
     diagnostics,

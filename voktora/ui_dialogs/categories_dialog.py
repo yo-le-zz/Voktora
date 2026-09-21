@@ -1,140 +1,247 @@
 """
 Voktora — ui_dialogs.categories_dialog
-Fragment de ui_dialogs.py extrait lors du découpage v1.0.2 en package.
+Gestion des catégories de projets : création, modification (nom, emoji,
+couleur), ordre d'affichage, suppression, et création automatique à partir
+des organisations GitHub. Les changements sont enregistrés immédiatement.
 """
 
 from __future__ import annotations
 
 import core
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
+    QCheckBox,
+    QColorDialog,
     QDialog,
     QFormLayout,
-    QGroupBox,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMessageBox,
     QPushButton,
     QVBoxLayout,
+    QWidget,
 )
 
 
-# ════════════ categories_dialog.py ════════════
+class CategoryEditor(QDialog):
+    """Petit formulaire : nom, emoji, couleur d'une catégorie."""
+
+    def __init__(self, parent: QWidget | None = None, name: str = "", emoji: str = "", color: str = ""):
+        super().__init__(parent)
+        self.setWindowTitle("Catégorie — Voktora")
+        self.setModal(True)
+        self.setMinimumWidth(380)
+        self._color = color
+
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+        self.name_edit = QLineEdit(name)
+        self.name_edit.setMaxLength(core.MAX_CATEGORY_NAME_LENGTH)
+        self.name_edit.setPlaceholderText("ex: Clients, Perso, Open source…")
+        self.emoji_edit = QLineEdit(emoji)
+        self.emoji_edit.setMaxLength(8)
+        self.emoji_edit.setPlaceholderText("📁 (facultatif)")
+        form.addRow("Nom :", self.name_edit)
+        form.addRow("Emoji :", self.emoji_edit)
+
+        color_row = QHBoxLayout()
+        self.color_btn = QPushButton()
+        self.color_btn.clicked.connect(self._pick_color)
+        btn_clear = QPushButton("✕")
+        btn_clear.setObjectName("subtle")
+        btn_clear.setFixedWidth(28)
+        btn_clear.clicked.connect(self._clear_color)
+        color_row.addWidget(self.color_btn, 1)
+        color_row.addWidget(btn_clear)
+        form.addRow("Couleur :", color_row)
+        layout.addLayout(form)
+        self._refresh_color_button()
+
+        buttons = QHBoxLayout()
+        btn_cancel = QPushButton("Annuler")
+        btn_cancel.clicked.connect(self.reject)
+        btn_ok = QPushButton("✔  Valider")
+        btn_ok.setObjectName("primary")
+        btn_ok.clicked.connect(self.accept)
+        buttons.addWidget(btn_cancel)
+        buttons.addWidget(btn_ok)
+        layout.addLayout(buttons)
+
+    def _refresh_color_button(self) -> None:
+        if self._color:
+            self.color_btn.setText(self._color)
+            self.color_btn.setStyleSheet(f"background: {self._color}; color: #11111b;")
+        else:
+            self.color_btn.setText("Aucune couleur")
+            self.color_btn.setStyleSheet("")
+
+    def _pick_color(self) -> None:
+        chosen = QColorDialog.getColor(QColor(self._color or "#89b4fa"), self, "Couleur de la catégorie")
+        if chosen.isValid():
+            self._color = chosen.name()
+            self._refresh_color_button()
+
+    def _clear_color(self) -> None:
+        self._color = ""
+        self._refresh_color_button()
+
+    def values(self) -> tuple[str, str, str]:
+        return self.name_edit.text().strip(), self.emoji_edit.text().strip(), self._color
+
+
 class CategoriesDialog(QDialog):
     """Dialogue pour gérer les catégories de projets."""
-    
-    def __init__(self, parent=None):
+
+    categories_changed = Signal()
+
+    def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setWindowTitle("📂 Gestion des catégories — Voktora")
         self.setModal(True)
-        self.setFixedSize(500, 450)
-        
+        self.setMinimumSize(520, 520)
+        self._dirty = False
+
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
-        
-        # Liste des catégories existantes
-        list_group = QGroupBox("📂 Catégories existantes")
-        list_layout = QVBoxLayout()
-        
-        self.categories_list = QListWidget()
-        list_layout.addWidget(self.categories_list)
-        
-        list_group.setLayout(list_layout)
-        layout.addWidget(list_group)
-        
-        # Ajouter une nouvelle catégorie
-        add_group = QGroupBox("➕ Ajouter une catégorie")
-        add_layout = QFormLayout()
-        
-        self.new_category_edit = QLineEdit()
-        self.new_category_edit.setPlaceholderText("Nom de la nouvelle catégorie...")
-        add_layout.addRow("Nom:", self.new_category_edit)
-        
-        self.btn_add_category = QPushButton("➕ Ajouter")
-        self.btn_add_category.clicked.connect(self._add_category)
-        add_layout.addRow("", self.btn_add_category)
-        
-        add_group.setLayout(add_layout)
-        layout.addWidget(add_group)
-        
-        # Boutons
-        btn_layout = QHBoxLayout()
-        btn_delete = QPushButton("🗑️ Supprimer")
-        btn_delete.clicked.connect(self._delete_selected)
-        btn_cancel = QPushButton("Annuler")
-        btn_cancel.clicked.connect(self.reject)
-        btn_apply = QPushButton("Appliquer")
-        btn_apply.setObjectName("primary")
-        btn_apply.clicked.connect(self.accept)
-        
-        btn_layout.addWidget(btn_delete)
-        btn_layout.addStretch()
-        btn_layout.addWidget(btn_cancel)
-        btn_layout.addWidget(btn_apply)
-        layout.addLayout(btn_layout)
-        
-        # Charger les catégories existantes
-        self._load_categories()
-        
-    def _load_categories(self):
-        """Charge la liste des catégories existantes."""
-        cfg = core._load_config()
-        categories = cfg.get("categories", [])
-        
-        # Catégories par défaut
-        default_categories = ["Web", "Desktop", "Mobile", "API", "CLI", "Game", "AI/ML", "Data", "DevOps", "Security", "IoT", "Blockchain", "Autre"]
-        
-        all_categories = list(set(default_categories + categories))
-        all_categories.sort()
-        
-        for category in all_categories:
-            item = QListWidgetItem(category)
-            self.categories_list.addItem(item)
-            
-    def _add_category(self):
-        """Ajoute une nouvelle catégorie."""
-        category = self.new_category_edit.text().strip()
-        if not category:
-            QMessageBox.warning(self, "Attention", "Veuillez entrer un nom de catégorie.")
-            return
-            
-        # Vérifier si la catégorie existe déjà
-        for i in range(self.categories_list.count()):
-            if self.categories_list.item(i).text().lower() == category.lower():
-                QMessageBox.warning(self, "Attention", f"La catégorie '{category}' existe déjà.")
-                return
-                
-        # Ajouter la catégorie
-        item = QListWidgetItem(category)
-        self.categories_list.addItem(item)
-        self.new_category_edit.clear()
-        
-    def _delete_selected(self):
-        """Supprime la catégorie sélectionnée."""
-        current_item = self.categories_list.currentItem()
-        if not current_item:
-            QMessageBox.warning(self, "Attention", "Veuillez sélectionner une catégorie à supprimer.")
-            return
-            
-        category = current_item.text()
-        reply = QMessageBox.question(
-            self, "Supprimer",
-            f"Êtes-vous sûr de vouloir supprimer la catégorie '{category}' ?\n\n"
-            "Les projets utilisant cette catégorie ne seront pas affectés.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
+        layout.setContentsMargins(20, 20, 20, 16)
+        layout.setSpacing(10)
+
+        intro = QLabel(
+            "Créez vos propres catégories pour classer vos projets. Un projet appartient à une "
+            "catégorie ; vous pouvez aussi les ranger automatiquement selon leur organisation GitHub."
         )
-        
-        if reply == QMessageBox.Yes:
-            self.categories_list.takeItem(self.categories_list.row(current_item))
-            
-    def get_categories(self):
-        """Retourne la liste des catégories."""
-        categories = []
-        for i in range(self.categories_list.count()):
-            categories.append(self.categories_list.item(i).text())
-        return categories
+        intro.setWordWrap(True)
+        intro.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        layout.addWidget(intro)
 
+        self.categories_list = QListWidget()
+        self.categories_list.itemDoubleClicked.connect(lambda _item: self._edit())
+        layout.addWidget(self.categories_list, 1)
 
+        row = QHBoxLayout()
+        self.btn_add = QPushButton("➕ Nouvelle")
+        self.btn_add.clicked.connect(self._add)
+        self.btn_edit = QPushButton("✏  Modifier")
+        self.btn_edit.clicked.connect(self._edit)
+        self.btn_delete = QPushButton("🗑  Supprimer")
+        self.btn_delete.clicked.connect(self._delete)
+        self.btn_up = QPushButton("↑")
+        self.btn_up.setFixedWidth(36)
+        self.btn_up.setToolTip("Monter")
+        self.btn_up.clicked.connect(lambda: self._move(-1))
+        self.btn_down = QPushButton("↓")
+        self.btn_down.setFixedWidth(36)
+        self.btn_down.setToolTip("Descendre")
+        self.btn_down.clicked.connect(lambda: self._move(1))
+        for w in (self.btn_add, self.btn_edit, self.btn_delete, self.btn_up, self.btn_down):
+            row.addWidget(w)
+        layout.addLayout(row)
+
+        auto = QVBoxLayout()
+        self.chk_reclassify = QCheckBox("Inclure les projets qui ont déjà une catégorie")
+        self.btn_github = QPushButton("🐙  Créer des catégories depuis les organisations GitHub")
+        self.btn_github.clicked.connect(self._from_github)
+        auto.addWidget(self.btn_github)
+        auto.addWidget(self.chk_reclassify)
+        layout.addLayout(auto)
+
+        btn_close = QPushButton("Fermer")
+        btn_close.clicked.connect(self.accept)
+        layout.addWidget(btn_close)
+
+        self._reload()
+
+    # ── affichage ────────────────────────────────
+
+    def _reload(self, select: str | None = None) -> None:
+        counts = core.category_counts()
+        self.categories_list.clear()
+        for cat in core.list_categories():
+            n = counts.get(cat["name"], 0)
+            item = QListWidgetItem(f"{cat['emoji']} {cat['name']}  —  {n} projet(s)".strip())
+            item.setData(Qt.UserRole, cat["name"])
+            if cat["color"]:
+                item.setForeground(QBrush(QColor(cat["color"])))
+            self.categories_list.addItem(item)
+            if cat["name"] == select:
+                self.categories_list.setCurrentItem(item)
+        uncategorized = counts.get(None, 0)
+        if uncategorized:
+            info = QListWidgetItem(f"— Sans catégorie : {uncategorized} projet(s) —")
+            info.setFlags(Qt.NoItemFlags)
+            self.categories_list.addItem(info)
+
+    def _selected_name(self) -> str | None:
+        item = self.categories_list.currentItem()
+        return item.data(Qt.UserRole) if item else None
+
+    def _changed(self, select: str | None = None) -> None:
+        self._dirty = True
+        self._reload(select)
+        self.categories_changed.emit()
+
+    # ── actions ──────────────────────────────────
+
+    def _add(self) -> None:
+        editor = CategoryEditor(self)
+        if editor.exec() != QDialog.Accepted:
+            return
+        name, emoji, color = editor.values()
+        try:
+            core.add_category(name, emoji, color)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Voktora", str(exc))
+            return
+        self._changed(name)
+
+    def _edit(self) -> None:
+        name = self._selected_name()
+        if not name:
+            return
+        cat = core.get_category(name)
+        editor = CategoryEditor(self, cat["name"], cat["emoji"], cat["color"])
+        if editor.exec() != QDialog.Accepted:
+            return
+        new_name, emoji, color = editor.values()
+        try:
+            core.update_category(name, new_name=new_name, emoji=emoji, color=color)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Voktora", str(exc))
+            return
+        self._changed(new_name)
+
+    def _delete(self) -> None:
+        name = self._selected_name()
+        if not name:
+            return
+        count = core.category_counts().get(name, 0)
+        detail = (f"Les {count} projet(s) qu'elle contient deviendront « sans catégorie » "
+                  "(aucun projet n'est supprimé).") if count else "Elle ne contient aucun projet."
+        answer = QMessageBox.question(self, "Voktora — Supprimer la catégorie",
+                                      f"Supprimer la catégorie « {name} » ?\n\n{detail}")
+        if answer == QMessageBox.Yes:
+            core.delete_category(name)
+            self._changed()
+
+    def _move(self, offset: int) -> None:
+        name = self._selected_name()
+        if name:
+            core.move_category(name, offset)
+            self._changed(name)
+
+    def _from_github(self) -> None:
+        assigned = core.categorize_by_github_owner(only_uncategorized=not self.chk_reclassify.isChecked())
+        if not assigned:
+            QMessageBox.information(
+                self, "Voktora",
+                "Aucun projet à classer : aucun n'est lié à un dépôt GitHub, ou tous ont déjà une catégorie.")
+            return
+        detail = "\n".join(f"• {owner} : {n}" for owner, n in sorted(assigned.items()))
+        QMessageBox.information(self, "Voktora", f"{sum(assigned.values())} projet(s) classé(s) :\n{detail}")
+        self._changed()
+
+    def has_changes(self) -> bool:
+        return self._dirty

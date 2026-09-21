@@ -1,6 +1,11 @@
 """
 Voktora — core.projects
-Fragment de core.py extrait lors du découpage v1.0.2 en package.
+Projets : création, import (ZIP / dossier / clone), renommage, suppression,
+notes, dépôt GitHub, tokens, export, ordre d'affichage, mises à jour.
+
+Un « projet » est un dossier enregistré dans config.json (liste `projects`).
+Il n'y a plus de distinction instance / intent : le classement se fait par
+catégories (voir core.categories) et par organisation GitHub (core.organize).
 """
 
 from __future__ import annotations
@@ -10,57 +15,113 @@ import shutil
 import urllib.error
 import urllib.parse
 import urllib.request
-import zipfile
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from . import config_store, constants, crypto, drives, git_ops, paths
+from . import archive, categories, config_store, constants, crypto, drives, git_ops, organize, paths
 
-# INSTANCES
+IMPORT_MOVE = "move"   # déplace le dossier vers la racine des projets (défaut)
+IMPORT_COPY = "copy"   # copie le dossier ; la source reste en place
+IMPORT_LINK = "link"   # enregistre le dossier là où il se trouve, sans le toucher
+IMPORT_MODES = (IMPORT_MOVE, IMPORT_COPY, IMPORT_LINK)
+
+
+# ──────────────────────────────────────────────
+# LECTURE / ENREGISTREMENT
 # ──────────────────────────────────────────────
 
-def list_instances() -> list:
-    return config_store._load_config().get("instances", [])
+def list_projects() -> list:
+    return config_store._load_config().get("projects", [])
 
 
-def create_instance(drive: str, name: str) -> Path:
+def get_project(path: Path | str) -> dict | None:
+    return config_store._find_entry(config_store._load_config(), path)
+
+
+def register_project(path: Path | str, drive: str = "", **fields) -> dict:
+    """Enregistre un dossier existant comme projet et retourne son entrée.
+
+    `category` (facultative) est créée si elle n'existe pas encore.
+    """
+    path = Path(path)
+    cfg = config_store._load_config()
+    if config_store._find_entry(cfg, path) is not None:
+        raise ValueError(f"« {path} » est déjà enregistré comme projet.")
+    category = fields.pop("category", None)
+    canonical = categories.ensure_category(category)["name"] if category and str(category).strip() else None
+    # ensure_category a pu sauvegarder la config : on repart de l'instance en cache.
+    cfg = config_store._load_config()
+    entry: dict = {
+        "name": fields.pop("name", None) or path.name,
+        "path": str(path),
+        "drive": drive,
+        "created": datetime.now().isoformat(),
+        "category": canonical,
+    }
+    entry.update(fields)
+    config_store.normalize_entry(entry)
+    cfg["projects"].append(entry)
+    config_store._save_config(cfg)
+    return entry
+
+
+def update_project(path: Path | str, **fields) -> bool:
+    """Met à jour des champs d'un projet (couleur, emoji, statut, tags…)."""
+    cfg = config_store._load_config()
+    if not config_store._update_entry(cfg, path, **fields):
+        return False
+    config_store._save_config(cfg)
+    return True
+
+
+def create_project(drive: str, name: str, category: str | None = None,
+                   git_init: bool = False, github_repo: str | None = None) -> Path:
     name = name.strip()
     paths.validate_name(name)
-    root = drives.get_instances_root(drive)
+    root = drives.get_projects_root(drive)
     root.mkdir(parents=True, exist_ok=True)
     path = root / name
     if path.exists():
-        raise FileExistsError(f"L'instance « {name} » existe déjà ({path}).")
+        raise FileExistsError(f"Le projet « {name} » existe déjà ({path}).")
     path.mkdir(parents=True, exist_ok=True)
-    cfg = config_store._load_config()
-    cfg["instances"].append({
-        "name": name, "path": str(path), "drive": drive,
-        "created": datetime.now().isoformat(),
-        "github_repo": None, "github_branch": "main",
-        "github_branches": ["main"], "github_token": "",
-        "github_token_protected": False, "note": "",
-        "status": constants.DEFAULT_PROJECT_STATUS, "color": None,
-        "emoji": None, "category": None, "language": None,
-    })
-    config_store._save_config(cfg)
+    if git_init:
+        git_ops.git_init(path)
+    fields: dict = {"category": category}
+    if github_repo and github_repo.strip():
+        fields["github_repo"] = git_ops.validate_clone_url(github_repo)
+    register_project(path, drive, name=name, **fields)
     return path
 
 
-def delete_instance(path: Path) -> None:
-    shutil.rmtree(path, ignore_errors=True)
+def forget_project(path: Path | str) -> None:
+    """Retire un projet de Voktora SANS toucher à son dossier."""
     cfg = config_store._load_config()
-    cfg["instances"] = [e for e in cfg["instances"] if e["path"] != str(path)]
+    target = str(path)
+    cfg["projects"] = [e for e in cfg["projects"] if e["path"] != target]
     config_store._save_config(cfg)
+    constants._SESSION_VAULT.pop(target, None)
 
 
-def rename_instance(path: Path, new_name: str) -> Path:
+def delete_project(path: Path, on_progress: archive.ProgressCallback | None = None,
+                   cancel: archive.CancelCheck | None = None) -> None:
+    """Supprime le dossier du projet ET son enregistrement.
+
+    Si le dossier ne peut pas être entièrement supprimé, une ArchiveError est
+    levée et le projet reste enregistré (rien n'est « oublié » à moitié).
+    """
+    archive.delete_tree(Path(path), on_progress, cancel)
+    forget_project(path)
+
+
+def rename_project(path: Path, new_name: str) -> Path:
     paths.validate_name(new_name)
     new_path = path.parent / new_name
     if new_path.exists():
         raise FileExistsError(f"Un dossier « {new_name} » existe déjà.")
     path.rename(new_path)
     cfg = config_store._load_config()
-    entry = config_store._find_entry(cfg, "instances", path)
+    entry = config_store._find_entry(cfg, path)
     if entry:
         entry["path"] = str(new_path)
         entry["name"] = new_name
@@ -82,70 +143,69 @@ def find_readme(folder: Path) -> Path | None:
     return None
 
 
-def rename_intent(path: Path, new_name: str) -> Path:
-    paths.validate_name(new_name)
-    new_path = path.parent / new_name
-    if new_path.exists():
-        raise FileExistsError(f"Un dossier « {new_name} » existe déjà.")
-    path.rename(new_path)
+def reorder_projects(ordered_paths: list[str]) -> None:
+    """Persiste l'ordre manuel des projets (glisser-déposer).
+
+    Les projets absents de `ordered_paths` sont conservés à leur place relative,
+    après les projets ordonnés.
+    """
     cfg = config_store._load_config()
-    entry = config_store._find_entry(cfg, "intents", path)
-    if entry:
-        entry["path"] = str(new_path)
-        entry["name"] = new_name
-    config_store._save_config(cfg)
-    return new_path
-
-
-def get_instance_note(path: Path) -> str:
-    cfg = config_store._load_config()
-    entry = config_store._find_entry(cfg, "instances", path)
-    return (entry.get("note") or "") if entry else ""
-
-
-def set_instance_note(path: Path, note: str) -> None:
-    cfg = config_store._load_config()
-    config_store._update_entry(cfg, "instances", path, note=note)
+    by_path = {e["path"]: e for e in cfg["projects"]}
+    reordered = [by_path[p] for p in dict.fromkeys(ordered_paths) if p in by_path]
+    seen = {e["path"] for e in reordered}
+    reordered += [e for e in cfg["projects"] if e["path"] not in seen]
+    cfg["projects"] = reordered
     config_store._save_config(cfg)
 
 
-def get_instance_repo(path: Path) -> str:
-    cfg = config_store._load_config()
-    entry = config_store._find_entry(cfg, "instances", path)
-    return (entry.get("github_repo") or "") if entry else ""
+# ──────────────────────────────────────────────
+# NOTE / DÉPÔT GITHUB / TOKEN
+# ──────────────────────────────────────────────
+
+def _get(path: Path, key: str, default=""):
+    entry = config_store._find_entry(config_store._load_config(), path)
+    return (entry.get(key) or default) if entry else default
 
 
-def set_instance_repo(path: Path, url: str) -> None:
+def _set(path: Path, **fields) -> None:
     cfg = config_store._load_config()
-    config_store._update_entry(cfg, "instances", path, github_repo=url)
+    config_store._update_entry(cfg, path, **fields)
     config_store._save_config(cfg)
 
 
-def get_instance_branch(path: Path) -> str:
-    cfg = config_store._load_config()
-    entry = config_store._find_entry(cfg, "instances", path)
-    return (entry.get("github_branch") or "main") if entry else "main"
+def get_project_note(path: Path) -> str:
+    return _get(path, "note")
 
 
-def set_instance_branch(path: Path, branch: str) -> None:
-    cfg = config_store._load_config()
-    config_store._update_entry(cfg, "instances", path, github_branch=branch)
-    config_store._save_config(cfg)
+def set_project_note(path: Path, note: str) -> None:
+    _set(path, note=note)
 
 
-def get_instance_branches(path: Path) -> list:
-    cfg = config_store._load_config()
-    entry = config_store._find_entry(cfg, "instances", path)
-    return (entry.get("github_branches") or ["main"]) if entry else ["main"]
+def get_project_repo(path: Path) -> str:
+    return _get(path, "github_repo")
 
 
-def set_instance_branches(path: Path, branches: list) -> None:
-    cfg = config_store._load_config()
-    config_store._update_entry(cfg, "instances", path, github_branches=branches)
-    config_store._save_config(cfg)
+def set_project_repo(path: Path, url: str) -> None:
+    _set(path, github_repo=url)
 
 
-def set_instance_token(path: Path, token: str, password: str = "") -> None:
+def get_project_branch(path: Path) -> str:
+    return _get(path, "github_branch", "main")
+
+
+def set_project_branch(path: Path, branch: str) -> None:
+    _set(path, github_branch=branch)
+
+
+def get_project_branches(path: Path) -> list:
+    return _get(path, "github_branches", ["main"])
+
+
+def set_project_branches(path: Path, branches: list) -> None:
+    _set(path, github_branches=branches)
+
+
+def set_project_token(path: Path, token: str, password: str = "") -> None:
     if password:
         stored    = crypto.token_encrypt(token, password)
         protected = True
@@ -153,28 +213,23 @@ def set_instance_token(path: Path, token: str, password: str = "") -> None:
     else:
         stored    = token
         protected = False
-    cfg = config_store._load_config()
-    config_store._update_entry(cfg, "instances", path, github_token=stored, github_token_protected=protected)
-    config_store._save_config(cfg)
+    _set(path, github_token=stored, github_token_protected=protected)
 
 
-def get_instance_token_raw(path: Path) -> str:
-    cfg = config_store._load_config()
-    entry = config_store._find_entry(cfg, "instances", path)
-    return (entry.get("github_token") or "") if entry else ""
+def get_project_token_raw(path: Path) -> str:
+    return _get(path, "github_token")
 
 
 def is_token_protected(path: Path) -> bool:
-    cfg = config_store._load_config()
-    entry = config_store._find_entry(cfg, "instances", path)
+    entry = config_store._find_entry(config_store._load_config(), path)
     return bool(entry.get("github_token_protected", False)) if entry else False
 
 
-def get_instance_token(path: Path, password: str = "") -> str:
+def get_project_token(path: Path, password: str = "") -> str:
     vault_key = str(path)
     if vault_key in constants._SESSION_VAULT:
         return constants._SESSION_VAULT[vault_key]
-    raw = get_instance_token_raw(path)
+    raw = get_project_token_raw(path)
     if not raw:
         return ""
     if is_token_protected(path):
@@ -238,147 +293,30 @@ def check_for_update() -> tuple[bool, str, str]:
 
 
 # ──────────────────────────────────────────────
-# ORDRE DES PROJETS — persistance drag & drop / tri
-# ──────────────────────────────────────────────
-
-def reorder_entries(kind: str, ordered_paths: list[str]) -> None:
-    """
-    Persiste l'ordre des instances ou intents après un glisser-déposer.
-    kind        : "instance" ou "intent"
-    ordered_paths : chemins dans le nouvel ordre.
-    Les entrées absentes de la liste sont ajoutées à la fin (sécurité).
-    """
-    key = f"{kind}s"          # "instances" | "intents"
-    cfg = config_store._load_config()
-    entries       = cfg.get(key, [])
-    path_to_entry = {e["path"]: e for e in entries}
-    reordered: list[dict] = []
-    for p in ordered_paths:
-        if p in path_to_entry:
-            reordered.append(path_to_entry[p])
-    seen = set(ordered_paths)
-    for e in entries:
-        if e["path"] not in seen:
-            reordered.append(e)
-    cfg[key] = reordered
-    config_store._save_config(cfg)
-
-
-# ──────────────────────────────────────────────
-# TRANSFERT Instance ↔ Intent (v1.0.1)
-# ──────────────────────────────────────────────
-
-def transfer_project(path: Path, from_kind: str, to_kind: str) -> Path:
-    """
-    Transfère un projet d'un type à l'autre (instance → intent ou intent → instance).
-    Déplace le dossier et met à jour la configuration.
-
-    Args:
-        path:      Chemin du projet à transférer.
-        from_kind: "instance" ou "intent".
-        to_kind:   "instance" ou "intent".
-
-    Returns:
-        Nouveau chemin du projet après déplacement.
-
-    Raises:
-        ValueError:      Si from_kind == to_kind ou types invalides.
-        FileExistsError: Si un projet du même nom existe déjà dans la destination.
-    """
-    if from_kind == to_kind:
-        raise ValueError("Le projet est déjà de ce type.")
-    if from_kind not in ("instance", "intent") or to_kind not in ("instance", "intent"):
-        raise ValueError("Types invalides (attendu : 'instance' ou 'intent').")
-
-    cfg = config_store._load_config()
-    from_key = f"{from_kind}s"
-    to_key   = f"{to_kind}s"
-
-    # Retrouver l'entrée source
-    src_entry = config_store._find_entry(cfg, from_key, path)
-    if src_entry is None:
-        raise FileNotFoundError(f"Projet introuvable dans la configuration : {path}")
-
-    # Calculer le chemin de destination
-    drive = src_entry.get("drive", "")
-    name  = src_entry.get("name", path.name)
-
-    dest_root = drives.get_instances_root(drive) if to_kind == "instance" else drives.get_intents_root(drive)
-
-    dest_root.mkdir(parents=True, exist_ok=True)
-    new_path = dest_root / name
-
-    if new_path.exists():
-        raise FileExistsError(
-            f"Un projet nommé « {name} » existe déjà dans les {to_kind}s."
-        )
-
-    # Déplacer physiquement le dossier
-    shutil.move(str(path), str(new_path))
-
-    # Créer la nouvelle entrée
-    new_entry = dict(src_entry)
-    new_entry["path"] = str(new_path)
-    new_entry["drive"] = drive
-
-    # Les intents n'ont pas les champs GitHub — nettoyer si passage vers intent
-    if to_kind == "intent":
-        for field in ["github_repo", "github_branch", "github_branches",
-                       "github_token", "github_token_protected"]:
-            new_entry.pop(field, None)
-    else:
-        # Passage vers instance : ajouter les champs GitHub manquants
-        new_entry.setdefault("github_repo", None)
-        new_entry.setdefault("github_branch", "main")
-        new_entry.setdefault("github_branches", ["main"])
-        new_entry.setdefault("github_token", "")
-        new_entry.setdefault("github_token_protected", False)
-
-    # Mettre à jour la configuration : supprimer de la source, ajouter dans la dest
-    cfg[from_key] = [e for e in cfg[from_key] if e["path"] != str(path)]
-    cfg[to_key].append(new_entry)
-    config_store._save_config(cfg)
-
-    return new_path
-
-
-# ──────────────────────────────────────────────
-# CLONE DANS UN PROJET EXISTANT (v1.0.1)
+# CLONE DANS UN PROJET EXISTANT
 # ──────────────────────────────────────────────
 
 def clone_into_existing(project_path: Path, repo_url: str,
                          token: str = "", branch: str = "main") -> str:
     """
     Clone un repo GitHub dans un projet/dossier existant.
-    Utilise `git clone --no-checkout` puis copie les fichiers.
-    Le dossier `project_path` doit déjà exister.
+    Clone dans un dossier temporaire puis copie les fichiers (sans `.git`, pour
+    conserver l'historique du projet cible). Le dossier `project_path` doit déjà exister.
 
     Returns: Sortie de la commande git.
     """
     if not project_path.exists():
         raise FileNotFoundError(f"Le dossier projet n'existe pas : {project_path}")
 
-    # Construire l'URL avec token si nécessaire
-    clone_url = repo_url
-    if token and repo_url.startswith("https://"):
-        clone_url = "https://" + token + "@" + repo_url[len("https://"):]
-
-    # Clone dans un dossier temporaire
     tmp_dir = project_path.parent / f"_voktora_tmp_{datetime.now().strftime('%Y%m%d%H%M%S')}"
     try:
-        out = git_ops._run_git(["clone", "--branch", branch, clone_url, str(tmp_dir)],
-                       project_path.parent)
-        # Copier le contenu, sauf .git (on conserve le .git existant du
-        # projet cible s'il y en a un, pour ne pas écraser son historique).
+        out = git_ops.git_clone(repo_url, tmp_dir, token=token, branch=branch)
         for item in tmp_dir.iterdir():
             if item.name == ".git":
                 continue
             dst = project_path / item.name
             if item.is_dir():
-                if dst.exists():
-                    shutil.copytree(str(item), str(dst), dirs_exist_ok=True)
-                else:
-                    shutil.copytree(str(item), str(dst))
+                shutil.copytree(str(item), str(dst), dirs_exist_ok=True)
             else:
                 shutil.copy2(str(item), str(dst))
         return out
@@ -386,137 +324,146 @@ def clone_into_existing(project_path: Path, repo_url: str,
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
+def clone_project(repo_url: str, drive: str = "", name: str | None = None,
+                  branch: str = "", token: str = "", category: str | None = None,
+                  on_output: Callable[[str], None] | None = None,
+                  cancel: Callable[[], bool] | None = None) -> Path:
+    """Clone un dépôt dans la racine des projets et l'enregistre.
+
+    Sans catégorie explicite, le projet garde simplement le propriétaire du
+    dépôt comme « organisation GitHub » (regroupement automatique).
+    """
+    clean_url = git_ops.validate_clone_url(repo_url)
+    project_name = (name or organize.repo_name_from_url(clean_url)).strip()
+    paths.validate_name(project_name)
+    target = drives.get_projects_root(drive) / project_name
+    if target.exists():
+        raise FileExistsError(f"Le projet « {project_name} » existe déjà ({target}).")
+    git_ops.git_clone(clean_url, target, token=token, branch=branch, on_output=on_output, cancel=cancel)
+    _url, head_branch = organize.read_git_origin(target)
+    used_branch = branch or head_branch or "main"
+    register_project(
+        target, drive, name=project_name, category=category, github_repo=clean_url,
+        github_branch=used_branch, github_branches=[used_branch],
+        note=f"Cloné depuis {clean_url}",
+    )
+    return target
+
+
 # ──────────────────────────────────────────────
-# INTENTS
+# EXPORT (ZIP)
 # ──────────────────────────────────────────────
 
-def list_intents() -> list:
-    return config_store._load_config().get("intents", [])
+def export_to_zip(folder_path: Path, output_dir: Path | None = None,
+                  on_progress: archive.ProgressCallback | None = None,
+                  cancel: archive.CancelCheck | None = None) -> Path:
+    return archive.export_folder_to_zip(folder_path, output_dir, on_progress, cancel)
 
 
-def create_intent(drive: str, name: str) -> Path:
-    name = name.strip()
-    paths.validate_name(name)
-    root = drives.get_intents_root(drive)
-    root.mkdir(parents=True, exist_ok=True)
-    path = root / name
-    if path.exists():
-        raise FileExistsError(f"L'intent « {name} » existe déjà ({path}).")
-    path.mkdir(parents=True, exist_ok=True)
+def export_all_to_zip(on_progress: archive.ProgressCallback | None = None,
+                      cancel: archive.CancelCheck | None = None) -> str:
+    """Exporte tous les projets et la configuration dans un ZIP horodaté.
+
+    La configuration exportée ne contient ni le compte GitHub, ni le coffre,
+    ni les tokens de projet : l'archive peut être partagée sans exposer de secret.
+    """
     cfg = config_store._load_config()
-    cfg["intents"].append({
-        "name": name, "path": str(path), "drive": drive,
-        "created": datetime.now().isoformat(), "note": "",
-        "color": None, "emoji": None, "category": None, "language": None,
-    })
-    config_store._save_config(cfg)
+    folders = [Path(e["path"]) for e in cfg.get("projects", []) if Path(e["path"]).is_dir()]
+    total = sum(archive._tree_size(f)[1] for f in folders)
+    tracker = archive.ProgressTracker(total, on_progress)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    public_cfg = {k: v for k, v in cfg.items() if k not in ("github_account", "vault")}
+    public_cfg["projects"] = [
+        {**e, "github_token": "", "github_token_protected": False} for e in cfg.get("projects", [])
+    ]
+
+    def _write(zf) -> None:
+        used: set[str] = set()
+        for folder in folders:
+            # Deux projets de même nom (dossiers différents) ne doivent pas se mélanger.
+            prefix, n = f"projects/{folder.name}", 2
+            while prefix in used:
+                prefix, n = f"projects/{folder.name}_{n}", n + 1
+            used.add(prefix)
+            archive.add_tree_to_zip(zf, folder, prefix, tracker, cancel)
+        zf.writestr("config.json", json.dumps(public_cfg, indent=2, ensure_ascii=False))
+        zf.writestr("export_info.txt", f"Voktora export — {timestamp}\nVersion : {constants.APP_VERSION}\n")
+
+    result = archive.write_zip_atomically(paths.get_backups_dir() / f"voktora_export_{timestamp}.zip", _write)
+    tracker.finish(result.name)
+    return str(result)
+
+
+# ──────────────────────────────────────────────
+# IMPORT (ZIP / DOSSIER)
+# ──────────────────────────────────────────────
+
+def _register_imported(path: Path, drive: str, name: str, category: str | None) -> Path:
+    """Enregistre un dossier importé ; reprend le dépôt GitHub s'il en a un."""
+    origin_url, branch = organize.read_git_origin(path)
+    fields: dict = {"name": name, "category": category}
+    if origin_url:
+        fields.update(github_repo=origin_url, github_branch=branch or "main",
+                      github_branches=[branch or "main"])
+    register_project(path, drive, **fields)
     return path
 
 
-def delete_intent(path: Path) -> None:
-    shutil.rmtree(path, ignore_errors=True)
-    cfg = config_store._load_config()
-    cfg["intents"] = [e for e in cfg["intents"] if e["path"] != str(path)]
-    config_store._save_config(cfg)
+def import_from_zip(zip_path: Path, drive: str = "", name: str | None = None,
+                    category: str | None = None,
+                    on_progress: archive.ProgressCallback | None = None,
+                    cancel: archive.CancelCheck | None = None) -> Path:
+    """Importe une archive ZIP comme nouveau projet (voir archive.extract_zip)."""
+    root = drives.get_projects_root(drive)
+    extracted = archive.extract_zip(Path(zip_path), root, name, on_progress, cancel)
+    try:
+        return _register_imported(extracted, drive, extracted.name, category)
+    except Exception:
+        # Enregistrement impossible : ne pas laisser un dossier orphelin fraîchement extrait.
+        shutil.rmtree(extracted, ignore_errors=True)
+        raise
 
 
-def get_intent_note(path: Path) -> str:
-    cfg = config_store._load_config()
-    entry = config_store._find_entry(cfg, "intents", path)
-    return (entry.get("note") or "") if entry else ""
+def import_from_folder(folder_path: Path, drive: str = "", mode: str = IMPORT_MOVE,
+                       name: str | None = None, category: str | None = None,
+                       on_progress: archive.ProgressCallback | None = None,
+                       cancel: archive.CancelCheck | None = None) -> Path:
+    """Importe un dossier existant (non compressé) comme projet.
 
-
-def set_intent_note(path: Path, note: str) -> None:
-    cfg = config_store._load_config()
-    config_store._update_entry(cfg, "intents", path, note=note)
-    config_store._save_config(cfg)
-
-
-# ──────────────────────────────────────────────
-# EXPORT / IMPORT (ZIP)
-# ──────────────────────────────────────────────
-
-def export_to_zip(folder_path: Path, output_dir: Path | None = None) -> Path:
-    if output_dir is None:
-        output_dir = paths.get_backups_dir()
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    zip_path  = output_dir / f"{folder_path.name}_{timestamp}.zip"
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for file in folder_path.rglob("*"):
-            if file.is_file():
-                zf.write(file, file.relative_to(folder_path.parent))
-    return zip_path
-
-
-def import_from_zip(zip_path: Path, drive: str, kind: str) -> Path:
-    root = drives.get_instances_root(drive) if kind == "instance" else drives.get_intents_root(drive)
-    root.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(zip_path, "r") as zf:
-        top_dirs    = {Path(n).parts[0] for n in zf.namelist() if n.strip("/")}
-        folder_name = next(iter(top_dirs)) if top_dirs else zip_path.stem
-        zf.extractall(root)
-    extracted_path = root / folder_name
-    cfg = config_store._load_config()
-    key = "instances" if kind == "instance" else "intents"
-    existing_paths = {e["path"] for e in cfg[key]}
-    if str(extracted_path) not in existing_paths:
-        entry: dict = {
-            "name": folder_name, "path": str(extracted_path),
-            "drive": drive, "created": datetime.now().isoformat(), "note": "",
-        }
-        if kind == "instance":
-            entry.update({
-                "github_repo": None, "github_branch": "main",
-                "github_branches": ["main"], "github_token": "",
-                "github_token_protected": False,
-            })
-        cfg[key].append(entry)
-        config_store._save_config(cfg)
-    return extracted_path
-
-
-def import_from_folder(folder_path: Path, drive: str, kind: str) -> Path:
-    """Importe un dossier existant (non compressé) comme instance ou intent.
-
-    Copie le dossier tel quel vers la racine Instances/Intents du disque
-    choisi (le dossier source n'est jamais modifié ni supprimé — même
-    comportement non destructif que import_from_zip) puis l'enregistre
-    dans la configuration.
+    mode :
+      IMPORT_MOVE (défaut) — déplace le dossier vers la racine des projets ;
+      IMPORT_COPY          — le copie, la source reste intacte ;
+      IMPORT_LINK          — l'enregistre sur place, sans rien déplacer.
     """
-    folder_path = Path(folder_path)
-    if not folder_path.is_dir():
-        raise NotADirectoryError(f"Introuvable ou n'est pas un dossier : {folder_path}")
+    folder = Path(folder_path)
+    if mode not in IMPORT_MODES:
+        raise ValueError(f"Mode d'import inconnu : {mode!r}")
+    if not folder.is_dir():
+        raise NotADirectoryError(f"Introuvable ou n'est pas un dossier : {folder}")
+    project_name = (name or folder.name).strip()
+    paths.validate_name(project_name)
 
-    root = drives.get_instances_root(drive) if kind == "instance" else drives.get_intents_root(drive)
-    root.mkdir(parents=True, exist_ok=True)
+    if mode == IMPORT_LINK:
+        return _register_imported(folder, drive, project_name, category)
 
-    folder_name = folder_path.name
-    dest_path   = root / folder_name
-    if dest_path.exists():
-        raise FileExistsError(
-            f"Un projet nommé « {folder_name} » existe déjà dans les {kind}s."
-        )
-    if dest_path.resolve() == folder_path.resolve() or root.resolve() in folder_path.resolve().parents:
-        raise ValueError("Le dossier source est déjà à l'intérieur de la racine de destination.")
+    root = drives.get_projects_root(drive)
+    dest = root / project_name
+    if folder.resolve().parent == root.resolve():
+        raise ValueError("Ce dossier est déjà dans le dossier des projets : utilisez « Ajouter sur place ».")
+    if dest.exists():
+        raise FileExistsError(f"Un projet nommé « {project_name} » existe déjà dans {root}.")
 
-    shutil.copytree(folder_path, dest_path)
-
-    cfg = config_store._load_config()
-    key = "instances" if kind == "instance" else "intents"
-    existing_paths = {e["path"] for e in cfg[key]}
-    if str(dest_path) not in existing_paths:
-        entry: dict = {
-            "name": folder_name, "path": str(dest_path),
-            "drive": drive, "created": datetime.now().isoformat(), "note": "",
-        }
-        if kind == "instance":
-            entry.update({
-                "github_repo": None, "github_branch": "main",
-                "github_branches": ["main"], "github_token": "",
-                "github_token_protected": False,
-            })
-        cfg[key].append(entry)
-        config_store._save_config(cfg)
-    return dest_path
-
+    if mode == IMPORT_MOVE:
+        archive.move_tree(folder, dest, on_progress, cancel)
+    else:
+        archive.copy_tree(folder, dest, on_progress, cancel)
+    try:
+        return _register_imported(dest, drive, project_name, category)
+    except Exception:
+        # Copie : on peut défaire proprement. Déplacement : le dossier est déjà
+        # chez sa destination, on le laisse plutôt que de risquer de le perdre.
+        if mode == IMPORT_COPY:
+            shutil.rmtree(dest, ignore_errors=True)
+        raise
 

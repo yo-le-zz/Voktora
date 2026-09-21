@@ -60,10 +60,9 @@ class _OllamaWorker(QThread):
 class CustomizeProjectDialog(QDialog):
     """Dialogue pour personnaliser un projet sélectionné."""
     
-    def __init__(self, project_path: str, project_kind: str, parent=None):
+    def __init__(self, project_path: str, parent=None):
         super().__init__(parent)
         self.project_path = project_path
-        self.project_kind = project_kind
         self.setWindowTitle("🎨 Personnaliser le projet — Voktora")
         self.setModal(True)
         self.setFixedSize(500, 600)
@@ -124,22 +123,13 @@ class CustomizeProjectDialog(QDialog):
         self.category_combo = QComboBox()
         self.category_combo.setEditable(True)
         
-        # Charger les catégories par défaut et personnalisées
-        default_categories = [
-            "Web", "Desktop", "Mobile", "API", "CLI", "Game", "AI/ML",
-            "Data", "DevOps", "Security", "IoT", "Blockchain", "Autre"
-        ]
-        
-        # Récupérer les catégories personnalisées depuis la config
-        cfg = core._load_config()
-        custom_categories = cfg.get("categories", [])
-        
-        # Combiner et dédupliquer les catégories
-        all_categories = list(set(default_categories + custom_categories))
-        all_categories.sort()
-        
+        # Catégories créées par l'utilisateur (voir « Gérer les catégories »).
+        # Saisir un nom inconnu en crée une nouvelle à l'enregistrement.
+        all_categories = [c["name"] for c in core.list_categories()]
+        self.category_combo.addItem("")
         self.category_combo.addItems(all_categories)
-        
+        self.category_combo.lineEdit().setPlaceholderText("Aucune — tapez un nom pour en créer une")
+
         # Configurer l'autocomplétion
         completer = QCompleter(all_categories)
         completer.setCaseSensitivity(Qt.CaseInsensitive)
@@ -231,7 +221,7 @@ class CustomizeProjectDialog(QDialog):
         
     def _load_current_data(self):
         """Charge les données de personnalisation actuelles du projet."""
-        entry = core._find_entry(core._load_config(), self.project_kind + "s", Path(self.project_path))
+        entry = core._find_entry(core._load_config(), Path(self.project_path))
         if entry:
             self.name_edit.setText(entry.get("name", ""))
             
@@ -381,11 +371,12 @@ class CustomizeProjectDialog(QDialog):
             cfg = core._load_config()
             
             # Trouver l'entrée correspondante
-            entry = core._find_entry(cfg, self.project_kind + "s", Path(self.project_path))
+            entry = core._find_entry(cfg, Path(self.project_path))
             if entry:
+                # La catégorie passe par core.assign_category : elle est créée si besoin.
+                core.assign_category([self.project_path], self.category_combo.currentText().strip() or None)
                 entry["color"] = self.current_color if self.current_color != "#89b4fa" else None
                 entry["emoji"] = self.emoji_combo.currentText() or None
-                entry["category"] = self.category_combo.currentText() or None
                 entry["language"] = self.language_combo.currentText() or None
                 entry["status"] = self.status_combo.currentData()
                 entry["note"] = self.notes_edit.text()

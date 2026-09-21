@@ -1,11 +1,15 @@
 """
 Voktora — ui_main (package)
-Version : 1.0.2
 
-Anciennement un unique fichier ui_main.py (4491 lignes). Découpé en :
+Anciennement un unique fichier ui_main.py. Découpé en :
 
-  workers.py               — Worker, GitWorker, DeleteWorker,
-                              UpdateCheckWorker, OAuthPollWorker, _make_sep
+  workers.py               — Worker, GitWorker, UpdateCheckWorker,
+                              OAuthPollWorker, _make_sep (TaskWorker vient de task_worker.py)
+  task_dialog.py           — TaskDialog : fenêtre de progression avec annulation
+  import_dialog.py         — ImportDialog : import d'un dossier ou d'un ZIP
+  clone_dialog.py          — CloneDialog : clone depuis ses dépôts GitHub ou une URL
+  repo_picker.py           — RepoPicker : liste de dépôts filtrable par organisation
+  github_dialog.py         — GitHubDialog : compte, organisations, classement automatique
   github_login_dialog.py   — GitHubLoginDialog (assistant de connexion)
   token_password_dialog.py — TokenPasswordDialog
   push_dialog.py           — PushDialog

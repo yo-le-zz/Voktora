@@ -1,6 +1,6 @@
 # Voktora — Templates de projets
 
-Lors de la création d'une instance, choisissez un template pour générer automatiquement la structure du projet.
+Lors de la création d'un projet, choisissez un template pour générer automatiquement la structure du projet.
 
 ---
 

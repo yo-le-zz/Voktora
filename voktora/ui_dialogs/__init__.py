@@ -1,6 +1,5 @@
 """
 Voktora — ui_dialogs (package)
-Version : 1.0.2
 
 Anciennement un unique fichier ui_dialogs.py (3226 lignes). Découpé selon
 les marqueurs de section déjà présents dans le fichier d'origine (chaque

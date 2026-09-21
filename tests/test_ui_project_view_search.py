@@ -17,42 +17,43 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+import core  # noqa: E402
 import ui_project_view as upv  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 _app = QApplication.instance() or QApplication(sys.argv)
 
 
+ENTRIES = [
+    {"name": "AlphaProject", "path": "/tmp/alpha", "tags": ["web", "urgent"]},
+    {"name": "BetaProject", "path": "/tmp/beta", "tags": ["cli"]},
+    {"name": "GammaIdea", "path": "/tmp/gamma", "tags": ["urgent"]},
+]
+
+
 @pytest.fixture
-def browser():
+def browser(isolated_data_dir):
     b = upv.ProjectBrowser()
-    b.populate(
-        instances=[
-            {"name": "AlphaProject", "path": "/tmp/alpha", "tags": ["web", "urgent"]},
-            {"name": "BetaProject", "path": "/tmp/beta", "tags": ["cli"]},
-        ],
-        intents=[
-            {"name": "GammaIdea", "path": "/tmp/gamma", "tags": ["urgent"]},
-        ],
-    )
+    b.set_view_state("list", "none", "name_asc")   # à plat : on teste la recherche seule
+    b.populate(ENTRIES)
     return b
 
 
 class TestEntryMatches:
     def test_matches_by_name(self):
-        assert upv._entry_matches({"name": "Foo", "path": "/x"}, "foo")
+        assert core.entry_matches({"name": "Foo", "path": "/x"}, "foo")
 
     def test_matches_by_path(self):
-        assert upv._entry_matches({"name": "Foo", "path": "/special-dir"}, "special")
+        assert core.entry_matches({"name": "Foo", "path": "/special-dir"}, "special")
 
     def test_matches_by_tag(self):
-        assert upv._entry_matches({"name": "Foo", "path": "/x", "tags": ["urgent"]}, "urgent")
+        assert core.entry_matches({"name": "Foo", "path": "/x", "tags": ["urgent"]}, "urgent")
 
     def test_no_match(self):
-        assert not upv._entry_matches({"name": "Foo", "path": "/x", "tags": ["cli"]}, "urgent")
+        assert not core.entry_matches({"name": "Foo", "path": "/x", "tags": ["cli"]}, "urgent")
 
     def test_entry_without_tags_key(self):
-        assert not upv._entry_matches({"name": "Foo", "path": "/x"}, "urgent")
+        assert not core.entry_matches({"name": "Foo", "path": "/x"}, "urgent")
 
 
 class TestSharedSearchAcrossModes:
@@ -64,8 +65,7 @@ class TestSharedSearchAcrossModes:
 
     def test_search_by_tag_filters_list_view(self, browser):
         browser.get_search_widget().setText("cli")
-        assert browser._list_view._inst_list.count() == 1
-        assert browser._list_view._int_list.count() == 0
+        assert browser._list_view.visible_paths() == ["/tmp/beta"]
 
     def test_clearing_search_restores_all_entries(self, browser):
         browser.get_search_widget().setText("urgent")

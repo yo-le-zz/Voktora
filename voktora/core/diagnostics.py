@@ -70,10 +70,9 @@ def run_health_check() -> HealthCheckResult:
 
     try:
         cfg = config_store._load_config()
-        orphan_instances = [e for e in cfg.get("instances", []) if not Path(e["path"]).exists()]
-        orphan_intents   = [e for e in cfg.get("intents", [])   if not Path(e["path"]).exists()]
-        if orphan_instances or orphan_intents:
-            names = [e["name"] for e in orphan_instances + orphan_intents]
+        orphans = [e for e in cfg.get("projects", []) if not Path(e["path"]).exists()]
+        if orphans:
+            names = [e["name"] for e in orphans]
             result.issues.append(DiagnosticIssue(
                 level="warning", category="data",
                 title=f"{len(names)} entrée(s) orpheline(s) détectée(s)",
@@ -123,17 +122,18 @@ def run_health_check() -> HealthCheckResult:
 
 def repair_config() -> tuple:
     cfg_path = paths.get_config_path()
-    salvaged_instances: list = []
-    salvaged_intents:   list = []
+    salvaged_projects: list = []
+    salvaged_categories: list = []
     if cfg_path.exists():
         try:
             with open(cfg_path, encoding="utf-8") as f:
                 raw = json.load(f)
             if isinstance(raw, dict):
-                salvaged_instances = [e for e in raw.get("instances", [])
-                                       if isinstance(e, dict) and "name" in e and "path" in e]
-                salvaged_intents   = [e for e in raw.get("intents", [])
-                                       if isinstance(e, dict) and "name" in e and "path" in e]
+                # « instances » / « intents » : ancien format, récupéré aussi.
+                for key in ("projects", "instances", "intents"):
+                    salvaged_projects += [e for e in raw.get(key) or []
+                                          if isinstance(e, dict) and "name" in e and "path" in e]
+                salvaged_categories = raw.get("categories") or []
         except Exception:
             pass
         backup = cfg_path.with_suffix(".json.bak")
@@ -143,16 +143,15 @@ def repair_config() -> tuple:
             pass
 
     new_cfg = config_store._get_default_config()
-    new_cfg["instances"] = salvaged_instances
-    new_cfg["intents"]   = salvaged_intents
+    new_cfg["projects"] = salvaged_projects
+    new_cfg["categories"] = salvaged_categories
     config_store.invalidate_cache()
     try:
         new_cfg, _ = config_store._migrate_config(new_cfg)
         config_store._save_config(new_cfg)
     except OSError as exc:
         return False, f"Impossible d'écrire la configuration : {exc}"
-    return True, (f"Configuration réparée. {len(salvaged_instances)} instance(s), "
-                  f"{len(salvaged_intents)} intent(s) récupérés.")
+    return True, f"Configuration réparée. {len(new_cfg['projects'])} projet(s) récupéré(s)."
 
 
 def repair_orphans() -> tuple:
@@ -160,11 +159,9 @@ def repair_orphans() -> tuple:
         cfg = config_store._load_config()
     except constants.ConfigCorruptedError as exc:
         return False, str(exc)
-    before_inst = len(cfg["instances"])
-    before_int  = len(cfg["intents"])
-    cfg["instances"] = [e for e in cfg["instances"] if Path(e["path"]).exists()]
-    cfg["intents"]   = [e for e in cfg["intents"]   if Path(e["path"]).exists()]
-    removed = (before_inst - len(cfg["instances"])) + (before_int - len(cfg["intents"]))
+    before = len(cfg["projects"])
+    cfg["projects"] = [e for e in cfg["projects"] if Path(e["path"]).exists()]
+    removed = before - len(cfg["projects"])
     config_store._save_config(cfg)
     return True, f"{removed} entrée(s) orpheline(s) supprimée(s)."
 
@@ -198,22 +195,14 @@ def uninstall_backup_all(destination: Path) -> list:
             shutil.copy2(item, dst)
         done.append(f"[backup existant] {item.name}")
     cfg = config_store._load_config()
-    for entry in cfg.get("instances", []):
+    for entry in cfg.get("projects", []):
         p = Path(entry["path"])
         if p.exists():
             try:
                 zp = projects.export_to_zip(p, destination)
-                done.append(f"[instance] {entry['name']} → {zp.name}")
+                done.append(f"[projet] {entry['name']} → {zp.name}")
             except Exception as e:
-                done.append(f"[ERREUR instance] {entry['name']} : {e}")
-    for entry in cfg.get("intents", []):
-        p = Path(entry["path"])
-        if p.exists():
-            try:
-                zp = projects.export_to_zip(p, destination)
-                done.append(f"[intent] {entry['name']} → {zp.name}")
-            except Exception as e:
-                done.append(f"[ERREUR intent] {entry['name']} : {e}")
+                done.append(f"[ERREUR projet] {entry['name']} : {e}")
     return done
 
 
