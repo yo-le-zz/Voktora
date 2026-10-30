@@ -7,9 +7,9 @@ on:
     types: [opened, synchronize, reopened, closed]
     branches: [main]
 
+# Droits par défaut : lecture seule. Chaque job demande uniquement ce dont il a besoin.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
 
@@ -17,11 +17,18 @@ jobs:
   test:
     if: github.event_name == 'push' || github.event.pull_request.merged != true
     runs-on: ubuntu-latest
+    env:
+      UV_PYTHON_PREFERENCE: only-system
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with: { python-version: "3.13" }
+
+      # Dépendances installées depuis uv.lock (versions verrouillées) : ce qui est testé
+      # est exactement ce qui sera compilé. uv réutilise le Python installé ci-dessus.
+      - uses: astral-sh/setup-uv@v7
 
       - name: Dépendances système Qt (offscreen)
         run: |
@@ -32,30 +39,33 @@ jobs:
             libxcb-xkb1 libxkbcommon-x11-0 libgl1 libglib2.0-0 \
             libopengl0 libxcb-cursor0
 
-      - name: Installer les dépendances de test
-        run: pip install pytest pytest-cov ruff cryptography pyside6
+      - name: Installer les dépendances (uv.lock)
+        run: uv sync --frozen
 
       - name: Lint (ruff)
-        run: ruff check voktora tests
+        run: uv run --frozen ruff check voktora tests
 
       - name: Tests unitaires (pytest)
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QPA_PLATFORMTHEME: minimal
-        run: pytest --cov=voktora --cov-report=term-missing
+        run: uv run --frozen pytest --cov=voktora --cov-report=term-missing
 
   # -- JOB 1 : push dev -> PR automatique vers main --------------------------
   open_pr:
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
 
       - name: Titre du dernier commit (= version)
         id: ci
-        run: echo "title=$(git log -1 --pretty=%s)" >> $GITHUB_OUTPUT
+        run: echo "title=$(git log -1 --pretty=%s)" >> "$GITHUB_OUTPUT"
 
       - name: Creer / mettre a jour la PR dev -> main
         uses: peter-evans/create-pull-request@v7
@@ -69,17 +79,43 @@ jobs:
             **Version :** `${{ steps.ci.outputs.title }}`
             -> Faites **Squash & Merge** pour declencher le build et la release.
 
-  # -- JOB 2 : merge PR sur main -> build DEB + MSI ---------------------------
+  # -- JOB 2 : valider la version (= titre de la PR fusionnée) ----------------
+  # Le titre d'une PR est une entrée NON FIABLE (modifiable par son auteur). Il ne doit jamais être
+  # interpolé directement dans un script : on le lit par variable d'environnement, on le valide
+  # strictement, et seuls les jobs suivants utilisent la valeur validée.
+  version:
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.check.outputs.tag }}
+      number: ${{ steps.check.outputs.number }}
+    steps:
+      - name: Valider le titre de la PR (v1.2.3 ou 1.2.3, suffixe -rc1 accepté)
+        id: check
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if [[ ! "$PR_TITLE" =~ ^[vV]?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Titre de PR invalide pour une version : '$PR_TITLE' (attendu : v1.2.3)"
+            exit 1
+          fi
+          echo "tag=$PR_TITLE" >> "$GITHUB_OUTPUT"
+          number="${PR_TITLE#[vV]}"
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+  # -- JOB 3 : merge PR sur main -> build DEB + RPM (Linux) et MSI (Windows) ---
   # Compilation directe sur les runners (pas de Docker) : les runners
   # heberges par GitHub incluent deja gcc/build-essential pour Linux, et
   # Docker Desktop n'est de toute facon PAS installe sur windows-latest
   # (donc inutilisable pour un build Windows via conteneur, meme en local
   # sur Windows -- voir docker/README.md pour une compilation Docker
   # optionnelle sur une vraie machine, hors CI).
+  # Sous Linux, Voktora n'est compilé QU'UNE FOIS : le .deb et le .rpm sont deux
+  # empaquetages du même résultat Nuitka (voir Installers/linux_common.sh).
   build:
-    if: >
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.merged == true
+    needs: version
     strategy:
       fail-fast: false
       matrix:
@@ -89,19 +125,27 @@ jobs:
           - os: windows-latest
             platform: windows
     runs-on: ${{ matrix.os }}
+    env:
+      UV_PYTHON_PREFERENCE: only-system   # compile avec le Python de setup-python, comme avant
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
 
       - name: Ecrire version.txt
         shell: bash
-        run: echo "${{ github.event.pull_request.title }}" > voktora/version.txt
+        env:
+          VERSION: ${{ needs.version.outputs.number }}
+        run: echo "$VERSION" > voktora/version.txt
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with: { python-version: "3.13" }
 
-      - name: Installer les dependances Python
-        run: pip install nuitka pyside6 cryptography
+      # Dépendances (dont Nuitka) installées depuis uv.lock : build reproductible.
+      - uses: astral-sh/setup-uv@v7
+
+      - name: Installer les dependances (uv.lock + Nuitka)
+        run: uv sync --frozen --group build
 
       # -- Linux ----------------------------------------------------------------
       - name: Dependances systeme Linux
@@ -113,11 +157,19 @@ jobs:
             libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
             libxcb-xkb1 libxkbcommon-x11-0 libgl1 libglib2.0-0 \
             libegl1 libopengl0 libxcb-cursor0 \
-            patchelf dpkg-dev
+            patchelf dpkg-dev rpm
 
-      - name: Build Linux (.deb)
+      - name: Build Linux (.deb) - compile Voktora avec Nuitka
         if: matrix.platform == 'linux'
-        run: bash "Installers/DEB installer/build_deb.sh" "${{ github.event.pull_request.title }}"
+        env:
+          VERSION: ${{ needs.version.outputs.number }}
+        run: uv run --frozen --group build bash "Installers/DEB installer/build_deb.sh" "$VERSION"
+
+      - name: Build Linux (.rpm) - reutilise la compilation du .deb
+        if: matrix.platform == 'linux'
+        env:
+          VERSION: ${{ needs.version.outputs.number }}
+        run: uv run --frozen --group build bash "Installers/RPM installer/build_rpm.sh" "$VERSION"
 
       # -- Windows ----------------------------------------------------------------
       - name: Installer WiX Toolset (Windows)
@@ -130,53 +182,75 @@ jobs:
 
       - name: Build Windows (.msi)
         if: matrix.platform == 'windows'
-        run: python "Installers/MSI installer/build_msi.py" "${{ github.event.pull_request.title }}"
+        env:
+          VERSION: ${{ needs.version.outputs.number }}
+        run: uv run --frozen --group build python "Installers/MSI installer/build_msi.py" "$env:VERSION"
 
       # -- Upload artifacts ---------------------------------------------------
       - name: Upload DEB artifact
         if: matrix.platform == 'linux'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-deb
           path: dist/linux/voktora_*.deb
+          if-no-files-found: error
+
+      - name: Upload RPM artifact
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-rpm
+          path: dist/linux/voktora-*.rpm
+          if-no-files-found: error
 
       - name: Upload MSI artifact
         if: matrix.platform == 'windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-msi
           path: dist\windows\Voktora_*_x64.msi
+          if-no-files-found: error
 
-  # -- JOB 3 : creer la release GitHub ---------------------------------------
+  # -- JOB 4 : creer la release GitHub ---------------------------------------
   release:
-    needs: build
-    if: >
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.merged == true
+    needs: [version, build]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
+
+      # Empreintes SHA-256 : permettent de verifier l'integrite des fichiers telecharges.
+      - name: Calculer les empreintes SHA-256
+        run: |
+          sha256sum linux-deb/voktora_*.deb linux-rpm/voktora-*.rpm windows-msi/Voktora_*_x64.msi \
+            | sed 's# [^ ]*/# #' > SHA256SUMS
+          cat SHA256SUMS
 
       - name: Creer la release GitHub
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.pull_request.title }}
-          name:     "Voktora ${{ github.event.pull_request.title }}"
+          tag_name: ${{ needs.version.outputs.tag }}
+          name:     "Voktora ${{ needs.version.outputs.tag }}"
           body: |
-            ## Voktora ${{ github.event.pull_request.title }}
+            ## Voktora ${{ needs.version.outputs.tag }}
 
             Gestionnaire de projets de developpement par **yolezz**
 
             | Plateforme | Fichier | Installation |
             |-----------|---------|-------------|
-            | Linux (Debian/Ubuntu) | `.deb` | `sudo dpkg -i voktora_*.deb` |
+            | Linux (Debian/Ubuntu) | `.deb` | `sudo apt install ./voktora_*.deb` |
+            | Linux (Fedora/RHEL/openSUSE) | `.rpm` | `sudo dnf install ./voktora-*.rpm` (openSUSE : `sudo zypper install ./voktora-*.rpm`) |
             | Windows 10/11 x64 | `.msi` | Double-cliquer |
 
             ### Notes d'installation
-            - **Linux** : les dependances Qt (libxcb, libgl1...) sont installees automatiquement par dpkg
+            - **Linux** : les dependances Qt (libxcb, libgl1...) sont installees automatiquement par apt / dnf / zypper
             - **Windows** : necessite Windows 10 64-bit ou plus recent
+            - **Verification** : comparez l'empreinte avec `SHA256SUMS` (`sha256sum -c SHA256SUMS --ignore-missing`)
 
             Documentation : https://github.com/yo-le-zz/Voktora/tree/main/doc
           files: |
             linux-deb/voktora_*.deb
+            linux-rpm/voktora-*.rpm
             windows-msi/Voktora_*_x64.msi
+            SHA256SUMS
