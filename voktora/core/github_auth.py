@@ -502,12 +502,12 @@ def save_github_account(token: str, user_info: dict, password: str = "") -> None
     account["avatar_url"] = user_info.get("avatar_url", "")
 
     if crypto.vault_is_unlocked():
-        # Vault disponible → AES-256 Fernet, clé dérivée du master password
+        # Vault disponible → Fernet, clé dérivée du master password
         crypto.vault_store("github_token", token, domain="github_token")
         account["token_encrypted"] = "__vault__"
         account["token_protected"] = False
     elif password:
-        # Fallback : chiffrement par mot de passe fourni (AES-256 Fernet)
+        # Fallback : chiffrement par mot de passe fourni (Fernet)
         account["token_encrypted"] = crypto.token_encrypt(token, password)
         account["token_protected"] = True
     else:

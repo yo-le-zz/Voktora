@@ -19,7 +19,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from . import archive, categories, config_store, constants, crypto, drives, git_ops, organize, paths
+from . import archive, categories, config_store, constants, crypto, drives, full_export, git_ops, organize, paths
 
 IMPORT_MOVE = "move"   # déplace le dossier vers la racine des projets (défaut)
 IMPORT_COPY = "copy"   # copie le dossier ; la source reste en place
@@ -366,33 +366,9 @@ def export_all_to_zip(on_progress: archive.ProgressCallback | None = None,
 
     La configuration exportée ne contient ni le compte GitHub, ni le coffre,
     ni les tokens de projet : l'archive peut être partagée sans exposer de secret.
+    Voir core.full_export pour le détail des phases (planification, config, copie).
     """
-    cfg = config_store._load_config()
-    folders = [Path(e["path"]) for e in cfg.get("projects", []) if Path(e["path"]).is_dir()]
-    total = sum(archive._tree_size(f)[1] for f in folders)
-    tracker = archive.ProgressTracker(total, on_progress)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    public_cfg = {k: v for k, v in cfg.items() if k not in ("github_account", "vault")}
-    public_cfg["projects"] = [
-        {**e, "github_token": "", "github_token_protected": False} for e in cfg.get("projects", [])
-    ]
-
-    def _write(zf) -> None:
-        used: set[str] = set()
-        for folder in folders:
-            # Deux projets de même nom (dossiers différents) ne doivent pas se mélanger.
-            prefix, n = f"projects/{folder.name}", 2
-            while prefix in used:
-                prefix, n = f"projects/{folder.name}_{n}", n + 1
-            used.add(prefix)
-            archive.add_tree_to_zip(zf, folder, prefix, tracker, cancel)
-        zf.writestr("config.json", json.dumps(public_cfg, indent=2, ensure_ascii=False))
-        zf.writestr("export_info.txt", f"Voktora export — {timestamp}\nVersion : {constants.APP_VERSION}\n")
-
-    result = archive.write_zip_atomically(paths.get_backups_dir() / f"voktora_export_{timestamp}.zip", _write)
-    tracker.finish(result.name)
-    return str(result)
+    return str(full_export.export_everything(on_progress, cancel).archive_path)
 
 
 # ──────────────────────────────────────────────

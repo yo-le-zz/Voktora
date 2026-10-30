@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
 # Voktora — build_deb.sh
-# Compile avec Nuitka (--onedir) puis empaquète en .deb
+# Compile avec Nuitka (--standalone, réutilisé si déjà compilé) puis empaquète en .deb
 #
 # Arborescence attendue :
 #   Voktora/
 #   ├── assets/                  ← icônes sources
 #   ├── Installers/
-#   │   ├── assets/
+#   │   ├── linux_common.sh      ← fonctions partagées .deb / .rpm
 #   │   ├── DEB installer/
 #   │   │   └── build_deb.sh     ← CE FICHIER
+#   │   ├── RPM installer/
+#   │   │   ├── build_rpm.sh
+#   │   │   └── voktora.spec
 #   │   └── MSI installer/
 #   │       ├── build_msi.py
 #   │       └── voktora.wxs
@@ -32,52 +35,34 @@ set -euo pipefail
 # Ce fichier est dans  Voktora/Installers/DEB installer/
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-VERSION="${1:-$(cat "$ROOT/voktora/version.txt" | tr -d '[:space:]')}"
-# Le numero de version Debian DOIT commencer par un chiffre (regle dpkg-deb) —
-# on retire un eventuel prefixe "v"/"V" (convention de tag git courante,
-# ex. "v1.0.2") sans toucher au tag/titre de PR original.
-VERSION="${VERSION#v}"
-VERSION="${VERSION#V}"
+# shellcheck source=../linux_common.sh
+source "$ROOT/Installers/linux_common.sh"
+
+VERSION="$(voktora_clean_version "${1:-$(tr -d '[:space:]' < "$ROOT/voktora/version.txt")}")"
+# Le numero de version Debian DOIT commencer par un chiffre (regle dpkg-deb).
+if [[ ! "$VERSION" =~ ^[0-9][A-Za-z0-9.+~:-]*$ ]]; then
+    echo "Version invalide pour un paquet Debian : '$VERSION'" >&2
+    exit 1
+fi
 ARCH="amd64"
 PKG_NAME="voktora"
 DIST_DIR="$ROOT/dist/linux"
 DEB_ROOT="$DIST_DIR/${PKG_NAME}_${VERSION}_${ARCH}"
-INSTALL_DIR="/opt/voktora"
+DEB_FILE="$DIST_DIR/${PKG_NAME}_${VERSION}_${ARCH}.deb"
 
 echo "=== Voktora DEB builder ==="
 echo "Version : $VERSION"
 echo "Root    : $ROOT"
 
-# ── 1. Nettoyage ─────────────────────────────────────────────────────────────
-rm -rf "$DIST_DIR"
-mkdir -p "$DIST_DIR"
+# ── 1. Compilation Nuitka (partagée avec le .rpm) ────────────────────────────
+voktora_compile "$ROOT" "$DIST_DIR"
 
-# ── 2. Compilation Nuitka --onedir ───────────────────────────────────────────
-echo ""
-echo ">>> Compilation Nuitka..."
-python -m nuitka \
-  --standalone \
-  --remove-output \
-  --enable-plugin=pyside6 \
-  --include-qt-plugins=iconengines,imageformats,platforms,platformthemes,tls,xcbglintegrations \
-  --disable-console \
-  --linux-icon="$ROOT/assets/Voktora.png" \
-  --output-dir="$DIST_DIR/nuitka_out" \
-  --output-filename=voktora \
-  "$ROOT/voktora/main.py"
-
-ONEDIR="$DIST_DIR/nuitka_out/main.dist"
-
-# Copier ressources
-cp -r "$ROOT/voktora/themes"   "$ONEDIR/themes"
-cp -r "$ROOT/assets"           "$ONEDIR/assets"
-cp    "$ROOT/voktora/version.txt" "$ONEDIR/version.txt"
-
-# ── 3. Structure du paquet .deb ──────────────────────────────────────────────
+# ── 2. Structure du paquet .deb ──────────────────────────────────────────────
 echo ""
 echo ">>> Création de la structure DEB..."
+rm -f "$DEB_FILE"
+voktora_stage_tree "$DEB_ROOT" "$ROOT" "$ONEDIR" "$VERSION"
 
-# DEBIAN/control
 mkdir -p "$DEB_ROOT/DEBIAN"
 cat > "$DEB_ROOT/DEBIAN/control" << EOF
 Package: voktora
@@ -86,10 +71,10 @@ Architecture: $ARCH
 Maintainer: yolezz <https://github.com/yo-le-zz>
 Section: devel
 Priority: optional
-Depends: libgl1, libglib2.0-0, libxcb-xinerama0, libxcb-icccm4, libxcb-image0, libxcb-keysyms1, libxcb-randr0, libxcb-render-util0, libxcb-xkb1, libxkbcommon-x11-0
+Depends: libgl1, libegl1, libopengl0, libglib2.0-0, libfontconfig1, libxcb-xinerama0, libxcb-icccm4, libxcb-image0, libxcb-keysyms1, libxcb-randr0, libxcb-render-util0, libxcb-xkb1, libxcb-cursor0, libxkbcommon-x11-0
 Description: Voktora — Project Instance Manager
  Gestionnaire de projets de développement avec interface graphique.
- Supporte instances/intents, vault sécurisé AES-256, profils d'exécution,
+ Supporte instances/intents, coffre chiffré (Fernet), profils d'exécution,
  hooks, snapshots, dashboard de santé et système de plugins.
  Thème Catppuccin Mocha. Authentification GitHub App ou OAuth.
  .
@@ -117,61 +102,11 @@ set -e
 EOF
 chmod 755 "$DEB_ROOT/DEBIAN/prerm"
 
-# Binaire + dépendances → /opt/voktora/
-mkdir -p "$DEB_ROOT$INSTALL_DIR"
-cp -r "$ONEDIR/." "$DEB_ROOT$INSTALL_DIR/"
-chmod +x "$DEB_ROOT$INSTALL_DIR/voktora"
-
-# Symlink → /usr/bin/voktora
-mkdir -p "$DEB_ROOT/usr/bin"
-ln -s "$INSTALL_DIR/voktora" "$DEB_ROOT/usr/bin/voktora"
-
-# Icône
-mkdir -p "$DEB_ROOT/usr/share/icons/hicolor/256x256/apps"
-cp "$ROOT/assets/Voktora.png" "$DEB_ROOT/usr/share/icons/hicolor/256x256/apps/voktora.png"
-
-# .desktop
-mkdir -p "$DEB_ROOT/usr/share/applications"
-cat > "$DEB_ROOT/usr/share/applications/voktora.desktop" << EOF
-[Desktop Entry]
-Type=Application
-Name=Voktora
-Comment=Project Instance Manager — by yolezz
-Exec=$INSTALL_DIR/voktora
-Icon=voktora
-Categories=Development;Utility;
-Terminal=false
-StartupWMClass=Voktora
-Keywords=project;git;manager;developer;
-EOF
-
-# AppStream metainfo
-mkdir -p "$DEB_ROOT/usr/share/metainfo"
-cat > "$DEB_ROOT/usr/share/metainfo/io.github.yo_le_zz.Voktora.metainfo.xml" << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<component type="desktop-application">
-  <id>io.github.yo_le_zz.Voktora</id>
-  <name>Voktora</name>
-  <summary>Project Instance Manager</summary>
-  <description>
-    <p>Gestionnaire de projets de développement : instances, intents, vault AES-256,
-    profils d'exécution, hooks, snapshots, dashboard et plugins.</p>
-  </description>
-  <metadata_license>MIT</metadata_license>
-  <project_license>MIT</project_license>
-  <url type="homepage">https://github.com/yo-le-zz/Voktora</url>
-  <launchable type="desktop-id">voktora.desktop</launchable>
-  <releases>
-    <release version="$VERSION"/>
-  </releases>
-</component>
-EOF
-
-# ── 4. Build .deb ────────────────────────────────────────────────────────────
+# ── 3. Build .deb ────────────────────────────────────────────────────────────
 echo ""
 echo ">>> Build du paquet DEB..."
-DEB_FILE="$DIST_DIR/${PKG_NAME}_${VERSION}_${ARCH}.deb"
 dpkg-deb --build --root-owner-group "$DEB_ROOT" "$DEB_FILE"
+rm -rf "$DEB_ROOT"
 
 echo ""
 echo "=== Succès ==="

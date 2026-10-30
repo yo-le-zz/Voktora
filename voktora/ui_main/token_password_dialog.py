@@ -37,7 +37,7 @@ class TokenPasswordDialog(QDialog):
             title = QLabel("🔐  Définir un mot de passe de protection")
             desc  = QLabel(
                 "Le token PAT sera chiffré avec ce mot de passe\n"
-                "via chiffrement <b>AES-256 (Fernet, PBKDF2-HMAC-SHA256)</b>.\n\n"
+                "via chiffrement <b>Fernet (AES-128-CBC + HMAC-SHA256, clé dérivée par PBKDF2)</b>.\n\n"
                 "⚠  Sans ce mot de passe, le token ne pourra pas être\n"
                 "utilisé pour les opérations Git."
             )

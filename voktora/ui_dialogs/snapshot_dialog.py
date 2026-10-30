@@ -10,7 +10,6 @@ from pathlib import Path
 import snapshots
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QApplication,
     QDialog,
     QFileDialog,
     QHBoxLayout,
@@ -83,20 +82,24 @@ class SnapshotDialog(QDialog):
         item = self._list.currentItem()
         return Path(item.data(Qt.UserRole)) if item else None
 
+    def _run(self, title: str, job):
+        """Exécute `job(ctx)` dans un thread avec fenêtre de progression (l'interface ne se fige jamais)."""
+        from ui_main import task_dialog  # import tardif : évite un cycle ui_main <-> ui_dialogs
+        return task_dialog.run_task(self, title, job, headline=title), task_dialog
+
     def _create(self) -> None:
         label, ok = QInputDialog.getText(self, "Label", "Label du snapshot :")
         if not ok:
             return
-        self._progress.setVisible(True)
-        QApplication.processEvents()
-        try:
-            out = snapshots.create(self._path, label)
-            self._progress.setVisible(False)
+        path = self._path
+        done, td = self._run(
+            "Création du snapshot",
+            lambda ctx: snapshots.create(path, label, on_progress=ctx.progress, cancel=ctx.is_cancelled))
+        if done.outcome == td.OUTCOME_OK:
             self._refresh()
-            QMessageBox.information(self, "Snapshot cree", str(out))
-        except Exception as e:
-            self._progress.setVisible(False)
-            QMessageBox.critical(self, "Erreur", str(e))
+            QMessageBox.information(self, "Snapshot cree", str(done.result))
+        elif done.outcome == td.OUTCOME_ERROR:
+            QMessageBox.critical(self, "Erreur", done.error)
 
     def _restore(self) -> None:
         snap = self._selected_snap()
@@ -106,12 +109,19 @@ class SnapshotDialog(QDialog):
         if not target:
             return
         dest = Path(target) / self._path.name
-        try:
-            snapshots.restore(snap, dest, overwrite=False)
+        overwrite = False
+        if dest.exists():
+            if QMessageBox.question(self, "Ecraser ?", f"{dest} existe. Ecraser ?") != QMessageBox.Yes:
+                return
+            overwrite = True
+        done, td = self._run(
+            "Restauration du snapshot",
+            lambda ctx: snapshots.restore(snap, dest, overwrite=overwrite,
+                                          on_progress=ctx.progress, cancel=ctx.is_cancelled))
+        if done.outcome == td.OUTCOME_OK:
             QMessageBox.information(self, "Restaure", str(dest))
-        except FileExistsError:
-            if QMessageBox.question(self, "Ecraser ?", f"{dest} existe. Ecraser ?") == QMessageBox.Yes:
-                snapshots.restore(snap, dest, overwrite=True)
+        elif done.outcome == td.OUTCOME_ERROR:
+            QMessageBox.critical(self, "Erreur", done.error)
 
     def _diff(self) -> None:
         snaps_list = snapshots.list_snaps(self._path)
@@ -127,7 +137,13 @@ class SnapshotDialog(QDialog):
             return
         snap_a = next(s for s in snaps_list if s.label == a_name)
         snap_b = next(s for s in snaps_list if s.label == b_name)
-        diff   = snapshots.diff_snaps(snap_a.path, snap_b.path)
+        done, td = self._run("Comparaison des snapshots",
+                             lambda ctx: snapshots.diff_snaps(snap_a.path, snap_b.path))
+        if done.outcome != td.OUTCOME_OK:
+            if done.outcome == td.OUTCOME_ERROR:
+                QMessageBox.critical(self, "Erreur", done.error)
+            return
+        diff   = done.result
         text   = "\n".join(f"{v.upper():10}  {k}" for k, v in sorted(diff.items()))
         dlg    = QDialog(self)
         dlg.setWindowTitle("Diff snapshots")

@@ -7,10 +7,12 @@ par domaine pour être plus lisible et plus facile à maintenir :
   paths.py        — dossiers de l'application, validation de nom
   config_store.py — lecture/écriture/migration de config.json
   drives.py       — disques disponibles, racine des projets
-  crypto.py       — chiffrement AES-256 (Fernet+PBKDF2), vault
+  crypto.py       — chiffrement Fernet (AES-128-CBC + HMAC) + vault
   github_auth.py  — OAuth device flow, GitHub App, sessions
   projects.py     — CRUD projets, import (zip/dossier/clone), export
   archive.py      — extraction/copie/déplacement/export avec progression
+  full_export.py  — export complet en phases (planification, config publique, copie)
+  file_crypto.py  — chiffrement de fichiers en flux (AES-256-GCM, scrypt)
   categories.py   — catégories créées par l'utilisateur
   organize.py     — recherche, tri, regroupement (logique pure)
   github_api.py   — dépôts et organisations GitHub (lecture)
@@ -44,6 +46,8 @@ from . import (
     crypto,
     diagnostics,
     drives,
+    file_crypto,
+    full_export,
     git_ops,
     github_api,
     github_auth,
@@ -60,6 +64,8 @@ _SUBMODULES = (
     drives,
     crypto,
     archive,
+    full_export,
+    file_crypto,
     categories,
     organize,
     projects,

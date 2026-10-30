@@ -107,19 +107,40 @@ Copy-Item src\version.txt     dist\windows\main.dist\version.txt
 
 ```bash
 # Script automatique (compile + package en .deb)
-bash "Installers/DEB installer/build_deb.sh" 1.0.3
+bash "Installers/DEB installer/build_deb.sh" 1.0.4
 
 # Résultat
-ls dist/linux/voktora_1.0.3_amd64.deb
+ls dist/linux/voktora_1.0.4_amd64.deb
 ```
 
 Le script :
-1. Compile avec Nuitka `--standalone` (onedir)
-2. Crée la structure `DEBIAN/` (control, postinst, prerm)
-3. Place les fichiers dans `/opt/voktora/`
-4. Crée un symlink `/usr/bin/voktora`
-5. Génère le `.desktop` et l'AppStream XML
-6. Appelle `dpkg-deb --build`
+1. Compile avec Nuitka `--standalone` (onedir) — sauf si `dist/linux/nuitka_out/main.dist` existe déjà
+   (forcer avec `VOKTORA_FORCE_COMPILE=1`)
+2. Construit l'arborescence installée (`Installers/linux_common.sh`) : `/opt/voktora/`, symlink
+   `/usr/bin/voktora`, icône, `.desktop`, AppStream XML, licence
+3. Crée la structure `DEBIAN/` (control, postinst, prerm)
+4. Appelle `dpkg-deb --build`
+
+---
+
+## Créer le paquet .rpm (Linux)
+
+```bash
+# Prérequis : paquet « rpm » (Debian/Ubuntu) ou « rpm-build » (Fedora/RHEL)
+bash "Installers/RPM installer/build_rpm.sh" 1.0.4
+
+# Résultat
+ls dist/linux/voktora-1.0.4-1.x86_64.rpm
+```
+
+Le script réutilise la compilation Nuitka du `.deb` si elle existe (la CI compile **une seule fois**
+puis produit les deux paquets), construit la même arborescence installée, puis lance `rpmbuild -bb`
+avec `Installers/RPM installer/voktora.spec`. Particularités :
+
+- paquet binaire (`ExclusiveArch: x86_64`), compression xz, sans `debuginfo` ni strip (Nuitka embarque Qt) ;
+- dépendances déclarées **par bibliothèque** (`libGL.so.1()(64bit)`…) : valables sur Fedora, RHEL et openSUSE ;
+- une version de préversion `1.0.5-rc1` devient `1.0.5~rc1` (le tiret est interdit dans le champ `Version`) ;
+- contrôle rapide : `rpm -qpl`, `rpm -qpR` et `rpm -qpi` sur le fichier produit.
 
 ---
 
@@ -127,10 +148,10 @@ Le script :
 
 ```powershell
 # Script automatique (compile + package en .msi via WiX)
-python "Installers\MSI installer\build_msi.py" 1.0.3
+python "Installers\MSI installer\build_msi.py" 1.0.4
 
 # Résultat
-dir dist\windows\Voktora_1.0.3_x64.msi
+dir dist\windows\Voktora_1.0.4_x64.msi
 ```
 
 Le script :
@@ -145,7 +166,8 @@ Le script :
 ## CI/CD automatique
 
 Push sur `dev` → PR automatique vers `main` (titre = version).  
-Squash & Merge → build `.deb` (Linux) + `.msi` (Windows) → release GitHub.
+Squash & Merge → build `.deb` + `.rpm` (Linux) et `.msi` (Windows) → release GitHub (avec `SHA256SUMS`).
+Le titre de la PR est validé (`v1.2.3`) avant d'être utilisé : il ne peut pas injecter de commande dans le build.
 
 Voir `.github/workflows/build-release.yml` pour les détails.
 

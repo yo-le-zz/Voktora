@@ -4,26 +4,47 @@
 
 ---
 
-## 🐧 Linux (Debian / Ubuntu / Mint)
+## 🐧 Linux (Debian / Ubuntu / Mint / Fedora / openSUSE)
 
 ### Via le paquet .deb (recommandé)
 
 ```bash
 # 1. Télécharger le .deb depuis la dernière release
-wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora_1.0.3_amd64.deb
+wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora_1.0.4_amd64.deb
 
 # 2. Installer
-sudo dpkg -i voktora_1.0.3_amd64.deb
-
-# 3. Si des dépendances manquent
-sudo apt-get install -f
+sudo apt install ./voktora_1.0.4_amd64.deb   # résout aussi les dépendances
 
 # 4. Lancer
 voktora
 # ou depuis le menu Applications → Développement → Voktora
 ```
 
-### Désinstallation Linux
+### Via le paquet .rpm (Fedora, RHEL / Rocky / Alma, openSUSE)
+
+```bash
+# 1. Télécharger le .rpm depuis la dernière release
+wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora-1.0.4-1.x86_64.rpm
+
+# 2. Installer (les bibliothèques Qt nécessaires sont résolues automatiquement)
+sudo dnf install ./voktora-1.0.4-1.x86_64.rpm        # Fedora / RHEL
+sudo zypper install ./voktora-1.0.4-1.x86_64.rpm     # openSUSE
+
+# 3. Lancer
+voktora
+```
+
+Désinstallation : `sudo dnf remove voktora` (ou `sudo zypper remove voktora`).
+
+### Vérifier le téléchargement
+
+Chaque release publie un fichier `SHA256SUMS` :
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+### Désinstallation Linux (.deb)
 
 ```bash
 sudo dpkg -r voktora
@@ -39,7 +60,7 @@ Les données utilisateur (`~/.voktora/`) ne sont **pas** supprimées.
 
 ### Via le .msi (recommandé)
 
-1. Télécharger `Voktora_1.0.3_x64.msi` depuis [les releases GitHub](https://github.com/yo-le-zz/Voktora/releases/latest)
+1. Télécharger `Voktora_1.0.4_x64.msi` depuis [les releases GitHub](https://github.com/yo-le-zz/Voktora/releases/latest)
 2. Double-cliquer sur le `.msi`
 3. Suivre l'assistant d'installation (Next → Install → Finish)
 4. Voktora est disponible dans le menu Démarrer et sur le Bureau
@@ -83,7 +104,7 @@ Au premier démarrage, Voktora vous demande de créer un **mot de passe maître*
 
 Ce mot de passe :
 - **n'est jamais stocké** (seul un verifier PBKDF2 est conservé)
-- dérive une clé AES-256 unique pour chaque type de secret
+- dérive une clé de chiffrement unique pour chaque type de secret
 - protège vos tokens GitHub, clés SSH et API keys dans le vault
 
 Vous pouvez cliquer **Passer** pour un vault non chiffré (déconseillé).
@@ -109,7 +130,7 @@ Voktora stocke ses données dans `~/.voktora/` :
 
 ## ✅ Dépendances runtime Linux
 
-Installées automatiquement avec le `.deb` :
+Installées automatiquement avec le `.deb` / `.rpm` :
 
 - `libgl1` — OpenGL
 - `libglib2.0-0` — GLib

@@ -17,7 +17,7 @@ from . import config_store, constants
 # ──────────────────────────────────────────────
 
 # ──────────────────────────────────────────────────────────────────────────────
-# CHIFFREMENT AES-256 via Fernet (AES-128-CBC + HMAC-SHA256)
+# CHIFFREMENT via Fernet (AES-128-CBC + HMAC-SHA256, clé de 32 octets)
 # Dérivation : PBKDF2-HMAC-SHA256, 480 000 itérations, sel 32 octets aléatoires
 #
 # Chaque appel à token_encrypt() génère un nouveau sel → les ciphertexts sont
@@ -82,8 +82,21 @@ def token_decrypt(ciphertext: str, password: str) -> str:
 
 _VAULT_MASTER_KEY: bytes | None = None   # clé en mémoire uniquement (session)
 
-_VAULT_VERIFIER_ITER = 480_000
+_VAULT_VERIFIER_ITER = 480_000           # format v1 uniquement (lecture / migration)
 _VAULT_VERIFIER_LEN  = 64
+_VAULT_VERSION       = 2
+_VERIFIER_CONTEXT    = b"voktora-vault-verifier-v2"
+
+# Format v1 (corrigé) : le « verifier » était PBKDF2(mot de passe, sel, 480000, dklen=64) alors que la
+# clé maître était PBKDF2(mot de passe, sel, 480000, dklen=32). PBKDF2 produit la sortie bloc par bloc :
+# les 32 premiers octets du verifier — stocké EN CLAIR dans config.json — étaient donc la clé maître
+# elle-même, ce qui permettait de déchiffrer tout le coffre sans connaître le mot de passe.
+# Format v2 : le verifier est un HMAC de la clé maître avec un contexte fixe — à sens unique, il ne
+# révèle rien de la clé. Les coffres v1 sont migrés (et leur clé renouvelée) au premier déverrouillage.
+
+
+def _verifier_v2(master_key: bytes) -> bytes:
+    return hmac.new(master_key, _VERIFIER_CONTEXT, hashlib.sha256).digest()
 
 
 def vault_is_initialized() -> bool:
@@ -95,44 +108,100 @@ def vault_is_initialized() -> bool:
 def vault_init(master_password: str) -> None:
     """
     Initialise le vault avec le mot de passe maître.
-    Calcule le verifier (PBKDF2) et le sel global. Ne stocke PAS le mot de passe.
+    Calcule le verifier (HMAC de la clé maître) et le sel global. Ne stocke PAS le mot de passe.
     """
     global _VAULT_MASTER_KEY
-    salt     = os.urandom(constants.SALT_BYTES)
-    verifier = hashlib.pbkdf2_hmac(
-        "sha256", master_password.encode(), salt,
-        _VAULT_VERIFIER_ITER, dklen=_VAULT_VERIFIER_LEN,
-    )
+    salt   = os.urandom(constants.SALT_BYTES)
+    master = _pbkdf2_raw(master_password, salt)
     cfg = config_store._load_config()
     cfg["vault"] = {
-        "verifier": base64.b64encode(verifier).decode(),
+        "version":  _VAULT_VERSION,
+        "verifier": base64.b64encode(_verifier_v2(master)).decode(),
         "salt":     base64.b64encode(salt).decode(),
     }
     config_store._save_config(cfg)
-    # Dériver la clé maître en mémoire
-    _VAULT_MASTER_KEY = _pbkdf2_raw(master_password, salt)
+    _VAULT_MASTER_KEY = master
 
 
 def vault_unlock(master_password: str) -> bool:
     """
     Vérifie le mot de passe et charge la clé maître en mémoire.
-    Retourne True si correct.
+    Retourne True si correct. Migre automatiquement un coffre au format v1.
     """
     global _VAULT_MASTER_KEY
     cfg  = config_store._load_config()
     info = cfg.get("vault", {})
     if not info.get("verifier") or not info.get("salt"):
         return False
-    salt     = base64.b64decode(info["salt"])
-    expected = base64.b64decode(info["verifier"])
-    actual   = hashlib.pbkdf2_hmac(
+    try:
+        salt     = base64.b64decode(info["salt"])
+        expected = base64.b64decode(info["verifier"])
+    except ValueError:
+        return False
+
+    if info.get("version", 1) >= 2:
+        master = _pbkdf2_raw(master_password, salt)
+        if not hmac.compare_digest(expected, _verifier_v2(master)):
+            return False
+        _VAULT_MASTER_KEY = master
+        return True
+
+    # Format v1 : on vérifie à l'ancienne, puis on migre.
+    actual = hashlib.pbkdf2_hmac(
         "sha256", master_password.encode(), salt,
         _VAULT_VERIFIER_ITER, dklen=_VAULT_VERIFIER_LEN,
     )
     if not hmac.compare_digest(expected, actual):
         return False
     _VAULT_MASTER_KEY = _pbkdf2_raw(master_password, salt)
+    _migrate_vault_v1(master_password)
     return True
+
+
+def _migrate_vault_v1(master_password: str) -> None:
+    """Passe un coffre v1 en v2 : nouveau sel (donc nouvelle clé), secrets rechiffrés, verifier à sens unique.
+
+    Tout ou rien : si un secret ne peut pas être déchiffré avec l'ancienne clé, on conserve le sel
+    et les ciphertexts tels quels et on remplace seulement le verifier (qui cesse ainsi de contenir la clé).
+    """
+    global _VAULT_MASTER_KEY
+    cfg     = config_store._load_config()
+    vault   = cfg.get("vault", {})
+    secrets = vault.get("secrets", {})
+
+    plain: dict[str, tuple[str, str]] = {}
+    rotate = True
+    for name, entry in secrets.items():
+        domain = entry.get("domain", "general")
+        value = vault_decrypt(entry.get("ciphertext", ""), domain)
+        if not value and entry.get("ciphertext"):
+            rotate = False       # secret illisible : ne rien rechiffrer, on ne veut perdre aucune donnée
+            break
+        plain[name] = (domain, value)
+
+    if not rotate:
+        vault["version"]  = _VAULT_VERSION
+        vault["verifier"] = base64.b64encode(_verifier_v2(_VAULT_MASTER_KEY)).decode()
+        config_store._save_config(cfg)
+        return
+
+    new_salt   = os.urandom(constants.SALT_BYTES)
+    new_master = _pbkdf2_raw(master_password, new_salt)
+    vault["salt"], vault["version"] = base64.b64encode(new_salt).decode(), _VAULT_VERSION
+    vault["verifier"] = base64.b64encode(_verifier_v2(new_master)).decode()
+    _VAULT_MASTER_KEY = new_master
+    for name, (domain, value) in plain.items():
+        # Écrit dans cfg, qui est sauvegardé d'un seul bloc (remplacement atomique du fichier).
+        secrets[name]["ciphertext"] = _encrypt_with_current_key(value, domain, new_salt)
+    config_store._save_config(cfg)
+
+
+def _encrypt_with_current_key(plaintext: str, domain: str, salt: bytes) -> str:
+    """Chiffre avec la clé de `domain` dérivée de la clé maître courante et d'un sel donné (pas encore sauvegardé)."""
+    from cryptography.fernet import Fernet
+    domain_salt = hashlib.sha256(salt + domain.encode()).digest()
+    raw = hashlib.pbkdf2_hmac("sha256", _VAULT_MASTER_KEY, domain_salt, 1, dklen=constants.AES_KEY_BYTES)
+    return Fernet(base64.urlsafe_b64encode(raw)).encrypt(plaintext.encode()).decode()
 
 
 def vault_is_unlocked() -> bool:
