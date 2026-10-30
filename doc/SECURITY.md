@@ -1,10 +1,10 @@
-# Sécurité — modèle et audit (v1.0.3)
+# Sécurité — modèle et audit (v1.0.4)
 
 ## Ce qui est protégé, et comment
 
 | Donnée | Protection |
 |--------|-----------|
-| Token OAuth / GitHub App | Chiffrement AES-256 (Fernet + PBKDF2) optionnel, voir [VAULT.md](VAULT.md) |
+| Token OAuth / GitHub App | Chiffrement Fernet (AES-128-CBC + HMAC-SHA256, clé PBKDF2) optionnel, voir [VAULT.md](VAULT.md) |
 | Token GitHub à l'exécution de git | Variables d'environnement `GIT_CONFIG_*`, en-tête limité à `https://github.com/` ; jamais dans l'URL d'un remote, jamais en argument (visible dans la liste des processus) |
 | `config.json` | Créé en `0600` sous Linux |
 | Exports, bundles `.mpack`, snapshots | Identifiants retirés de `.git/config` ; export global et bundles sans compte GitHub ni tokens de projet |
@@ -34,7 +34,7 @@ Une archive ZIP, un dossier importé, un dépôt cloné ou un nom de branche peu
 - Les **plugins** exécutent du code Python : n'installez que des plugins de confiance.
 - Le **`.msi` n'est pas signé** (voir [BUILD.md](BUILD.md)).
 
-## Audit 1.0.3
+## Audit 1.0.3 (historique)
 
 Deux passes ont été faites (avant puis après correction) sur la configuration, l'authentification git,
 l'import/export, l'ouverture d'applications externes et les dialogues.
@@ -53,6 +53,49 @@ l'import/export, l'ouverture d'applications externes et les dialogues.
 
 Les tests correspondants sont dans `tests/test_security.py`, `tests/test_git_auth.py` et
 `tests/test_archive.py`.
+
+## Audit 1.0.4
+
+Deux passes (avant puis après correction), orientées application de bureau : fichiers locaux,
+processus lancés, archives non fiables, secrets stockés, chaîne de build.
+
+### Élevée
+
+| Constat | Impact | Correctif | État |
+|---------|--------|-----------|------|
+| Coffre : le *verifier* stocké dans `config.json` contenait la clé maître (PBKDF2 `dklen=64` vs `dklen=32` : les 32 premiers octets sont identiques) | Toute personne ayant lu `config.json` (ou une de ses sauvegardes) pouvait déchiffrer tout le coffre **sans le mot de passe** | Verifier = HMAC-SHA256 de la clé maître (à sens unique). Migration automatique au déverrouillage avec nouveau sel, donc nouvelle clé, et rechiffrement des secrets (tout ou rien) | Corrigé |
+| Chiffrement de projet = XOR avec SHA-512(mot de passe), sans sel ni authentification ; mauvais mot de passe au déchiffrement = fichiers corrompus **et** originaux supprimés ; fichier entier chargé en mémoire | Aucune confidentialité réelle ; perte de données ; crash mémoire sur gros fichiers | AES-256-GCM en flux (blocs de 1 Mo authentifiés, clé scrypt, sel par opération, en-tête lié aux blocs). Mauvais mot de passe / altération / troncature détectés avant toute écriture définitive. Ancien format toujours déchiffrable | Corrigé |
+| Workflow CI : titre de PR interpolé dans un script shell (`${{ github.event.pull_request.title }}`) avec un jeton en écriture | Exécution de commande dans la CI avec un titre piégé | Titre lu via variable d'environnement, validé (`v1.2.3`) dans un job dédié ; droits du jeton réduits par job | Corrigé |
+
+### Moyenne
+
+| Constat | Correctif | État |
+|---------|-----------|------|
+| Restauration de snapshot : noms de membres non validés (écriture hors du dossier cible) et dossier cible supprimé avant extraction | Validation des noms, liens ignorés, extraction dans un dossier temporaire puis échange | Corrigé |
+| Script de désinstallation à nom fixe dans `/tmp`, chemins interpolés dans le shell, suppression possible d'un dossier de sources ou personnel | Fichier privé à nom aléatoire, `shlex.quote`, refus des dossiers système/personnel et du dossier des sources | Corrigé |
+
+### Faible
+
+| Constat | Correctif | État |
+|---------|-----------|------|
+| `config.json.tmp` créé en `0644` puis `chmod 0600` (fenêtre de lecture) | Création directe en `0600` | Corrigé |
+| `open_url_in_browser` acceptait n'importe quel schéma (`file:`, `ms-…:`) | `http` / `https` uniquement | Corrigé |
+| Dépendances de build non figées (`pip install` sans version) | Installation depuis `uv.lock` | Corrigé |
+
+### Information
+
+- Fernet est AES-128-CBC + HMAC-SHA256 (clé de 32 octets). Les libellés « AES-256 » du coffre étaient
+  inexacts et ont été corrigés ; le format n'a pas été changé.
+- PBKDF2 reste à 480 000 itérations (compatibilité des coffres existants) ; OWASP recommande
+  600 000 pour PBKDF2-HMAC-SHA256. À relever avec un champ de version dans une prochaine release.
+- Les anciennes copies de `config.json` (dossier de sauvegardes) créées **avant** la 1.0.4 contiennent
+  encore l'ancien verifier : supprimez-les, et régénérez par précaution les tokens du coffre.
+- Les **plugins** s'exécutent avec les droits de l'utilisateur dès leur chargement : leur dossier
+  (`data/plugins`) est une frontière de confiance.
+- Le **`.rpm` n'est pas signé** (pas plus que le `.deb` et le `.msi`) ; publiez et vérifiez `SHA256SUMS`.
+
+Tests : `tests/test_vault.py`, `tests/test_file_crypto.py`, `tests/test_snapshots.py`,
+`tests/test_full_export.py`, `tests/test_security.py`, `tests/test_archive.py`.
 
 ## Signaler une vulnérabilité
 

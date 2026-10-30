@@ -5,8 +5,6 @@ Fragment de ui_dialogs.py extrait lors du découpage v1.0.2 en package.
 
 from __future__ import annotations
 
-import hashlib
-import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -26,8 +24,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-
 # ════════════ encrypt_dialog.py ════════════
+_operation_in_progress = False   # une seule opération longue à la fois (chiffrement ou copie)
+
+
 def _is_operation_running() -> bool:
     return _operation_in_progress
 
@@ -44,7 +44,12 @@ def _set_operation(state: bool) -> None:
 
 
 class EncryptWorker(QThread):
-    """Chiffre/déchiffre récursivement un dossier dans un thread séparé."""
+    """Chiffre/déchiffre récursivement un dossier dans un thread séparé.
+
+    Chiffrement authentifié AES-256-GCM en flux (voir core.file_crypto) : la mémoire reste
+    constante quelle que soit la taille des fichiers, et un mauvais mot de passe est détecté
+    avant toute écriture définitive. Annulable proprement via requestInterruption().
+    """
 
     progress_text  = Signal(str)   # Message de statut
     progress_value = Signal(int)   # Pourcentage 0-100
@@ -58,112 +63,132 @@ class EncryptWorker(QThread):
         self._path     = path
         self._password = password
         self._mode     = mode
+        self._done     = 0
+        self._total    = 1
+        self._last_pct = -1
 
     def run(self) -> None:
         try:
-            if self._mode == "encrypt":
-                self._do_encrypt()
-            else:
-                self._do_decrypt()
-            self.finished.emit(True, "Opération terminée avec succès.")
+            msg = self._do_encrypt() if self._mode == "encrypt" else self._do_decrypt()
+            self.finished.emit(True, msg)
+        except core.OperationCancelled:
+            self.finished.emit(False, "Opération annulée. Les fichiers déjà traités le sont entièrement ; "
+                                      "relancez l'opération pour terminer.")
         except Exception as e:
             self.finished.emit(False, str(e))
 
-    # ── Dérivation de clé ──────────────────────────
+    # ── Progression ────────────────────────────────
+
+    def _cancelled(self) -> bool:
+        return self.isInterruptionRequested()
+
+    def _advance(self, nbytes: int) -> None:
+        self._done += nbytes
+        pct = min(99, self._done * 100 // max(self._total, 1))
+        if pct != self._last_pct:      # n'émet que si le pourcentage change (pas de saturation de la boucle Qt)
+            self._last_pct = pct
+            self.progress_value.emit(pct)
 
     @staticmethod
-    def _derive_key(password: str) -> bytes:
-        return hashlib.sha512(password.encode("utf-8")).digest()
+    def _size(path: Path) -> int:
+        try:
+            return path.stat().st_size
+        except OSError:
+            return 0
 
     # ── Chiffrement ────────────────────────────────
 
-    def _do_encrypt(self) -> None:
+    def _do_encrypt(self) -> str:
         files = [f for f in self._path.rglob("*")
-                 if f.is_file() and not f.name.startswith(".")]
-        total = len(files)
-        if total == 0:
-            return
+                 if f.is_file() and not f.is_symlink() and not f.name.startswith(".")
+                 and not core.is_encrypted_name(f)]
+        if not files:
+            return "Aucun fichier à chiffrer."
+        self._total = sum(self._size(f) for f in files) or 1
 
-        key = self._derive_key(self._password)
+        self.progress_text.emit("Dérivation de la clé…")
+        salt = core.new_salt()
+        key  = core.derive_key(self._password, salt)
 
-        for i, file_path in enumerate(files):
-            # Ignorer les fichiers déjà chiffrés
-            if file_path.suffix == ".menc":
-                continue
+        failures = 0
+        for file_path in files:
+            if self._cancelled():
+                raise core.OperationCancelled("Opération annulée.")
             self.progress_text.emit(f"Chiffrement : {file_path.name}")
-            self.progress_value.emit(int(i / total * 90))
-
             try:
-                with open(file_path, "rb") as f:
-                    data = f.read()
-
-                encrypted = bytes([b ^ key[i % len(key)] for i, b in enumerate(data)])
-                enc_path  = file_path.with_suffix(file_path.suffix + ".menc")
-
-                with open(enc_path, "wb") as f:
-                    f.write(encrypted)
-
-                file_path.unlink()
-
+                core.encrypt_file(file_path, file_path.with_name(file_path.name + core.SUFFIX),
+                                  key, salt, self._advance, self._cancelled)
+                file_path.unlink()          # l'original n'est supprimé qu'une fois la version chiffrée complète
+            except core.OperationCancelled:
+                raise
             except Exception as e:
+                failures += 1
                 self.progress_text.emit(f"⚠ Ignoré : {file_path.name} ({e})")
 
-        # Marqueur de chiffrement
-        marker = self._path / ".voktora_encrypted"
-        marker.write_text(
+        (self._path / ".voktora_encrypted").write_text(
             f"Encrypted with Voktora v{core.APP_VERSION}\n"
-            f"Date: {datetime.now().isoformat()}\n"
+            f"Format: AES-256-GCM (v2)\n"
+            f"Date: {datetime.now().isoformat()}\n",
+            encoding="utf-8",
         )
         self.progress_value.emit(100)
+        if failures:
+            return f"Terminé, mais {failures} fichier(s) n'ont pas pu être chiffrés (ils restent en clair)."
+        return "Opération terminée avec succès."
 
     # ── Déchiffrement ──────────────────────────────
 
-    def _do_decrypt(self) -> None:
-        files = [f for f in self._path.rglob("*.menc") if f.is_file()]
-        total = len(files)
-        if total == 0:
-            # Tenter l'ancien format (.encrypted)
-            files = [f for f in self._path.rglob("*.encrypted") if f.is_file()]
-            total = len(files)
-
-        if total == 0:
+    def _do_decrypt(self) -> str:
+        files = [f for f in self._path.rglob("*")
+                 if f.is_file() and f.suffix in (core.SUFFIX, *core.LEGACY_SUFFIXES)]
+        if not files:
             self.progress_value.emit(100)
-            return
+            return "Aucun fichier chiffré trouvé."
+        self._total = sum(self._size(f) for f in files) or 1
 
-        key = self._derive_key(self._password)
-
-        for i, file_path in enumerate(files):
+        keys: dict[bytes, bytes] = {}      # sel -> clé (scrypt n'est calculé qu'une fois par sel)
+        failures = 0
+        legacy = 0
+        for file_path in files:
+            if self._cancelled():
+                raise core.OperationCancelled("Opération annulée.")
             self.progress_text.emit(f"Déchiffrement : {file_path.name}")
-            self.progress_value.emit(int(i / total * 90))
-
             try:
-                with open(file_path, "rb") as f:
-                    encrypted_data = f.read()
-
-                decrypted = bytes([b ^ key[i % len(key)] for i, b in enumerate(encrypted_data)])
-
-                # Retirer l'extension .menc ou .encrypted
-                if file_path.suffix == ".menc":
-                    original_path = file_path.with_suffix("")
-                elif file_path.suffix == ".encrypted":
-                    original_path = Path(str(file_path)[:-10])
+                if file_path.suffix == core.SUFFIX:
+                    header = core.read_header(file_path)
+                    if header is None:
+                        raise core.DecryptionError(f"Format de chiffrement inconnu : {file_path.name}")
+                    salt = header[0]
+                    if salt not in keys:
+                        keys[salt] = core.derive_key(self._password, salt)
+                    core.decrypt_file(file_path, file_path.with_suffix(""), keys[salt],
+                                      self._advance, self._cancelled)
                 else:
-                    continue
-
-                with open(original_path, "wb") as f:
-                    f.write(decrypted)
-
+                    legacy += 1
+                    original = (file_path.with_suffix("") if file_path.suffix == ".menc"
+                                else Path(str(file_path)[:-len(".encrypted")]))
+                    core.legacy_decrypt_file(file_path, original, self._password,
+                                             self._advance, self._cancelled)
                 file_path.unlink()
-
+            except core.DecryptionError as e:
+                # Mauvais mot de passe : inutile (et dangereux) de continuer sur les autres fichiers.
+                raise core.DecryptionError(str(e)) from e
+            except core.OperationCancelled:
+                raise
             except Exception as e:
+                failures += 1
                 self.progress_text.emit(f"⚠ Ignoré : {file_path.name} ({e})")
 
-        # Supprimer le marqueur
-        marker = self._path / ".voktora_encrypted"
-        if marker.exists():
-            marker.unlink()
-
+        if not failures:
+            (self._path / ".voktora_encrypted").unlink(missing_ok=True)
         self.progress_value.emit(100)
+        notes = []
+        if failures:
+            notes.append(f"{failures} fichier(s) n'ont pas pu être déchiffrés et restent chiffrés.")
+        if legacy:
+            notes.append(f"{legacy} fichier(s) étaient dans l'ancien format non authentifié : "
+                         "vérifiez le résultat, puis rechiffrez le projet pour passer au nouveau format.")
+        return "\n".join(notes) or "Opération terminée avec succès."
 
 
 # ──────────────────────────────────────────────
@@ -172,7 +197,7 @@ class EncryptWorker(QThread):
 
 
 class CopyWorker(QThread):
-    """Copie un dossier avec progression en arrière-plan."""
+    """Copie un dossier (sauvegarde) en arrière-plan : atomique, annulable, progression réelle en octets."""
 
     progress_text  = Signal(str)
     progress_value = Signal(int)
@@ -182,25 +207,23 @@ class CopyWorker(QThread):
         super().__init__()
         self._src = src
         self._dst = dst
+        self._last_pct = -1
+
+    def _on_progress(self, done: int, total: int, current: str) -> None:
+        pct = min(100, done * 100 // total) if total else 0
+        if pct != self._last_pct:
+            self._last_pct = pct
+            self.progress_value.emit(pct)
+            if current:
+                self.progress_text.emit(f"Copie : {current}")
 
     def run(self) -> None:
         try:
-            files = [f for f in self._src.rglob("*") if f.is_file()]
-            total = len(files)
-            self._dst.mkdir(parents=True, exist_ok=True)
-
-            for i, src_file in enumerate(files):
-                rel = src_file.relative_to(self._src)
-                dst_file = self._dst / rel
-                dst_file.parent.mkdir(parents=True, exist_ok=True)
-
-                self.progress_text.emit(f"Copie : {src_file.name}")
-                self.progress_value.emit(int(i / max(total, 1) * 100))
-
-                shutil.copy2(src_file, dst_file)
-
+            core.copy_tree(self._src, self._dst, self._on_progress, self.isInterruptionRequested)
             self.progress_value.emit(100)
             self.finished.emit(True, f"Copie terminée vers {self._dst}")
+        except core.OperationCancelled:
+            self.finished.emit(False, "Sauvegarde annulée.")
         except Exception as e:
             self.finished.emit(False, str(e))
 
@@ -388,7 +411,7 @@ class EncryptProjectDialog(QDialog):
         self._lock_ui(False)
 
         if ok:
-            algo = "AES-256 (Fernet, PBKDF2-HMAC-SHA256)"
+            algo = "AES-256-GCM (clé dérivée par scrypt)"
             QMessageBox.information(
                 self, "Chiffrement réussi",
                 f"Le projet a été chiffré avec succès.\n\n"
@@ -444,16 +467,17 @@ class EncryptProjectDialog(QDialog):
             reply = QMessageBox.question(
                 self, "Annuler ?",
                 "Une opération est en cours. Voulez-vous vraiment annuler ?\n"
-                "⚠ Annuler en cours de chiffrement peut corrompre les fichiers !",
+                "Les fichiers déjà traités restent intacts ; vous pourrez relancer ensuite.",
                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No
             )
             if reply != QMessageBox.Yes:
                 return
-            # Tenter d'arrêter les workers
+            # Arrêt coopératif : les fichiers sont écrits dans un « .part » puis renommés, donc
+            # interrompre entre deux fichiers (ou au milieu d'un bloc) ne corrompt rien.
             for worker in [self._worker, self._copy_worker]:
                 if worker and worker.isRunning():
-                    worker.terminate()
-                    worker.wait(2000)
+                    worker.requestInterruption()
+                    worker.wait(15_000)
             _set_operation(False)
         self.reject()
 

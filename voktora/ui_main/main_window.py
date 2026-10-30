@@ -1322,7 +1322,7 @@ class MainWindow(QMainWindow):
         if token:
             if protect and token_password:
                 core.set_project_token(self._sel_path, token, token_password)
-                algo = "AES-256 (Fernet, PBKDF2-HMAC-SHA256)"
+                algo = "Fernet (AES-128-CBC + HMAC-SHA256, clé dérivée par PBKDF2)"
                 self._log(f"🔐  Token PAT chiffré et sauvegardé  (algo : {algo})")
             elif not protect:
                 core.set_project_token(self._sel_path, token, "")
@@ -1506,35 +1506,29 @@ class MainWindow(QMainWindow):
         do_backup, backup_dir = dlg.get_options()
 
         if do_backup and backup_dir:
-            progress = QMessageBox(self)
-            progress.setWindowTitle("Voktora — Backup en cours")
-            progress.setText(
-                "Export de toutes les données en cours…\n\n"
-                "Veuillez patienter, ne fermez pas l'application."
-            )
-            progress.setStandardButtons(QMessageBox.NoButton)
-            progress.show()
-            QApplication.processEvents()
-
-            try:
-                done = core.uninstall_backup_all(backup_dir)
-                progress.hide()
-                detail = "\n".join(done) if done else "(aucune donnée trouvée)"
+            # Thread de travail + progression annulable : plus de fenêtre figée pendant l'export de tous les projets.
+            result = task_dialog.run_task(
+                self, "Sauvegarde avant désinstallation",
+                lambda ctx: core.uninstall_backup_all(backup_dir, ctx.progress, ctx.is_cancelled),
+                headline="Export de toutes les données")
+            if result.outcome == task_dialog.OUTCOME_CANCELLED:
+                return
+            if result.outcome == task_dialog.OUTCOME_ERROR:
+                if QMessageBox.critical(
+                    self, "Erreur pendant le backup",
+                    f"Une erreur s'est produite :\n{result.error}\n\n"
+                    "Voulez-vous continuer la désinstallation quand même ?",
+                    QMessageBox.Yes | QMessageBox.No,
+                ) == QMessageBox.No:
+                    return
+            else:
+                detail = "\n".join(result.result) if result.result else "(aucune donnée trouvée)"
                 QMessageBox.information(
                     self, "Backup terminé",
                     f"Export réussi vers :\n{backup_dir}\n\n"
                     f"Éléments sauvegardés :\n{detail}\n\n"
                     "Voktora va maintenant se désinstaller."
                 )
-            except Exception as e:
-                progress.hide()
-                if QMessageBox.critical(
-                    self, "Erreur pendant le backup",
-                    f"Une erreur s'est produite :\n{e}\n\n"
-                    "Voulez-vous continuer la désinstallation quand même ?",
-                    QMessageBox.Yes | QMessageBox.No,
-                ) == QMessageBox.No:
-                    return
 
         try:
             bat_path = core.create_uninstall_script()

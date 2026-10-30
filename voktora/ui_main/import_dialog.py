@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import core
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
     QComboBox,
@@ -33,6 +33,10 @@ from . import task_dialog, workers
 SOURCE_ZIP = "zip"
 SOURCE_FOLDER = "folder"
 
+# Au-delà de cette taille, l'analyse d'une archive (lecture de son répertoire central, qui peut
+# compter des centaines de milliers d'entrées) se fait en arrière-plan pour ne jamais figer la fenêtre.
+_SYNC_INSPECT_LIMIT = 256 * 1024 * 1024
+
 _MODE_LABELS = {
     core.IMPORT_MOVE: "📦  Déplacer le dossier dans Voktora (recommandé)",
     core.IMPORT_COPY: "📄  Copier (le dossier d'origine reste en place)",
@@ -52,12 +56,36 @@ def classify_path(raw: str) -> str | None:
     return None
 
 
+class _ZipInspector(QThread):
+    """Analyse une archive ZIP hors du thread d'interface."""
+    inspected = Signal(str, object, str)   # chemin, ZipSummary | None, message d'erreur
+
+    def __init__(self, path: str, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._path = path
+
+    def run(self) -> None:
+        try:
+            self.inspected.emit(self._path, core.inspect_zip(Path(self._path)), "")
+        except core.ArchiveError as exc:
+            self.inspected.emit(self._path, None, str(exc))
+
+
+def _is_large_file(path: Path) -> bool:
+    try:
+        return path.stat().st_size > _SYNC_INSPECT_LIMIT
+    except OSError:
+        return False
+
+
 class ImportDialog(QDialog):
     def __init__(self, drive: str, parent: QWidget | None = None,
                  source_path: str = "", source_kind: str = SOURCE_FOLDER):
         super().__init__(parent)
         self._drive = drive
         self.imported_path: Path | None = None
+        self._zip_cache: dict[str, object] = {}          # chemin -> ZipSummary (archives analysées en arrière-plan)
+        self._inspectors: list[_ZipInspector] = []
         self.setWindowTitle("Importer un projet — Voktora")
         self.setMinimumWidth(560)
         self.setModal(True)
@@ -197,22 +225,70 @@ class ImportDialog(QDialog):
         if not raw:
             return ""
         if self.kind() == SOURCE_ZIP:
+            if raw in self._zip_cache:
+                return self._zip_cache[raw].suggested_name
+            if _is_large_file(Path(raw)):
+                return Path(raw).stem          # le nom définitif arrive avec l'analyse en arrière-plan
             try:
                 return core.inspect_zip(Path(raw)).suggested_name
             except core.ArchiveError:
                 return Path(raw).stem
         return Path(raw).name
 
+    @staticmethod
+    def _zip_text(info) -> str:
+        text = f"{info.file_count} fichier(s), {task_dialog.format_bytes(info.total_bytes)} une fois extrait."
+        if info.skipped_links:
+            text += f" {info.skipped_links} lien(s) symbolique(s) seront ignorés."
+        return text
+
     def _describe_zip(self, path: Path) -> None:
+        key = str(path)
+        if key in self._zip_cache:
+            self._source_info.setText(self._zip_text(self._zip_cache[key]))
+            return
+        if _is_large_file(path):
+            self._source_info.setText("Analyse de l'archive en cours…")
+            self._start_inspector(key)
+            return
         try:
             info = core.inspect_zip(path)
         except core.ArchiveError as exc:
             self._source_info.setText(f"⚠  {exc}")
             return
-        text = f"{info.file_count} fichier(s), {task_dialog.format_bytes(info.total_bytes)} une fois extrait."
-        if info.skipped_links:
-            text += f" {info.skipped_links} lien(s) symbolique(s) seront ignorés."
-        self._source_info.setText(text)
+        self._source_info.setText(self._zip_text(info))
+
+    def _start_inspector(self, key: str) -> None:
+        if any(t.isRunning() and t._path == key for t in self._inspectors):
+            return
+        worker = _ZipInspector(key, self)
+        worker.inspected.connect(self._on_zip_inspected)
+        worker.finished.connect(lambda w=worker: self._inspectors.remove(w) if w in self._inspectors else None)
+        self._inspectors.append(worker)
+        worker.start()
+
+    def _on_zip_inspected(self, key: str, info, error: str) -> None:
+        if key != self.source_edit.text().strip() or self.kind() != SOURCE_ZIP:
+            return                                  # la source a changé entre-temps : résultat périmé
+        if info is None:
+            self._source_info.setText(f"⚠  {error}")
+            return
+        self._zip_cache[key] = info
+        self._source_info.setText(self._zip_text(info))
+        if not self.name_edit.isModified():
+            self.name_edit.blockSignals(True)
+            self.name_edit.setText(info.suggested_name)
+            self.name_edit.blockSignals(False)
+        self._refresh_preview()
+
+    def _stop_inspectors(self) -> None:
+        """Ne jamais détruire la fenêtre pendant qu'une analyse tourne encore."""
+        for worker in list(self._inspectors):
+            worker.wait(10_000)
+
+    def done(self, result: int) -> None:
+        self._stop_inspectors()
+        super().done(result)
 
     def _target_path(self) -> Path | None:
         name = self.name_edit.text().strip()

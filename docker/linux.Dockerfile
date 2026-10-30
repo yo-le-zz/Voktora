@@ -1,13 +1,13 @@
 # Voktora — image de compilation Linux (.deb)
 #
 # Fournit un environnement reproductible pour compiler Voktora avec Nuitka
-# et l'empaqueter en .deb, identique en local et en CI.
+# et l'empaqueter en .deb et .rpm, identique en local et en CI.
 #
 # Utilisation :
 #   docker build -f docker/linux.Dockerfile -t voktora-build-linux .
 #   docker run --rm -v "$PWD/dist:/app/dist" voktora-build-linux [VERSION]
 #
-# Le paquet produit est ecrit dans dist/linux/ sur la machine hote.
+# Les paquets produits (.deb et .rpm) sont ecrits dans dist/linux/ sur la machine hote.
 
 FROM python:3.13-slim-bookworm
 
@@ -16,6 +16,7 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
         git \
         patchelf \
         dpkg-dev \
+        rpm \
         ccache \
         libxcb-xinerama0 \
         libxcb-icccm4 \
@@ -44,4 +45,5 @@ RUN pip install --no-cache-dir nuitka pyside6 cryptography
 WORKDIR /app
 COPY . /app
 
-ENTRYPOINT ["bash", "Installers/DEB installer/build_deb.sh"]
+# Compile une fois (build_deb.sh) puis reutilise la compilation pour le .rpm.
+ENTRYPOINT ["bash", "-c", "bash 'Installers/DEB installer/build_deb.sh' \"$@\" && bash 'Installers/RPM installer/build_rpm.sh' \"$@\"", "--"]

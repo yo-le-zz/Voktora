@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -184,7 +186,8 @@ def reinstall_dependencies() -> tuple:
 # DÉSINSTALLATION — Windows + Linux
 # ──────────────────────────────────────────────
 
-def uninstall_backup_all(destination: Path) -> list:
+def uninstall_backup_all(destination: Path, on_progress=None, cancel=None) -> list:
+    """Sauvegarde les backups existants et exporte chaque projet. Pensé pour un thread de travail."""
     destination.mkdir(parents=True, exist_ok=True)
     done: list = []
     for item in paths.get_backups_dir().iterdir():
@@ -199,67 +202,76 @@ def uninstall_backup_all(destination: Path) -> list:
         p = Path(entry["path"])
         if p.exists():
             try:
-                zp = projects.export_to_zip(p, destination)
+                zp = projects.export_to_zip(p, destination, on_progress, cancel)
                 done.append(f"[projet] {entry['name']} → {zp.name}")
             except Exception as e:
                 done.append(f"[ERREUR projet] {entry['name']} : {e}")
     return done
 
 
+def _removal_targets() -> list[Path]:
+    """Dossiers que la désinstallation peut supprimer, après vérification qu'ils sont raisonnables.
+
+    L'application n'est supprimée que si elle tourne compilée : depuis les sources, `get_app_dir()`
+    est le dossier du code (voire du dépôt), qu'un script de désinstallation ne doit jamais effacer.
+    Racine de disque, dossier personnel et ses parents sont toujours refusés.
+    """
+    home = Path.home().resolve()
+    app_dir, data_dir = paths.get_app_dir().resolve(), paths.get_data_dir().resolve()
+    candidates = [app_dir] if paths.is_frozen() else []
+    if data_dir != app_dir and app_dir not in data_dir.parents:
+        candidates.append(data_dir)
+    targets = []
+    for path in candidates:
+        if path == path.parent or path == home or path in home.parents:
+            raise RuntimeError(f"Suppression refusée : « {path} » est un dossier système ou personnel.")
+        targets.append(path)
+    return targets
+
+
+def _write_private_script(suffix: str, content: str) -> Path:
+    """Écrit un script dans un fichier temporaire à nom imprévisible, lisible par le seul propriétaire.
+
+    Un nom fixe dans /tmp permettrait à un autre utilisateur local de pré-créer un lien ou un script
+    à cet emplacement (écrasement de fichier, ou exécution de code à la place du nôtre).
+    """
+    fd, name = tempfile.mkstemp(prefix="voktora_uninstall_", suffix=suffix)
+    with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+        f.write(content)
+    if os.name == "posix":
+        os.chmod(name, 0o700)
+    return Path(name)
+
+
 def create_uninstall_script() -> Path:
-    app_dir  = paths.get_app_dir()
-    data_dir = paths.get_data_dir()
+    targets = _removal_targets()
 
     if constants.IS_WINDOWS:
-        temp_dir = Path(os.environ.get("TEMP", r"C:\Windows\Temp"))
-        script_path = temp_dir / "voktora_uninstall.bat"
         lines = [
             "@echo off", "chcp 65001 > nul", "echo.",
             "echo  Voktora - Desinstallation en cours...",
             "timeout /t 2 /nobreak > nul",
-            f'if exist "{app_dir}" (',
-            f'    rmdir /s /q "{app_dir}"',
-            f'    echo  [OK] Supprime : {app_dir}',
-            ") else (", "    echo  [INFO] Dossier app deja absent.", ")",
         ]
-        try:
-            data_dir.relative_to(app_dir)
-        except ValueError:
+        for target in targets:
+            if '"' in str(target) or "%" in str(target):
+                raise RuntimeError(f"Chemin non pris en charge pour la désinstallation : {target}")
             lines += [
-                f'if exist "{data_dir}" (',
-                f'    rmdir /s /q "{data_dir}"',
-                f'    echo  [OK] Donnees supprimees : {data_dir}', ")",
+                f'if exist "{target}" (',
+                f'    rmdir /s /q "{target}"',
+                f'    echo  [OK] Supprime : {target}',
+                ")",
             ]
         lines += ["echo.", "echo  Voktora a ete desinstalle proprement.",
                   "timeout /t 2 /nobreak > nul", 'del "%~f0"']
-        script_path.write_text("\n".join(lines), encoding="utf-8")
-    else:
-        # Linux : script bash
-        temp_dir = Path("/tmp")
-        script_path = temp_dir / "voktora_uninstall.sh"
-        lines = [
-            "#!/bin/bash", "echo ''",
-            "echo 'Voktora - Désinstallation en cours...'",
-            "sleep 2",
-            f'if [ -d "{app_dir}" ]; then',
-            f'    rm -rf "{app_dir}"',
-            f'    echo "[OK] Supprimé : {app_dir}"',
-            "else", "    echo '[INFO] Dossier app absent.'", "fi",
-        ]
-        try:
-            data_dir.relative_to(app_dir)
-        except ValueError:
-            lines += [
-                f'if [ -d "{data_dir}" ]; then',
-                f'    rm -rf "{data_dir}"',
-                f'    echo "[OK] Données supprimées : {data_dir}"', "fi",
-            ]
-        lines += ["echo ''", "echo 'Voktora désinstallé.'",
-                  "rm -- \"$0\""]  # Auto-suppression du script
-        script_path.write_text("\n".join(lines), encoding="utf-8")
-        os.chmod(script_path, 0o755)
+        return _write_private_script(".bat", "\n".join(lines))
 
-    return script_path
+    # Linux : script bash. Les chemins sont échappés par shlex.quote (aucune interprétation par le shell).
+    lines = ["#!/bin/bash", "echo ''", "echo 'Voktora - Désinstallation en cours...'", "sleep 2"]
+    for target in targets:
+        q = shlex.quote(str(target))
+        lines += [f"if [ -d {q} ]; then", f"    rm -rf -- {q}", f"    echo \"[OK] Supprimé : \"{q}", "fi"]
+    lines += ["echo ''", "echo 'Voktora désinstallé.'", 'rm -- "$0"']   # auto-suppression du script
+    return _write_private_script(".sh", "\n".join(lines) + "\n")
 
 
 def launch_uninstall_and_quit(script_path: Path) -> None:

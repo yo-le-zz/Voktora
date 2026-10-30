@@ -114,7 +114,11 @@ def run_project_builder(path: Path) -> None:
 
 
 def open_url_in_browser(url: str) -> None:
+    """Ouvre une URL http(s) dans le navigateur ; tout autre schéma (file:, ms-*:…) est refusé."""
+    import urllib.parse
     import webbrowser
+    if urllib.parse.urlparse(url).scheme.lower() not in ("http", "https"):
+        raise ValueError(f"URL refusée (seuls http et https sont autorisés) : {url!r}")
     webbrowser.open(url)
 
 

@@ -12,7 +12,7 @@ Le vault Voktora stocke vos secrets sensibles chiffrés localement :
 - Variables `.env` sensibles
 - Tout autre secret
 
-**Chiffrement :** AES-256 via Fernet (`cryptography`)  
+**Chiffrement :** Fernet (`cryptography`) — AES-128-CBC + HMAC-SHA256, clé de 32 octets  
 **Dérivation :** PBKDF2-HMAC-SHA256, 480 000 itérations, sel 32 octets  
 **Par domaine :** chaque type de secret a sa propre clé dérivée
 
@@ -32,7 +32,7 @@ Si vous oubliez le mot de passe maître, les secrets chiffrés sont **irrécupé
 
 ## Domaines
 
-Chaque domaine a une clé AES-256 dérivée indépendante :
+Chaque domaine a une clé de chiffrement dérivée indépendante :
 
 | Domaine | Usage |
 |---------|-------|

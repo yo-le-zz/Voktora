@@ -47,7 +47,7 @@ class MasterPasswordSetupDialog(QDialog):
         desc = QLabel(
             "Creez un <b>mot de passe maitre</b> pour securiser vos tokens GitHub, "
             "cles SSH et autres secrets.<br><br>"
-            "Ce mot de passe derive une cle AES-256 unique par type de secret. "
+            "Ce mot de passe derive une cle de chiffrement unique par type de secret. "
             "Il n'est jamais stocke, seulement un verifier PBKDF2 (480 000 iterations)."
         )
         desc.setWordWrap(True)

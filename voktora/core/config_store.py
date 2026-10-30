@@ -485,13 +485,15 @@ def _save_config(cfg: dict) -> None:
 
     tmp_path = cfg_path.with_suffix(".tmp")
     try:
-        with open(tmp_path, "w", encoding="utf-8") as f:
+        # config.json peut contenir des tokens : le fichier est créé directement en 0600 (propriétaire
+        # seul) — un chmod après écriture laisserait une courte fenêtre où il serait lisible par tous.
+        fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(cfg, f, indent=2, ensure_ascii=False)
             f.flush()
             os.fsync(f.fileno())
         if os.name == "posix":
-            # config.json peut contenir des tokens : lisible par le seul propriétaire.
-            os.chmod(tmp_path, 0o600)
+            os.chmod(tmp_path, 0o600)   # fichier .tmp préexistant avec d'autres droits
         tmp_path.replace(cfg_path)
     except OSError as e:
         tmp_path.unlink(missing_ok=True)

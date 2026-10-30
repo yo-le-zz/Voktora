@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Voktora — Project Manager</title>
-  <meta name="description" content="Voktora est un gestionnaire de projets de développement avec vault AES-256, profils d'exécution, hooks, snapshots et plugins. Par yolezz."/>
+  <meta name="description" content="Voktora est un gestionnaire de projets de développement avec vault chiffré, profils d'exécution, hooks, snapshots et plugins. Par yolezz."/>
   <meta property="og:title" content="Voktora — Project Manager"/>
   <meta property="og:description" content="Gérez, lancez et automatisez vos projets de développement."/>
   <meta property="og:image" content="https://voktora.pages.dev/assets/Voktora.png"/>
@@ -499,12 +499,12 @@
   <h1>Voktora</h1>
   <p class="hero-sub">
     Gérez, lancez et automatisez vos projets de développement.<br/>
-    <strong>Vault AES-256 · Hooks · Profils · Snapshots · Plugins</strong>
+    <strong>Vault chiffré · Hooks · Profils · Snapshots · Plugins</strong>
   </p>
 
   <div class="download-row">
     <a class="dl-btn dl-btn-linux"
-       href="https://github.com/yo-le-zz/Voktora/releases/latest/download/Voktora_1.0.0_amd64.deb">
+       href="https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora_1.0.4_amd64.deb">
       <span class="dl-btn-platform">🐧 Linux (Debian/Ubuntu)</span>
       <span class="dl-btn-ext">.deb</span>
       <span class="dl-btn-platform">x86_64 · 1.0.0</span>
@@ -546,7 +546,7 @@
       <div class="stat-label">Templates de projets</div>
     </div>
     <div class="stat">
-      <div class="stat-num">AES-256</div>
+      <div class="stat-num">Fernet</div>
       <div class="stat-label">Chiffrement vault</div>
     </div>
   </section>
@@ -567,7 +567,7 @@
       </div>
       <div class="feat-card">
         <span class="feat-icon">🔐</span>
-        <div class="feat-title">Vault AES-256</div>
+        <div class="feat-title">Vault chiffré</div>
         <div class="feat-desc">Stockage chiffré de tokens GitHub, clés SSH et API keys. Master password dérivé PBKDF2, 480 000 itérations.</div>
       </div>
       <div class="feat-card">
@@ -618,7 +618,7 @@
       <div class="feat-card">
         <span class="feat-icon">📦</span>
         <div class="feat-title">Packages natifs</div>
-        <div class="feat-desc">.deb pour Debian/Ubuntu, .msi pour Windows. Installation native sans Python requis sur la machine cible.</div>
+        <div class="feat-desc">.deb pour Debian/Ubuntu, .rpm pour Fedora/RHEL/openSUSE, .msi pour Windows. Installation native sans Python requis sur la machine cible.</div>
       </div>
     </div>
   </section>
@@ -716,9 +716,9 @@
 <span class="comment"># Télécharger et installer</span>
 <span class="cmd">wget</span> <span class="str">https://github.com/yo-le-zz/Voktora</span>
      <span class="str">/releases/latest/download</span>
-     <span class="str">/voktora_1.0.0_amd64.deb</span>
+     <span class="str">/voktora_1.0.4_amd64.deb</span>
 
-<span class="cmd">sudo dpkg -i</span> voktora_1.0.0_amd64.deb
+<span class="cmd">sudo dpkg -i</span> voktora_1.0.4_amd64.deb
 
 <span class="comment"># Si dépendances manquantes</span>
 <span class="cmd">sudo apt-get install -f</span>

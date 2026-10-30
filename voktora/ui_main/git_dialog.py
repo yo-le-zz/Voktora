@@ -148,14 +148,14 @@ class GitDialog(QDialog):
         token_v.addWidget(protect_sep)
 
         self.chk_protect = QCheckBox(
-            "🔐  Protéger le token avec un mot de passe  (chiffrement AES-256)"
+            "🔐  Protéger le token avec un mot de passe  (chiffrement Fernet)"
         )
         self.chk_protect.setChecked(token_protected)
         self.chk_protect.setStyleSheet("font-weight: 600; color: #cba6f7;")
         token_v.addWidget(self.chk_protect)
 
         lbl_protect_hint = QLabel(
-            "Le token est chiffré via <b>AES-256 (Fernet, PBKDF2-HMAC-SHA256)</b> avant d'être stocké.\n"
+            "Le token est chiffré via <b>Fernet (AES-128-CBC + HMAC-SHA256, clé dérivée par PBKDF2)</b> avant d'être stocké.\n"
             "Sans le mot de passe, les opérations Git demandent une confirmation."
         )
         lbl_protect_hint.setObjectName("sectionLbl")
@@ -275,7 +275,7 @@ class GitDialog(QDialog):
         dlg = token_password_dialog.TokenPasswordDialog(mode="set", parent=self)
         if dlg.exec() == QDialog.Accepted:
             self._new_token_password = dlg.get_password()
-            algo = "AES-256 (Fernet, PBKDF2-HMAC-SHA256)"
+            algo = "Fernet (AES-128-CBC + HMAC-SHA256, clé dérivée par PBKDF2)"
             self.lbl_pwd_status.setText(
                 f"✅  Mot de passe défini — chiffrement via <b>{algo}</b>"
             )

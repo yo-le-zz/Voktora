@@ -40,7 +40,14 @@ CancelCheck = Callable[[], bool]
 
 MAX_ZIP_ENTRIES = 1_000_000        # garde-fou contre les archives absurdes
 _MIN_FREE_MARGIN = 64 * 1024 * 1024  # marge d'espace disque conservée
-_CHUNK = 1024 * 1024
+_CHUNK = 4 * 1024 * 1024  # gros blocs : moins d'appels système sur les fichiers de plusieurs Go
+# Formats déjà compressés : les passer à Deflate coûte du CPU pour un gain nul.
+_ALREADY_COMPRESSED = frozenset({
+    ".zip", ".7z", ".rar", ".gz", ".bz2", ".xz", ".zst", ".tgz", ".jar", ".whl",
+    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".avif",
+    ".mp3", ".aac", ".ogg", ".opus", ".flac", ".mp4", ".mkv", ".mov", ".webm", ".avi",
+    ".pdf", ".docx", ".xlsx", ".pptx", ".woff2", ".snap", ".menc2",
+})
 _STAGING_PREFIX = ".voktora-tmp-"
 _WINDOWS_DRIVE_RE = re.compile(r"^[A-Za-z]:")
 # Credentials éventuellement présents dans une URL de remote (https://user:token@host/…)
@@ -95,13 +102,25 @@ def _ensure_free_space(where: Path, needed: int) -> None:
 def _tree_size(folder: Path) -> tuple[int, int]:
     """(nombre de fichiers, taille totale en octets) d'un dossier, liens non suivis."""
     count = total = 0
-    for root, _dirs, files in os.walk(folder):
-        for name in files:
-            full = os.path.join(root, name)
-            with contextlib.suppress(OSError):
-                if not os.path.islink(full):
-                    total += os.path.getsize(full)
-                count += 1
+    stack = [os.fspath(folder)]
+    while stack:
+        try:
+            with os.scandir(stack.pop()) as it:
+                for entry in it:
+                    try:
+                        if entry.is_symlink():
+                            # Lien vers un dossier : ignoré ; lien vers un fichier : compté, taille 0.
+                            if not entry.is_dir():
+                                count += 1
+                        elif entry.is_dir(follow_symlinks=False):
+                            stack.append(entry.path)
+                        else:
+                            count += 1
+                            total += entry.stat(follow_symlinks=False).st_size
+                    except OSError:
+                        count += 1
+        except OSError:
+            continue
     return count, total
 
 
@@ -258,10 +277,13 @@ def _extract_member(zf: zipfile.ZipFile, info: zipfile.ZipInfo, out: Path,
 # ──────────────────────────────────────────────
 
 def _copy_file(src: Path, dst: Path, tracker: ProgressTracker, cancel: CancelCheck | None) -> None:
+    # Un seul tampon réutilisé pour tout le fichier : pas d'allocation de 4 Mo par bloc.
+    buffer = bytearray(_CHUNK)
+    view = memoryview(buffer)
     with open(src, "rb") as fsrc, open(dst, "wb") as fdst:
-        while chunk := fsrc.read(_CHUNK):
-            fdst.write(chunk)
-            tracker.advance(len(chunk), src.name)
+        while (read := fsrc.readinto(buffer)):
+            fdst.write(view[:read])
+            tracker.advance(read, src.name)
             _check_cancel(cancel)
     with contextlib.suppress(OSError):
         shutil.copystat(src, dst)
@@ -421,13 +443,16 @@ def delete_tree(folder: Path, on_progress: ProgressCallback | None = None,
 # ──────────────────────────────────────────────
 
 def add_tree_to_zip(zf: zipfile.ZipFile, folder: Path, arc_prefix: str,
-                    tracker: ProgressTracker, cancel: CancelCheck | None = None) -> None:
-    """Ajoute `folder` à l'archive sous `arc_prefix/`.
+                    tracker: ProgressTracker, cancel: CancelCheck | None = None) -> list[str]:
+    """Ajoute `folder` à l'archive sous `arc_prefix/` et retourne les fichiers ignorés.
 
     Les liens symboliques ne sont pas suivis (on n'embarque jamais de contenu
     extérieur au projet) et les identifiants éventuellement présents dans
-    `.git/config` sont retirés de la copie archivée.
+    `.git/config` sont retirés de la copie archivée. Un fichier verrouillé ou
+    disparu pendant l'export n'interrompt pas l'archive : il est simplement
+    listé dans la valeur de retour (chemins relatifs à `folder`).
     """
+    skipped: list[str] = []
     for root, dirnames, filenames in os.walk(folder):
         dirnames.sort()
         for filename in sorted(filenames):
@@ -439,20 +464,23 @@ def add_tree_to_zip(zf: zipfile.ZipFile, folder: Path, arc_prefix: str,
             arcname = f"{arc_prefix}/{rel}"
             try:
                 zinfo = zipfile.ZipInfo.from_file(full, arcname)
-                zinfo.compress_type = zipfile.ZIP_DEFLATED
+                # Les formats déjà compressés sont stockés tels quels (gain de CPU énorme sur les gros médias).
+                stored = full.suffix.lower() in _ALREADY_COMPRESSED
+                zinfo.compress_type = zipfile.ZIP_STORED if stored else zipfile.ZIP_DEFLATED
                 if rel == ".git/config":
                     zf.writestr(zinfo, strip_git_credentials(full.read_bytes()))
                     tracker.advance(zinfo.file_size, arcname)
                     continue
+                buffer = bytearray(_CHUNK)
+                view = memoryview(buffer)
                 with open(full, "rb") as src, zf.open(zinfo, "w", force_zip64=zinfo.file_size > 2**30) as dst:
-                    while chunk := src.read(_CHUNK):
-                        dst.write(chunk)
-                        tracker.advance(len(chunk), arcname)
+                    while (read := src.readinto(buffer)):
+                        dst.write(view[:read])
+                        tracker.advance(read, arcname)
                         _check_cancel(cancel)
             except OSError:
-                # Fichier verrouillé ou disparu pendant l'export : on continue
-                # plutôt que d'abandonner toute l'archive.
-                continue
+                skipped.append(rel)
+    return skipped
 
 
 def _unique_path(path: Path) -> Path:

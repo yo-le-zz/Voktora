@@ -5,6 +5,72 @@ Format : [Semantic Versioning](https://semver.org/) — `MAJEUR.MINEUR.CORRECTIF
 
 ---
 
+## [1.0.4] — 2026-10-30
+
+### Sécurité
+
+- **Coffre (vault) : la clé maître était déductible du fichier de configuration.** Le « verifier »
+  stocké dans `config.json` était dérivé du mot de passe avec la même fonction que la clé maître, et
+  ses 32 premiers octets *étaient* cette clé : quiconque lisait `config.json` pouvait déchiffrer tout
+  le coffre sans connaître le mot de passe. Le verifier est désormais un HMAC à sens unique. Les
+  coffres existants sont migrés automatiquement au premier déverrouillage, avec **renouvellement de la
+  clé** et rechiffrement des secrets. Pensez à supprimer d'anciennes copies de `config.json` (dossier
+  de sauvegardes) et, par précaution, à régénérer les tokens qu'elles contenaient.
+- **Chiffrement de projet : remplacement du XOR par AES-256-GCM.** L'ancien format `.menc` n'était
+  qu'un XOR avec SHA-512(mot de passe) : sans sel, sans authentification, cassable, et un mauvais mot
+  de passe produisait des fichiers corrompus tout en supprimant les originaux chiffrés. Le nouveau
+  format `.vkenc` (clé scrypt, blocs authentifiés) détecte un mauvais mot de passe ou une altération
+  avant toute écriture définitive. Les anciens fichiers `.menc` restent déchiffrables ; rechiffrez
+  ensuite le projet pour passer au nouveau format.
+- **Restauration de snapshot : écriture hors du dossier cible (« zip-slip »).** Les noms de membres
+  ne sont plus acceptés tels quels (pas de `..`, chemin absolu ou lecteur Windows ; liens ignorés) et
+  l'extraction se fait dans un dossier temporaire : l'ancien dossier n'est remplacé qu'une fois le
+  snapshot entièrement extrait (avant, il était supprimé d'abord).
+- **Désinstallation** : le script n'est plus écrit sous un nom fixe dans `/tmp` (pré-création par un
+  autre utilisateur local possible) mais dans un fichier privé à nom aléatoire ; les chemins sont
+  échappés ; la suppression est refusée pour une racine de disque, le dossier personnel, et — hors
+  version compilée — le dossier des sources.
+- `config.json` est créé directement en `0600` (plus de fenêtre où il était lisible avant le `chmod`).
+- L'ouverture d'URL dans le navigateur n'accepte plus que `http` et `https`.
+- Workflow CI : le titre de la PR n'est plus interpolé dans un script shell (injection de commande
+  possible avec un titre piégé) ; il est validé (`v1.2.3`) avant usage. Droits du jeton réduits au
+  nécessaire par job, dépendances installées depuis `uv.lock`, empreintes `SHA256SUMS` publiées.
+
+### Ajouté
+
+- **Paquet `.rpm`** (Fedora, RHEL/Rocky/Alma, openSUSE) construit et publié avec chaque release, à
+  côté du `.deb` et du `.msi`. Le `.deb` et le `.rpm` empaquettent la **même compilation Nuitka**
+  (compilée une seule fois en CI). Dépendances déclarées par bibliothèque (soname), donc valables
+  d'une distribution RPM à l'autre.
+- Export complet en trois phases séparées (`core/full_export.py`) : planification (lecture seule),
+  configuration publique sans secrets, puis copie. Un projet illisible n'empêche plus l'export des
+  autres ; les projets introuvables et les fichiers ignorés sont listés dans `export_info.txt`.
+- Chiffrement de fichiers en flux (`core/file_crypto.py`) : mémoire constante, quelle que soit la
+  taille des fichiers.
+
+### Changé
+
+- **Interface qui ne fige plus** : création, restauration et comparaison de snapshots, sauvegarde
+  avant désinstallation et analyse d'une grosse archive ZIP à l'import s'exécutent en arrière-plan
+  (progression, annulation). Le chiffrement et la sauvegarde avant chiffrement sont annulables
+  proprement (plus de `terminate()` du thread).
+- **Performances** : copie, extraction et export par blocs de 4 Mo avec un tampon réutilisé ; les
+  formats déjà compressés (images, vidéos, archives, PDF…) sont stockés tels quels dans les ZIP au
+  lieu d'être recompressés ; calcul de taille des dossiers plus rapide (`scandir`) ; comparaison de
+  snapshots par CRC au lieu de charger les fichiers en mémoire ; déverrouillage du coffre deux fois
+  plus rapide (une seule dérivation PBKDF2 au lieu de deux).
+- Dépendances `.deb` complétées (`libxcb-cursor0`, `libegl1`, `libopengl0`, `libfontconfig1`),
+  nécessaires au démarrage de Qt sur une installation minimale.
+- La documentation et l'interface ne parlent plus d'« AES-256 » pour le coffre : Fernet utilise
+  AES-128-CBC + HMAC-SHA256.
+
+### Corrigé
+
+- Le dialogue de chiffrement plantait (`NameError`) au premier clic sur « Chiffrer » / « Déchiffrer ».
+- Métadonnées AppStream du paquet (balise `<n>` invalide → `<name>`).
+
+---
+
 ## [1.0.3] — 2026-09-21
 
 ### Changé

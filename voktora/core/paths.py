@@ -13,6 +13,15 @@ from pathlib import Path
 from . import constants
 
 
+def is_frozen() -> bool:
+    """True quand l'application tourne compilée (Nuitka) et non depuis les sources."""
+    try:
+        _ = __compiled__
+        return True
+    except NameError:
+        return False
+
+
 @functools.cache
 def get_app_dir() -> Path:
     try:
