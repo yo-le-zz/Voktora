@@ -76,26 +76,28 @@ def _lang_color(lang: str) -> str:
 
 
 def _make_emoji_pixmap(emoji: str, size: int = 44) -> QPixmap:
+    """Pixmap de l'icône d'un projet (identifiant « mdi:… » ou emoji hérité, converti en icône)."""
+    import icons
     pix = QPixmap(size, size)
     pix.fill(Qt.transparent)
     painter = QPainter(pix)
-    font = QFont()
-    font.setPixelSize(int(size * 0.72))
-    painter.setFont(font)
-    painter.drawText(pix.rect(), Qt.AlignCenter, emoji)
+    icon = icons.icon(emoji)
+    if not icon.isNull():
+        side = int(size * 0.78)
+        offset = (size - side) // 2
+        painter.drawPixmap(offset, offset, icon.pixmap(side, side))
     painter.end()
     return pix
 
 
 def _status_labels() -> dict[str, str]:
     """Identifiant de statut → « emoji nom » (statuts intégrés + personnalisés)."""
-    return {s.id: f"{s.emoji} {s.name}" for s in core.get_all_project_statuses().values()}
+    return {s.id: s.name for s in core.get_all_project_statuses().values()}
 
 
 def _group_title(group, count: int | None = None) -> str:
-    icon = f"{group.emoji} " if group.emoji else ""
     n = len(group.entries) if count is None else count
-    return f"{icon}{group.label}  ({n})"
+    return f"{group.label}  ({n})"
 
 
 def _visible_groups(entries: list[dict], group_by: str, sort: str, filtering: bool):
@@ -116,10 +118,10 @@ def _visible_groups(entries: list[dict], group_by: str, sort: str, filtering: bo
 def _compute_ping(path: str) -> tuple[str, str]:
     p = Path(path)
     if not p.exists():
-        return "red", "❌ Dossier introuvable"
+        return "red", "Dossier introuvable"
     if (p / ".git").exists():
-        return "green", "✅ Dossier OK — dépôt Git présent"
-    return "yellow", "⚠️ Dossier OK — pas de dépôt Git"
+        return "green", "Dossier OK — dépôt Git présent"
+    return "yellow", "Dossier OK — pas de dépôt Git"
 
 
 _PING_COLORS = {"green": "#a6e3a1", "yellow": "#f9e2af", "red": "#f38ba8"}
@@ -216,7 +218,7 @@ class ProjectCard(QFrame):
         status_id = entry.get("status", "")
         if status_id:
             status = core.get_project_status_by_id(status_id)
-            text = f"{status.emoji} {status.name}" if status else status_id
+            text = status.name if status else status_id
             row2 = QHBoxLayout()
             row2.setAlignment(Qt.AlignHCenter)
             lbl_s = QLabel(text)
@@ -591,12 +593,15 @@ class ProjectListView(QWidget):
     def _make_project_item(self, entry: dict) -> QTreeWidgetItem:
         name = entry.get("name", Path(entry["path"]).name)
         emoji = entry.get("emoji", "")
-        text = f"{emoji} {name}" if emoji else name
+        text = name
         status_id = entry.get("status", "")
         if status_id and status_id != core.DEFAULT_PROJECT_STATUS:
             status = core.get_project_status_by_id(status_id)
             text += f"  [{status.name if status else status_id}]"
         item = QTreeWidgetItem([text])
+        if emoji:
+            import icons
+            item.setIcon(0, icons.icon(emoji, color=entry.get("color") or None))
         item.setData(0, _ROLE_PATH, entry["path"])
         item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsDragEnabled)
         if entry.get("color"):
@@ -625,6 +630,9 @@ class ProjectListView(QWidget):
                 header.setFont(0, font)
                 if group.color:
                     header.setForeground(0, QColor(group.color))
+                if group.emoji:
+                    import icons
+                    header.setIcon(0, icons.icon(group.emoji, color=group.color or None))
                 tree.addTopLevelItem(header)
                 for entry in group.entries:
                     header.addChild(self._make_project_item(entry))
@@ -950,8 +958,10 @@ class ProjectBrowser(QWidget):
         menu = QMenu(self)
         sub = menu.addMenu(f"📂 Catégorie ({len(paths)} projet(s))" if len(paths) > 1 else "📂 Catégorie")
         for cat in core.list_categories():
-            label = f"{cat['emoji']} {cat['name']}".strip()
-            sub.addAction(label, lambda n=cat["name"]: self.assign_category(paths, n))
+            action = sub.addAction(cat["name"], lambda n=cat["name"]: self.assign_category(paths, n))
+            if cat.get("emoji"):
+                import icons
+                action.setIcon(icons.icon(cat["emoji"], color=cat.get("color") or None))
         if sub.actions():
             sub.addSeparator()
         sub.addAction("➕ Nouvelle catégorie…", lambda: self._assign_new_category(paths))

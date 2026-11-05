@@ -48,7 +48,7 @@ class TestGroupedList:
     def test_default_groups_by_category_with_user_order_and_empty_category(self, world):
         browser, _ = world
         headers = _headers(browser)
-        assert headers[0].startswith("🌐 Web") and "(2)" in headers[0]
+        assert headers[0].startswith("Web") and "(2)" in headers[0]
         assert headers[1].startswith("Outils") and "(0)" in headers[1]      # cible de dépôt vide
         assert headers[-1].startswith("Sans catégorie") and "(2)" in headers[-1]
 

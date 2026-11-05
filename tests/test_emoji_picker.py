@@ -15,7 +15,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 _app = QApplication.instance() or QApplication(sys.argv)
 
 
-class TestEmojiPickerDialog:
+class TestIconPickerDialog:
     def test_search_finds_matching_emoji_by_keyword(self):
         dlg = ui_dialogs.EmojiPickerDialog()
         dlg._search.setText("rapide")
@@ -36,6 +36,6 @@ class TestEmojiPickerDialog:
     def test_choosing_emoji_sets_selection_and_accepts(self):
         dlg = ui_dialogs.EmojiPickerDialog()
         assert dlg.get_selected_emoji() is None
-        dlg._choose("🚀")
-        assert dlg.get_selected_emoji() == "🚀"
+        dlg._choose("mdi:rocket-launch")
+        assert dlg.get_selected_emoji() == "mdi:rocket-launch"
         assert dlg.result() == ui_dialogs.EmojiPickerDialog.Accepted

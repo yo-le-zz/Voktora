@@ -9,8 +9,10 @@ dans une seule liste « projects » ; les catégories deviennent des objets
 
 from __future__ import annotations
 
+import copy
 import json
 import os
+import re
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -631,6 +633,86 @@ def set_ollama_config(host: str, model: str) -> None:
     cfg["app_config"]["ollama_host"] = host
     cfg["app_config"]["ollama_model"] = model
     _save_config(cfg)
+
+
+# ── Fournisseurs d'IA (Ollama, OmniRoute, serveurs compatibles OpenAI) ──────────────────
+AI_KINDS = ("ollama", "omniroute", "openai")
+_AI_DEFAULT_HOSTS = {
+    "ollama": "http://localhost:11434",
+    "omniroute": "http://localhost:20128/v1",
+    "openai": "http://localhost:1234/v1",
+}
+_AI_DEFAULT_NAMES = {"ollama": "Ollama", "omniroute": "OmniRoute", "openai": "Serveur compatible OpenAI"}
+
+
+def normalize_ai_config(raw: dict | None, legacy_host: str = "", legacy_model: str = "") -> dict:
+    """Configuration IA propre : fournisseurs valides, ids uniques, un fournisseur actif.
+
+    Un fournisseur « ollama » existe toujours (repris des anciens réglages `ollama_host` /
+    `ollama_model` tant que rien d'autre n'a été enregistré).
+    """
+    raw = raw if isinstance(raw, dict) else {}
+    providers: list[dict] = []
+    seen: set[str] = set()
+    for item in raw.get("providers") or []:
+        if not isinstance(item, dict) or item.get("kind") not in AI_KINDS:
+            continue
+        kind = item["kind"]
+        base_id = re.sub(r"[^a-z0-9_-]+", "-", str(item.get("id") or kind).lower()).strip("-") or kind
+        provider_id, n = base_id, 2
+        while provider_id in seen:
+            provider_id, n = f"{base_id}-{n}", n + 1
+        seen.add(provider_id)
+        providers.append({
+            "id": provider_id, "kind": kind,
+            "name": str(item.get("name") or _AI_DEFAULT_NAMES[kind])[:60],
+            "host": str(item.get("host") or _AI_DEFAULT_HOSTS[kind]).strip(),
+            "model": str(item.get("model") or "").strip(),
+            "api_key": str(item.get("api_key") or "").strip(),
+        })
+    if not any(p["kind"] == "ollama" for p in providers):
+        providers.insert(0, {
+            "id": "ollama" if "ollama" not in seen else "ollama-local", "kind": "ollama",
+            "name": "Ollama", "host": legacy_host or _AI_DEFAULT_HOSTS["ollama"],
+            "model": legacy_model, "api_key": "",
+        })
+    active = raw.get("active")
+    if active not in {p["id"] for p in providers}:
+        active = providers[0]["id"]
+    return {"active": active, "providers": providers}
+
+
+def redact_ai_secrets(cfg: dict) -> dict:
+    """Copie de `cfg` sans clé d'API : à utiliser avant tout export ou partage de la configuration."""
+    redacted = copy.deepcopy(cfg)
+    ai = (redacted.get("app_config") or {}).get("ai")
+    if isinstance(ai, dict):
+        for provider in ai.get("providers") or []:
+            if isinstance(provider, dict):
+                provider["api_key"] = ""
+    return redacted
+
+
+def get_ai_config() -> dict:
+    app_cfg = get_app_config()
+    return normalize_ai_config(app_cfg.get("ai"), app_cfg.get("ollama_host", ""), app_cfg.get("ollama_model", ""))
+
+
+def set_ai_config(ai: dict) -> None:
+    """Enregistre la configuration IA ; le fournisseur Ollama est aussi recopié dans les anciens réglages."""
+    normalized = normalize_ai_config(ai)
+    cfg = _load_config()
+    cfg["app_config"]["ai"] = normalized
+    ollama = next((p for p in normalized["providers"] if p["kind"] == "ollama"), None)
+    if ollama:
+        cfg["app_config"]["ollama_host"] = ollama["host"]
+        cfg["app_config"]["ollama_model"] = ollama["model"]
+    _save_config(cfg)
+
+
+def get_active_ai_provider() -> dict | None:
+    ai = get_ai_config()
+    return next((p for p in ai["providers"] if p["id"] == ai["active"]), None)
 
 
 def get_quick_apps() -> list:

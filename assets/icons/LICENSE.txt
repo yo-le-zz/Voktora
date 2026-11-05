@@ -1,0 +1,13 @@
+Material Design Icons (police « materialdesignicons-webfont.ttf » et table de correspondance
+« materialdesignicons-charmap.json », version 6.9.96)
+
+Copyright (c) Pictogrammers (Austin Andrews et contributeurs) — https://pictogrammers.com/library/mdi/
+
+  • Les icônes « Material Design Icons » communautaires sont publiées sous licence Apache 2.0
+    (https://www.apache.org/licenses/LICENSE-2.0).
+  • La police qui les regroupe est publiée sous licence SIL Open Font License 1.1
+    (https://openfontlicense.org/).
+
+Les fichiers sont redistribués sans modification, tels que fournis par le paquet Python
+« qtawesome » (MIT) qui les embarque. Voktora les charge à l'exécution pour afficher ses icônes :
+ils remplacent les emojis, absents de la plupart des installations Linux.

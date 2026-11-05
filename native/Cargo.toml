@@ -1,0 +1,23 @@
+[package]
+name = "voktora_native"
+version = "1.0.5"
+edition = "2021"
+authors = ["yolezz"]
+license = "MIT"
+description = "Accélérations natives optionnelles pour Voktora (parcours, hachage, copie, recherche)."
+publish = false
+
+[lib]
+name = "voktora_native"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module"] }
+rayon = "1.10"
+crc32fast = "1.4"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true

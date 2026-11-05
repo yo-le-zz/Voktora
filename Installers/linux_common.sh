@@ -70,7 +70,7 @@ voktora_stage_tree() {
 [Desktop Entry]
 Type=Application
 Name=Voktora
-Comment=Project Instance Manager — by yolezz
+Comment=Project Manager — by yolezz
 Exec=$install_dir/voktora
 Icon=voktora
 Categories=Development;Utility;
@@ -85,9 +85,9 @@ DESKTOP
 <component type="desktop-application">
   <id>io.github.yo_le_zz.Voktora</id>
   <name>Voktora</name>
-  <summary>Project Instance Manager</summary>
+  <summary>Project Manager</summary>
   <description>
-    <p>Gestionnaire de projets de développement : instances, intents, coffre chiffré,
+    <p>Gestionnaire de projets de développement : projets Git, catégories, coffre chiffré,
     profils d'exécution, hooks, snapshots, dashboard et plugins.</p>
   </description>
   <metadata_license>MIT</metadata_license>

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+import core
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
@@ -42,7 +43,8 @@ class TaskDialog(QDialog):
 
     def __init__(self, title: str, fn: Callable[[TaskContext], object],
                  parent: QWidget | None = None, *, show_log: bool = False,
-                 cancellable: bool = True, headline: str = ""):
+                 cancellable: bool = True, headline: str = "",
+                 unit: str = "bytes", git_progress: bool = False):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setModal(True)
@@ -52,6 +54,9 @@ class TaskDialog(QDialog):
         self.error: str = ""
         self._cancellable = cancellable
         self._finished = False
+        self._unit = unit                  # "bytes" (Mo), "items" (3 / 8) ou "percent" (barre seule)
+        self._git_progress = git_progress  # lit la progression des lignes de `git clone --progress`
+        self._has_explicit_progress = False
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 22, 24, 20)
@@ -131,11 +136,15 @@ class TaskDialog(QDialog):
 
     def _on_progress(self, done: int, total: int, current: str) -> None:
         if total > 0:
+            self._has_explicit_progress = True
             if self._bar.maximum() != 1000:
                 self._bar.setRange(0, 1000)
             self._bar.setValue(int(min(done, total) * 1000 / total))
             self._bar.setFormat(f"{min(done, total) * 100 // total} %")
-            self._status.setText(f"{format_bytes(done)} / {format_bytes(total)}")
+            if self._unit == "items":
+                self._status.setText(f"{min(done, total)} / {total}")
+            elif self._unit == "bytes":
+                self._status.setText(f"{format_bytes(done)} / {format_bytes(total)}")
         if current:
             self._detail.setText(current)
 
@@ -143,6 +152,14 @@ class TaskDialog(QDialog):
         if self._log is not None:
             self._log.appendPlainText(line)
         self._detail.setText(line)
+        if self._git_progress and not self._has_explicit_progress:
+            parsed = core.parse_git_progress(line)
+            if parsed:
+                phase, percent = parsed
+                if self._bar.maximum() != 100:
+                    self._bar.setRange(0, 100)
+                self._bar.setValue(percent)
+                self._bar.setFormat(f"{phase} — {percent} %")
 
     def _on_succeeded(self, result: object) -> None:
         self.result = result

@@ -35,7 +35,7 @@ from .categories_dialog import CategoriesDialog
 from .config_dialog import ConfigDialog
 from .customize_dialog import CustomizeProjectDialog
 from .dashboard_dialog import DashboardDialog
-from .emoji_picker_dialog import EmojiPickerDialog
+from .emoji_picker_dialog import EmojiPickerDialog, IconPickerDialog
 from .encrypt_dialog import CopyWorker, EncryptProjectDialog, EncryptWorker
 from .hooks_dialog import HooksDialog
 from .json_config_editor_dialog import JsonConfigEditorDialog
@@ -54,6 +54,7 @@ __all__ = [
     "CustomizeProjectDialog",
     "DashboardDialog",
     "EmojiPickerDialog",
+    "IconPickerDialog",
     "CopyWorker", "EncryptProjectDialog", "EncryptWorker",
     "HooksDialog",
     "JsonConfigEditorDialog",

@@ -93,6 +93,7 @@ def plan_full_export(cfg: dict) -> ExportPlan:
 
 def public_config(cfg: dict) -> dict:
     """Copie de la config sans aucun secret : l'archive peut être partagée."""
+    cfg = config_store.redact_ai_secrets(cfg)       # clés d'API des fournisseurs d'IA
     public = {k: v for k, v in cfg.items() if k not in ("github_account", "vault")}
     public["projects"] = [
         {**e, "github_token": "", "github_token_protected": False} for e in cfg.get("projects", [])

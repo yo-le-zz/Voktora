@@ -5,6 +5,27 @@ Format : [Semantic Versioning](https://semver.org/) — `MAJEUR.MINEUR.CORRECTIF
 
 ---
 
+## [1.0.5] — 2026-11-05
+
+### Ajouté
+
+- **Extension Rust optionnelle (`voktora_native`)** : parcours, copie et CRC32 parallèles (copie de
+  224 Mo / 12 000 fichiers : 0,18 s contre 4,9 s). Repli automatique en Python pur
+  (`VOKTORA_NO_NATIVE=1` pour le forcer).
+- **Multi-processus** (`core.parallel`) pour le chiffrement/déchiffrement de nombreux fichiers.
+- **Icônes vectorielles (Material Design Icons)** à la place des emojis, avec sélecteur d'icônes.
+- **Fournisseurs d'IA multiples** : Ollama, OmniRoute et API compatibles OpenAI (clés masquées dans les exports).
+- **Ajout des dépôts de mon compte GitHub** : clonage automatique en parallèle.
+- **Migration automatique** des anciens dossiers « Instances » / « Intents » vers le dossier des projets.
+- **Barres de progression** supplémentaires (clonage git, opérations longues, activité en arrière-plan).
+- **Compatibilité Linux élargie** : détection distribution / bureau / session, terminaux et gestionnaires de fichiers.
+
+### Modifié
+
+- Mentions légales : copyright « yolezz », `THIRD_PARTY_NOTICES.md`, boîte « À propos ».
+
+---
+
 ## [1.0.4] — 2026-10-30
 
 ### Sécurité

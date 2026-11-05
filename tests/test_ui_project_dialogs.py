@@ -192,7 +192,7 @@ class TestCategoriesDialog:
 
     def test_editor_values_and_color_clear(self, isolated_data_dir):
         editor = CategoryEditor(None, "A", "📁", "#112233")
-        assert editor.values() == ("A", "📁", "#112233")
+        assert editor.values() == ("A", "mdi:folder", "#112233")   # emoji hérité → icône
         editor._clear_color()
         assert editor.values()[2] == ""
 

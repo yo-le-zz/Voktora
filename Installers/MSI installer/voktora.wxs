@@ -30,7 +30,7 @@
            Scope="perMachine">
 
     <SummaryInformation Keywords="Voktora Project Manager"
-                        Description="Voktora - Project Instance Manager by yolezz"
+                        Description="Voktora - Project Manager by yolezz"
                         Manufacturer="yolezz"/>
 
     <Icon Id="VoktoraIcon" SourceFile="$(var.SourceDir)\assets\Voktora.ico"/>
@@ -52,13 +52,13 @@
           <Shortcut Id="DesktopShortcut"
                     Directory="DesktopFolder"
                     Name="Voktora"
-                    Description="Project Instance Manager"
+                    Description="Project Manager"
                     Icon="VoktoraIcon"
                     WorkingDirectory="VOKTORA_DIR"/>
           <Shortcut Id="StartMenuShortcut"
                     Directory="VoktoraStartMenu"
                     Name="Voktora"
-                    Description="Project Instance Manager"
+                    Description="Project Manager"
                     Icon="VoktoraIcon"
                     WorkingDirectory="VOKTORA_DIR"/>
         </Component>

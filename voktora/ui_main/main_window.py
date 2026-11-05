@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QSizePolicy,
     QSplitter,
@@ -48,6 +49,7 @@ from ui_project_panel import ProjectPanel
 from ui_project_view import ProjectBrowser
 
 from . import (
+    account_sync_dialog,
     clone_dialog,
     create_dialog,
     diagnostic_dialog,
@@ -92,6 +94,10 @@ class MainWindow(QMainWindow):
         self._build_statusbar()
         self._setup_shortcuts()
         self._refresh_all()
+
+        # Fin de l'ancienne séparation Instances / Intents (1.0.5) : avant tout le reste,
+        # car la migration peut changer les chemins des projets.
+        self._run_legacy_layout_migration()
 
         # Tente de restaurer la session GitHub OAuth au démarrage
         self._restore_github_session()
@@ -191,10 +197,12 @@ class MainWindow(QMainWindow):
         """Lance la vérification des mises à jour en arrière-plan."""
         self._update_worker = workers.UpdateCheckWorker()
         self._update_worker.result.connect(self._on_update_result)
+        self._busy(True, "Recherche de mises à jour…")
         self._update_worker.start()
 
     def _on_update_result(self, available: bool, latest: str, url: str) -> None:
         self._update_worker = None
+        self._busy(False)
         if available:
             self._update_lbl.setText(
                 f"🚀  Mise à jour disponible : <b>v{latest}</b>"
@@ -208,6 +216,40 @@ class MainWindow(QMainWindow):
     # ──────────────────────────────────────────────
     #  CONTRÔLE DE SANTÉ AU DÉMARRAGE (v1.0.1)
     # ──────────────────────────────────────────────
+
+    def _run_legacy_layout_migration(self) -> None:
+        """Déplace les anciens dossiers « Instances » / « Intents » dans le dossier des projets."""
+        try:
+            plan = core.plan_migration()
+        except Exception as exc:
+            self._log(f"⚠  Détection de l'ancienne arborescence impossible : {html.escape(str(exc))}")
+            return
+        if plan is None:
+            return
+
+        def job(ctx):
+            return core.apply_migration(plan, ctx.progress, ctx.is_cancelled)
+
+        done = task_dialog.run_task(
+            self, "Mise à jour de l'arborescence", job, show_log=False, cancellable=True,
+            headline="Regroupement des anciens dossiers Instances / Intents", unit="percent")
+        if done.outcome == task_dialog.OUTCOME_OK:
+            result = done.result
+            moved = len(result.moved)
+            failed = sum(1 for line in result.log if line.startswith("❌"))
+            self._invalidate_cache()
+            self._refresh_all()
+            text = f"{moved} projet(s) déplacé(s) dans {plan.destination}."
+            if failed:
+                text += f"\n{failed} déplacement(s) ont échoué :\n" + "\n".join(
+                    line for line in result.log if line.startswith("❌"))
+            if result.leftovers:
+                text += "\nDossiers conservés (contiennent encore des fichiers) :\n" + "\n".join(
+                    str(p) for p in result.leftovers)
+            QMessageBox.information(self, "Voktora — Arborescence mise à jour", text)
+        elif done.outcome == task_dialog.OUTCOME_ERROR:
+            QMessageBox.warning(self, "Voktora — Migration impossible", done.error)
+            self._refresh_all()
 
     def _run_startup_health_check(self) -> None:
         try:
@@ -258,11 +300,28 @@ class MainWindow(QMainWindow):
         self._status_lbl = QLabel("Prêt")
         self._status_lbl.setObjectName("statusLbl")
         sb.addWidget(self._status_lbl)
+        # Barre d'activité (indéterminée) : visible pendant les opérations git et la recherche de mises à jour
+        self._busy_bar = QProgressBar()
+        self._busy_bar.setRange(0, 0)
+        self._busy_bar.setTextVisible(False)
+        self._busy_bar.setFixedSize(140, 10)
+        self._busy_bar.hide()
+        self._busy_count = 0
+        sb.addPermanentWidget(self._busy_bar)
         # Indicateur version à droite
         ver = core.APP_VERSION
         ver_lbl = QLabel(f"Voktora v{ver}")
         ver_lbl.setStyleSheet("color: #45475a; font-size: 11px; padding-right: 4px;")
         sb.addPermanentWidget(ver_lbl)
+
+    def _busy(self, active: bool, message: str = "") -> None:
+        """Affiche/masque la barre d'activité de la barre d'état (compteur : les appels s'additionnent)."""
+        self._busy_count = max(0, self._busy_count + (1 if active else -1))
+        self._busy_bar.setVisible(self._busy_count > 0)
+        if active and message:
+            self._set_status(message)
+        elif not self._busy_count:
+            self._set_status("Prêt")
 
     def _set_status(self, msg: str, timeout_ms: int = 0) -> None:
         """Met à jour le message de la statusbar."""
@@ -315,6 +374,9 @@ class MainWindow(QMainWindow):
         act_import.triggered.connect(self.act_import)
         act_clone_repo = QAction("🐙 Cloner un dépôt GitHub...", self)
         act_clone_repo.triggered.connect(self.act_clone_repo)
+        act_sync_account = QAction("🐙 Ajouter les dépôts de mon compte...", self)
+        act_sync_account.setToolTip("Clone automatiquement les dépôts de votre compte GitHub qui ne sont pas encore dans Voktora")
+        act_sync_account.triggered.connect(self.act_sync_account)
         act_import_cfg = QAction("🔄 Importer config Meridian / Voktora...", self)
         act_import_cfg.setToolTip("Fusionne un config.json d'une ancienne version Meridian ou Voktora")
         act_import_cfg.triggered.connect(self.act_import_meridian_config)
@@ -328,6 +390,7 @@ class MainWindow(QMainWindow):
         menu_file.addAction(act_new)
         menu_file.addAction(act_import)
         menu_file.addAction(act_clone_repo)
+        menu_file.addAction(act_sync_account)
         menu_file.addSeparator()
         menu_file.addAction(act_import_cfg)
         menu_file.addAction(act_export)
@@ -854,6 +917,7 @@ class MainWindow(QMainWindow):
             return
 
         self._project_panel.set_git_busy(True)
+        self._busy(True, "Opération git en cours…")
 
         self._git_worker = workers.GitWorker(fn, *args, **kwargs)
         self._git_worker.log_line.connect(self._log)
@@ -862,6 +926,7 @@ class MainWindow(QMainWindow):
 
     def _on_git_worker_finished(self, success: bool) -> None:
         self._project_panel.set_git_busy(False)
+        self._busy(False)
         if success:
             self._log(
                 '<span style="color:#a6e3a1; font-weight:600">✅  Opération git terminée.</span>'
@@ -1192,6 +1257,14 @@ class MainWindow(QMainWindow):
         dlg = clone_dialog.CloneDialog(self._current_drive(), self)
         if dlg.exec() == QDialog.Accepted and dlg.cloned_path:
             self._after_project_added(dlg.cloned_path, "🐙  Cloné")
+
+    def act_sync_account(self, *_args) -> None:
+        """Cloner d'un coup les dépôts du compte GitHub connecté qui ne sont pas encore des projets."""
+        dlg = account_sync_dialog.AccountSyncDialog(self._current_drive(), self)
+        dlg.exec()
+        if dlg.outcomes:
+            self._invalidate_cache()
+            self._refresh_all()
 
     @staticmethod
     def _dropped_sources(mime) -> list[tuple[str, str]]:
@@ -1728,9 +1801,11 @@ class MainWindow(QMainWindow):
             self,
             "À propos de Voktora",
             f"""<b>Voktora v{core.APP_VERSION}</b><br><br>
-Project Manager pour Windows<br><br>
-Auteur : <a href='https://github.com/yo-le-zz'>yo-le-zz</a><br><br>
-Gestionnaire de projets avec intégration GitHub,<br>
-personnalisation avancée et chiffrement.<br><br>
-© 2026 - Tous droits réservés"""
+Gestionnaire de projets de développement (Windows et Linux)<br><br>
+Auteur : <a href='https://github.com/yo-le-zz'>yolezz</a><br><br>
+Intégration GitHub, personnalisation avancée et chiffrement.<br><br>
+© 2026 yolezz — distribué sous <a href='https://github.com/yo-le-zz/Voktora/blob/main/LICENSE'>licence MIT</a>.<br>
+Logiciel fourni « tel quel », sans garantie. Composants tiers :
+PySide6 (LGPLv3), cryptography (Apache-2.0/BSD), Material Design Icons (Apache-2.0),
+voir <code>THIRD_PARTY_NOTICES.md</code>."""
         )

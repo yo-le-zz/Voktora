@@ -40,16 +40,29 @@ jobs:
             libopengl0 libxcb-cursor0
 
       - name: Installer les dépendances (uv.lock)
-        run: uv sync --frozen
+        run: uv sync --frozen --group native
+
+      # Extension Rust optionnelle (voktora_native) : testée avec ET sans.
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Compiler l'extension native (Rust)
+        run: uv run --frozen --group native maturin develop --release --manifest-path native/Cargo.toml
 
       - name: Lint (ruff)
         run: uv run --frozen ruff check voktora tests
 
-      - name: Tests unitaires (pytest)
+      - name: Tests unitaires (pytest, avec extension native)
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QPA_PLATFORMTHEME: minimal
         run: uv run --frozen pytest --cov=voktora --cov-report=term-missing
+
+      - name: Tests unitaires (pytest, Python pur)
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QPA_PLATFORMTHEME: minimal
+          VOKTORA_NO_NATIVE: "1"
+        run: uv run --frozen pytest -q
 
   # -- JOB 1 : push dev -> PR automatique vers main --------------------------
   open_pr:

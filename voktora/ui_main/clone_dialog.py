@@ -160,7 +160,7 @@ class CloneDialog(QDialog):
                                       on_output=ctx.log, cancel=ctx.is_cancelled)
 
         done = task_dialog.run_task(self, "Clonage du dépôt", job, show_log=True,
-                                    headline=f"Clonage de {name}")
+                                    headline=f"Clonage de {name}", git_progress=True)
         if done.outcome == task_dialog.OUTCOME_OK:
             self.cloned_path = done.result
             self.accept()

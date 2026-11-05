@@ -107,10 +107,10 @@ Copy-Item src\version.txt     dist\windows\main.dist\version.txt
 
 ```bash
 # Script automatique (compile + package en .deb)
-bash "Installers/DEB installer/build_deb.sh" 1.0.4
+bash "Installers/DEB installer/build_deb.sh" 1.0.5
 
 # Résultat
-ls dist/linux/voktora_1.0.4_amd64.deb
+ls dist/linux/voktora_1.0.5_amd64.deb
 ```
 
 Le script :
@@ -127,10 +127,10 @@ Le script :
 
 ```bash
 # Prérequis : paquet « rpm » (Debian/Ubuntu) ou « rpm-build » (Fedora/RHEL)
-bash "Installers/RPM installer/build_rpm.sh" 1.0.4
+bash "Installers/RPM installer/build_rpm.sh" 1.0.5
 
 # Résultat
-ls dist/linux/voktora-1.0.4-1.x86_64.rpm
+ls dist/linux/voktora-1.0.5-1.x86_64.rpm
 ```
 
 Le script réutilise la compilation Nuitka du `.deb` si elle existe (la CI compile **une seule fois**
@@ -148,10 +148,10 @@ avec `Installers/RPM installer/voktora.spec`. Particularités :
 
 ```powershell
 # Script automatique (compile + package en .msi via WiX)
-python "Installers\MSI installer\build_msi.py" 1.0.4
+python "Installers\MSI installer\build_msi.py" 1.0.5
 
 # Résultat
-dir dist\windows\Voktora_1.0.4_x64.msi
+dir dist\windows\Voktora_1.0.5_x64.msi
 ```
 
 Le script :

@@ -16,10 +16,23 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from . import archive, categories, config_store, constants, crypto, drives, full_export, git_ops, organize, paths
+from . import (
+    archive,
+    categories,
+    config_store,
+    constants,
+    crypto,
+    drives,
+    full_export,
+    git_ops,
+    organize,
+    parallel,
+    paths,
+)
 
 IMPORT_MOVE = "move"   # déplace le dossier vers la racine des projets (défaut)
 IMPORT_COPY = "copy"   # copie le dossier ; la source reste en place
@@ -348,6 +361,120 @@ def clone_project(repo_url: str, drive: str = "", name: str | None = None,
         note=f"Cloné depuis {clean_url}",
     )
     return target
+
+
+# ──────────────────────────────────────────────
+# CLONAGE EN LOT — « ajouter les dépôts de mon compte »
+# ──────────────────────────────────────────────
+
+CLONE_CLONED = "cloned"
+CLONE_SKIPPED = "skipped"
+CLONE_FAILED = "failed"
+
+
+@dataclass
+class CloneOutcome:
+    repo: str                  # « propriétaire/nom »
+    status: str                # CLONE_CLONED | CLONE_SKIPPED | CLONE_FAILED
+    path: Path | None = None
+    message: str = ""
+
+
+def _repo_key(url: str | None) -> str:
+    """Forme canonique d'une URL de dépôt pour détecter « déjà présent » (hôte, chemin, sans .git)."""
+    if not url:
+        return ""
+    text = url.strip().lower()
+    if text.startswith("git@") and ":" in text:
+        text = text.split("@", 1)[1].replace(":", "/", 1)
+    text = text.split("://", 1)[-1].split("@", 1)[-1]
+    return text.removesuffix("/").removesuffix(".git")
+
+
+def plan_clone_many(repos: list, drive: str = "") -> tuple[list[tuple[object, Path]], list[CloneOutcome]]:
+    """Sépare les dépôts à cloner de ceux qu'on ignore (déjà enregistrés, dossier existant).
+
+    Deux dépôts de même nom (propriétaires différents) ne se marchent pas dessus : le second est
+    cloné dans « propriétaire-nom ». Lecture seule.
+    """
+    root = drives.get_projects_root(drive)
+    known = {_repo_key(e.get("github_repo")) for e in list_projects()}
+    taken: set[str] = set()
+    to_clone: list[tuple[object, Path]] = []
+    skipped: list[CloneOutcome] = []
+    for repo in repos:
+        if _repo_key(repo.clone_url) in known:
+            skipped.append(CloneOutcome(repo.full_name, CLONE_SKIPPED, message="déjà dans Voktora"))
+            continue
+        name = repo.name
+        if name.lower() in taken or (root / name).exists():
+            alt = f"{repo.owner}-{repo.name}"
+            if alt.lower() in taken or (root / alt).exists():
+                skipped.append(CloneOutcome(repo.full_name, CLONE_SKIPPED, message="un dossier du même nom existe"))
+                continue
+            name = alt
+        try:
+            paths.validate_name(name)
+        except ValueError as exc:
+            skipped.append(CloneOutcome(repo.full_name, CLONE_SKIPPED, message=str(exc)))
+            continue
+        taken.add(name.lower())
+        to_clone.append((repo, root / name))
+    return to_clone, skipped
+
+
+def clone_many(repos: list, drive: str = "", category: str | None = "__owner__", token: str = "",
+               workers: int = 3, on_progress: Callable[[int, int, str], None] | None = None,
+               on_output: Callable[[str], None] | None = None,
+               cancel: Callable[[], bool] | None = None) -> list[CloneOutcome]:
+    """Clone plusieurs dépôts en parallèle (threads : git fait le travail) puis les enregistre.
+
+    category : "__owner__" (défaut) → catégorie = propriétaire du dépôt ; None → aucune ; sinon le nom.
+    Les échecs sont rapportés par dépôt sans interrompre les autres ; l'annulation (OperationCancelled)
+    laisse les dépôts déjà terminés enregistrés. L'enregistrement dans la config se fait dans le
+    thread appelant, jamais depuis les workers (la config n'est pas thread-safe).
+    """
+    to_clone, outcomes = plan_clone_many(repos, drive)
+    total = len(to_clone)
+    if on_progress:
+        on_progress(0, max(total, 1), "")
+
+    def clone_one(job: tuple[object, Path]) -> tuple[str, str]:
+        repo, target = job
+        try:
+            git_ops.git_clone(repo.clone_url, target, token=token, on_output=(
+                (lambda line, n=repo.full_name: on_output(f"[{n}] {line}")) if on_output else None), cancel=cancel)
+        except constants.OperationCancelled:
+            raise
+        except Exception as exc:
+            return CLONE_FAILED, str(exc)
+        return CLONE_CLONED, ""
+
+    done = 0
+
+    def finished(index: int, result: tuple[str, str]) -> None:
+        nonlocal done
+        repo, target = to_clone[index]
+        status, message = result
+        if status == CLONE_CLONED:
+            try:
+                _url, head = organize.read_git_origin(target)
+                branch = head or repo.default_branch or "main"
+                cat = repo.owner if category == "__owner__" else category
+                register_project(target, drive, name=target.name, category=cat, github_repo=repo.clone_url,
+                                 github_branch=branch, github_branches=[branch],
+                                 note=f"Cloné depuis {repo.clone_url}")
+            except Exception as exc:
+                status, message = CLONE_FAILED, f"cloné mais non enregistré : {exc}"
+        outcomes.append(CloneOutcome(repo.full_name, status, target if status == CLONE_CLONED else None, message))
+        done += 1
+        if on_progress:
+            on_progress(done, total, repo.full_name)
+
+    if to_clone:
+        parallel.thread_map(clone_one, to_clone, workers=max(1, min(workers, total)),
+                            on_result=finished, cancel=cancel)
+    return outcomes
 
 
 # ──────────────────────────────────────────────

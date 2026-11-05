@@ -38,11 +38,11 @@ class TestCustomizeDialogOllamaIntegration:
         dlg._on_ollama_done("description", "Une description générée.")
         assert dlg.notes_edit.text() == "Une description générée."
 
-    def test_successful_emoji_suggestion_fills_emoji_combo(self, project):
+    def test_successful_icon_suggestion_sets_project_icon(self, project):
         core.set_ollama_config("http://localhost:11434", "llama3.1")
         dlg = ui_dialogs.CustomizeProjectDialog(str(project))
-        dlg._on_ollama_done("emoji", "🎯")
-        assert dlg.emoji_combo.currentText() == "🎯"
+        dlg._on_ollama_done("icon", "mdi:target")
+        assert dlg._icon_value == "mdi:target"
 
     def test_error_reenables_buttons_and_clears_worker(self, project):
         core.set_ollama_config("http://localhost:11434", "llama3.1")
@@ -67,3 +67,37 @@ class TestOllamaConfigPersistence:
         cfg = core.get_ollama_config()
         assert cfg["host"] == "http://localhost:11434"
         assert cfg["model"] == ""
+
+
+class TestAIConfig:
+    def test_legacy_ollama_settings_become_the_default_provider(self, isolated_data_dir):
+        core.set_ollama_config("http://10.0.0.5:11434", "mistral")
+        ai = core.get_ai_config()
+        assert ai["active"] == ai["providers"][0]["id"]
+        assert ai["providers"][0]["kind"] == "ollama"
+        assert ai["providers"][0]["host"] == "http://10.0.0.5:11434"
+        assert ai["providers"][0]["model"] == "mistral"
+
+    def test_providers_round_trip_and_mirror_ollama_settings(self, isolated_data_dir):
+        ai = core.get_ai_config()
+        ai["providers"][0].update(host="http://h:1", model="m1")
+        ai["providers"].append({"id": "omniroute", "kind": "omniroute", "name": "OmniRoute",
+                                "host": "http://localhost:20128/v1", "model": "auto", "api_key": "sk-x"})
+        ai["active"] = "omniroute"
+        core.set_ai_config(ai)
+        assert core.get_active_ai_provider()["kind"] == "omniroute"
+        assert core.get_ollama_config() == {"host": "http://h:1", "model": "m1"}
+
+    def test_invalid_entries_are_dropped_and_ids_deduplicated(self, isolated_data_dir):
+        ai = core.normalize_ai_config({"active": "zzz", "providers": [
+            {"id": "a", "kind": "openai"}, {"id": "a", "kind": "openai"}, {"id": "b", "kind": "weird"}, "x"]})
+        ids = [p["id"] for p in ai["providers"]]
+        assert ids.count("a") == 1 and "a-2" in ids and all(p["kind"] != "weird" for p in ai["providers"])
+        assert ai["active"] in ids
+
+    def test_exported_config_never_contains_api_keys(self, isolated_data_dir):
+        ai = core.get_ai_config()
+        ai["providers"].append({"id": "o", "kind": "omniroute", "name": "O", "host": "", "model": "", "api_key": "sk-secret"})
+        core.set_ai_config(ai)
+        public = core.public_config(core._load_config())
+        assert "sk-secret" not in str(public)

@@ -37,6 +37,25 @@ _ALLOWED_URL_RE = re.compile(r"^(https?://|ssh://|git://|[\w.-]+@[\w.-]+:)", re.
 _REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/\-]*$")
 
 
+_GIT_PROGRESS_RE = re.compile(
+    r"(?:remote:\s*)?(Enumerating objects|Counting objects|Compressing objects|Receiving objects|"
+    r"Resolving deltas|Updating files|Checking out files|Unpacking objects):\s+(\d{1,3})%")
+_GIT_PHASES_FR = {
+    "Enumerating objects": "Énumération", "Counting objects": "Comptage", "Compressing objects": "Compression",
+    "Receiving objects": "Réception", "Resolving deltas": "Résolution des deltas",
+    "Updating files": "Écriture des fichiers", "Checking out files": "Écriture des fichiers",
+    "Unpacking objects": "Décompression",
+}
+
+
+def parse_git_progress(line: str) -> tuple[str, int] | None:
+    """(phase en français, pourcentage 0-100) d'une ligne de progression de `git clone --progress`."""
+    match = _GIT_PROGRESS_RE.search(line)
+    if not match:
+        return None
+    return _GIT_PHASES_FR[match.group(1)], min(100, int(match.group(2)))
+
+
 def validate_clone_url(url: str) -> str:
     """Retourne l'URL nettoyée de ses identifiants, ou lève ValueError si elle est suspecte.
 

@@ -7,9 +7,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import ai_providers
 import core
-import ollama_client
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -22,13 +23,16 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QScrollArea,
     QSpinBox,
     QVBoxLayout,
     QWidget,
 )
+from task_worker import TaskWorker
 
 
 # ════════════ config_dialog.py ════════════
@@ -167,35 +171,73 @@ class ConfigDialog(QDialog):
         grp_apps.setLayout(apps_layout)
         layout.addWidget(grp_apps)
 
-        # ── 4bis. Ollama (génération IA locale) ───────────
-        grp_ollama = QGroupBox("🤖 Ollama (génération IA locale)")
-        form_ollama = QFormLayout()
+        # ── 4bis. Fournisseurs d'IA (Ollama, OmniRoute, compatible OpenAI) ───────────
+        grp_ai = QGroupBox("Fournisseurs d'IA")
+        form_ai = QFormLayout()
 
-        self.ollama_host_edit = QLineEdit()
-        self.ollama_host_edit.setPlaceholderText("http://localhost:11434")
-        form_ollama.addRow("Hôte:", self.ollama_host_edit)
+        top_row = QHBoxLayout()
+        self.ai_provider_combo = QComboBox()
+        self.ai_provider_combo.currentIndexChanged.connect(self._on_ai_provider_changed)
+        top_row.addWidget(self.ai_provider_combo, stretch=1)
+        self.btn_ai_add = QPushButton("Ajouter")
+        add_menu = QMenu(self.btn_ai_add)
+        for kind in ai_providers.KINDS:
+            action = QAction(ai_providers.KIND_LABELS[kind], add_menu)
+            action.triggered.connect(lambda _checked=False, k=kind: self._add_ai_provider(k))
+            add_menu.addAction(action)
+        self.btn_ai_add.setMenu(add_menu)
+        top_row.addWidget(self.btn_ai_add)
+        self.btn_ai_remove = QPushButton("Supprimer")
+        self.btn_ai_remove.clicked.connect(self._remove_ai_provider)
+        top_row.addWidget(self.btn_ai_remove)
+        form_ai.addRow("Fournisseur:", top_row)
 
-        self.ollama_model_combo = QComboBox()
-        self.ollama_model_combo.setEditable(True)
+        self.ai_active_chk = QCheckBox("Utiliser ce fournisseur pour la génération (description, icône)")
+        self.ai_active_chk.toggled.connect(self._on_ai_active_toggled)
+        form_ai.addRow(self.ai_active_chk)
+
+        self.ai_name_edit = QLineEdit()
+        form_ai.addRow("Nom:", self.ai_name_edit)
+
+        self.ai_host_edit = QLineEdit()
+        form_ai.addRow("Adresse:", self.ai_host_edit)
+
+        self.ai_key_edit = QLineEdit()
+        self.ai_key_edit.setEchoMode(QLineEdit.Password)
+        self.ai_key_edit.setPlaceholderText("Facultative (OmniRoute : si REQUIRE_API_KEY est activé)")
+        form_ai.addRow("Clé d'API:", self.ai_key_edit)
+
+        self.ai_model_combo = QComboBox()
+        self.ai_model_combo.setEditable(True)
         model_row = QHBoxLayout()
-        model_row.addWidget(self.ollama_model_combo, stretch=1)
-        btn_detect_models = QPushButton("🔄 Détecter")
-        btn_detect_models.setToolTip("Lister les modèles installés sur le serveur Ollama configuré ci-dessus.")
-        btn_detect_models.clicked.connect(self._detect_ollama_models)
-        model_row.addWidget(btn_detect_models)
-        form_ollama.addRow("Modèle:", model_row)
+        model_row.addWidget(self.ai_model_combo, stretch=1)
+        self.btn_ai_detect = QPushButton("Détecter")
+        self.btn_ai_detect.setToolTip("Lister les modèles proposés par le serveur configuré ci-dessus.")
+        self.btn_ai_detect.clicked.connect(self._detect_ai_models)
+        model_row.addWidget(self.btn_ai_detect)
+        form_ai.addRow("Modèle:", model_row)
 
-        self.ollama_status_lbl = QLabel(
-            "Utilisé pour générer des descriptions de projet et suggérer des "
-            "emojis. Nécessite un serveur Ollama lancé localement (aucune "
-            "donnée n'est envoyée en dehors de votre machine)."
+        self.ai_status_lbl = QLabel(
+            "Ollama : serveur local (http://localhost:11434). OmniRoute : passerelle compatible OpenAI "
+            "(http://localhost:20128/v1) qui route vers plusieurs fournisseurs. Aucune donnée ne part "
+            "ailleurs que vers l'adresse configurée ; la clé d'API est stockée dans config.json "
+            "(lisible par vous seul) et n'est jamais incluse dans les exports."
         )
-        self.ollama_status_lbl.setWordWrap(True)
-        self.ollama_status_lbl.setStyleSheet("font-size: 11px; color:#a6adc8;")
-        form_ollama.addRow(self.ollama_status_lbl)
+        self.ai_status_lbl.setWordWrap(True)
+        self.ai_status_lbl.setStyleSheet("font-size: 11px; color:#a6adc8;")
+        form_ai.addRow(self.ai_status_lbl)
+        self.ai_bar = QProgressBar()
+        self.ai_bar.setRange(0, 0)
+        self.ai_bar.setTextVisible(False)
+        self.ai_bar.setFixedHeight(6)
+        self.ai_bar.hide()
+        form_ai.addRow(self.ai_bar)
 
-        grp_ollama.setLayout(form_ollama)
-        layout.addWidget(grp_ollama)
+        grp_ai.setLayout(form_ai)
+        layout.addWidget(grp_ai)
+        self._ai: dict = core.get_ai_config()
+        self._ai_index = -1
+        self._ai_worker: TaskWorker | None = None
 
         # ── 5. GitHub OAuth ───────────────────────────────
         grp_gh = QGroupBox("🐙 GitHub OAuth")
@@ -271,34 +313,125 @@ class ConfigDialog(QDialog):
         # Barre rapide
         self._refresh_apps_list()
 
-        # Ollama
-        ollama_cfg = core.get_ollama_config()
-        self.ollama_host_edit.setText(ollama_cfg["host"])
-        if ollama_cfg["model"]:
-            self.ollama_model_combo.setCurrentText(ollama_cfg["model"])
+        # Fournisseurs d'IA
+        self._ai = core.get_ai_config()
+        self._refresh_ai_combo(select=self._ai["active"])
 
         # GitHub OAuth Client ID
         self.client_id_edit.setText(core.get_github_client_id())
 
-    def _detect_ollama_models(self) -> None:
-        host = self.ollama_host_edit.text().strip() or ollama_client.DEFAULT_HOST
-        try:
-            models = ollama_client.list_models(host)
-        except ollama_client.OllamaError as e:
-            QMessageBox.warning(self, "Ollama", str(e))
+    # ── Fournisseurs d'IA ──────────────────────────
+
+    def _provider_label(self, provider: dict) -> str:
+        marker = "  (actif)" if provider["id"] == self._ai["active"] else ""
+        return f"{provider['name']} — {ai_providers.KIND_LABELS[provider['kind']].split(' (')[0]}{marker}"
+
+    def _refresh_ai_combo(self, select: str | None = None) -> None:
+        self.ai_provider_combo.blockSignals(True)
+        self.ai_provider_combo.clear()
+        for provider in self._ai["providers"]:
+            self.ai_provider_combo.addItem(self._provider_label(provider), provider["id"])
+        index = max(self.ai_provider_combo.findData(select), 0) if select else 0
+        self.ai_provider_combo.setCurrentIndex(index)
+        self.ai_provider_combo.blockSignals(False)
+        self._ai_index = -1
+        self._on_ai_provider_changed(index)
+
+    def _store_ai_fields(self) -> None:
+        """Recopie les champs affichés dans le fournisseur actuellement sélectionné."""
+        if not 0 <= self._ai_index < len(self._ai["providers"]):
             return
+        provider = self._ai["providers"][self._ai_index]
+        provider["name"] = self.ai_name_edit.text().strip() or provider["name"]
+        provider["host"] = self.ai_host_edit.text().strip()
+        provider["api_key"] = self.ai_key_edit.text().strip()
+        provider["model"] = self.ai_model_combo.currentText().strip()
+
+    def _on_ai_provider_changed(self, index: int) -> None:
+        self._store_ai_fields()
+        self._ai_index = index
+        if not 0 <= index < len(self._ai["providers"]):
+            return
+        provider = self._ai["providers"][index]
+        self.ai_name_edit.setText(provider["name"])
+        self.ai_host_edit.setText(provider["host"])
+        self.ai_host_edit.setPlaceholderText(ai_providers.DEFAULT_HOSTS[provider["kind"]])
+        self.ai_key_edit.setText(provider["api_key"])
+        self.ai_model_combo.clear()
+        self.ai_model_combo.setCurrentText(provider["model"])
+        self.ai_active_chk.blockSignals(True)
+        self.ai_active_chk.setChecked(provider["id"] == self._ai["active"])
+        self.ai_active_chk.blockSignals(False)
+        only_ollama = len(self._ai["providers"]) == 1
+        self.btn_ai_remove.setEnabled(not (provider["kind"] == "ollama" and only_ollama))
+
+    def _on_ai_active_toggled(self, checked: bool) -> None:
+        if not 0 <= self._ai_index < len(self._ai["providers"]):
+            return
+        provider = self._ai["providers"][self._ai_index]
+        if checked:
+            self._ai["active"] = provider["id"]
+        elif self._ai["active"] == provider["id"]:
+            self.ai_active_chk.blockSignals(True)
+            self.ai_active_chk.setChecked(True)      # il faut toujours un fournisseur actif
+            self.ai_active_chk.blockSignals(False)
+        self._store_ai_fields()
+        self._refresh_ai_combo(select=provider["id"])
+
+    def _add_ai_provider(self, kind: str) -> None:
+        self._store_ai_fields()
+        base = kind
+        ids = {p["id"] for p in self._ai["providers"]}
+        new_id, n = base, 2
+        while new_id in ids:
+            new_id, n = f"{base}-{n}", n + 1
+        self._ai["providers"].append({
+            "id": new_id, "kind": kind, "name": ai_providers.KIND_LABELS[kind].split(" (")[0],
+            "host": ai_providers.DEFAULT_HOSTS[kind], "model": "", "api_key": "",
+        })
+        self._refresh_ai_combo(select=new_id)
+
+    def _remove_ai_provider(self) -> None:
+        index = self._ai_index
+        if not 0 <= index < len(self._ai["providers"]):
+            return
+        removed = self._ai["providers"].pop(index)
+        if self._ai["active"] == removed["id"] and self._ai["providers"]:
+            self._ai["active"] = self._ai["providers"][0]["id"]
+        self._ai_index = -1
+        self._refresh_ai_combo(select=self._ai["active"])
+
+    def _detect_ai_models(self) -> None:
+        if self._ai_worker is not None and self._ai_worker.isRunning():
+            return
+        self._store_ai_fields()
+        provider = dict(self._ai["providers"][self._ai_index])
+        self.btn_ai_detect.setEnabled(False)
+        self.ai_bar.show()
+        self.ai_status_lbl.setText("Recherche des modèles…")
+        self._ai_worker = TaskWorker(lambda _ctx: ai_providers.list_models(provider))
+        self._ai_worker.succeeded.connect(self._on_ai_models)
+        self._ai_worker.failed.connect(self._on_ai_models_failed)
+        self._ai_worker.cancelled.connect(lambda: (self.btn_ai_detect.setEnabled(True), self.ai_bar.hide()))
+        self._ai_worker.start()
+
+    def _on_ai_models(self, models) -> None:
+        self.btn_ai_detect.setEnabled(True)
+        self.ai_bar.hide()
         if not models:
-            QMessageBox.information(
-                self, "Ollama",
-                "Aucun modèle installé sur ce serveur Ollama.\n"
-                "Installez-en un avec par ex. « ollama pull llama3.1 »."
-            )
+            self.ai_status_lbl.setText("Aucun modèle proposé par ce serveur (Ollama : « ollama pull llama3.1 »).")
             return
-        current = self.ollama_model_combo.currentText()
-        self.ollama_model_combo.clear()
-        self.ollama_model_combo.addItems(models)
-        if current in models:
-            self.ollama_model_combo.setCurrentText(current)
+        current = self.ai_model_combo.currentText()
+        self.ai_model_combo.clear()
+        self.ai_model_combo.addItems(models)
+        self.ai_model_combo.setCurrentText(current if current in models else models[0])
+        self.ai_status_lbl.setText(f"{len(models)} modèle(s) disponible(s).")
+
+    def _on_ai_models_failed(self, message: str) -> None:
+        self.btn_ai_detect.setEnabled(True)
+        self.ai_bar.hide()
+        self.ai_status_lbl.setText(message)
+        QMessageBox.warning(self, "Fournisseur d'IA", message)
 
     def _refresh_apps_list(self) -> None:
         self.apps_list.clear()
@@ -397,11 +530,9 @@ class ConfigDialog(QDialog):
         app_cfg["note_auto_save_interval"]   = self.note_interval_spin.value()
         core.set_app_config(app_cfg)
 
-        # Ollama
-        core.set_ollama_config(
-            self.ollama_host_edit.text().strip() or ollama_client.DEFAULT_HOST,
-            self.ollama_model_combo.currentText().strip(),
-        )
+        # Fournisseurs d'IA
+        self._store_ai_fields()
+        core.set_ai_config(self._ai)
 
         # GitHub Client ID
         cid = self.client_id_edit.text().strip()

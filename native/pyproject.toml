@@ -1,0 +1,15 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "voktora-native"
+version = "1.0.5"
+description = "Extension native optionnelle de Voktora (Rust)."
+requires-python = ">=3.13"
+license = { text = "MIT" }
+authors = [{ name = "yolezz" }]
+
+[tool.maturin]
+module-name = "voktora_native"
+features = ["pyo3/extension-module"]

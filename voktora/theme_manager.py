@@ -330,6 +330,11 @@ def apply_theme_to_app(app) -> None:
         theme = load_theme("default")
     qss = _build_qss(theme)
     app.setStyleSheet(qss)
+    try:
+        import icons
+        icons.set_default_color(theme.get("text", "#cdd6f4"))
+    except Exception:
+        pass         # les icônes gardent leur couleur par défaut
 
 
 def import_theme(path: Path) -> str:

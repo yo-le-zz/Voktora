@@ -33,7 +33,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 
-from . import constants, paths
+from . import constants, native, paths
 
 ProgressCallback = Callable[[int, int, str], None]
 CancelCheck = Callable[[], bool]
@@ -100,28 +100,11 @@ def _ensure_free_space(where: Path, needed: int) -> None:
 
 
 def _tree_size(folder: Path) -> tuple[int, int]:
-    """(nombre de fichiers, taille totale en octets) d'un dossier, liens non suivis."""
-    count = total = 0
-    stack = [os.fspath(folder)]
-    while stack:
-        try:
-            with os.scandir(stack.pop()) as it:
-                for entry in it:
-                    try:
-                        if entry.is_symlink():
-                            # Lien vers un dossier : ignoré ; lien vers un fichier : compté, taille 0.
-                            if not entry.is_dir():
-                                count += 1
-                        elif entry.is_dir(follow_symlinks=False):
-                            stack.append(entry.path)
-                        else:
-                            count += 1
-                            total += entry.stat(follow_symlinks=False).st_size
-                    except OSError:
-                        count += 1
-        except OSError:
-            continue
-    return count, total
+    """(nombre de fichiers, taille totale en octets) d'un dossier, liens non suivis.
+
+    Parcours parallèle en Rust quand l'extension native est installée (voir core.native).
+    """
+    return native.tree_size(folder)
 
 
 def strip_git_credentials(data: bytes) -> bytes:
@@ -291,6 +274,10 @@ def _copy_file(src: Path, dst: Path, tracker: ProgressTracker, cancel: CancelChe
 
 def _copy_into(src: Path, dst: Path, tracker: ProgressTracker, cancel: CancelCheck | None) -> None:
     dst.mkdir(parents=True, exist_ok=True)
+    if native.native_available():
+        # Copie parallèle sans GIL : voir native/src/lib.rs (mêmes règles que la boucle Python ci-dessous).
+        native.copy_tree_native(src, dst, tracker.advance, cancel)
+        return
     for root, dirnames, filenames in os.walk(src):
         rel = Path(root).relative_to(src)
         for dirname in dirnames:

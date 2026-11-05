@@ -155,6 +155,35 @@ def decrypt_file(src: Path, dst: Path, key: bytes,
 
 
 # ──────────────────────────────────────────────
+# TRAVAUX PICKLABLES — exécutés dans des processus séparés (core.parallel.process_map)
+# ──────────────────────────────────────────────
+# Chaque fichier est indépendant : le chiffrement AES-GCM d'un lot de fichiers se répartit sur
+# tous les cœurs. Les fonctions renvoient un résultat simple au lieu de lever (une exception
+# traverse mal la frontière entre processus) ; l'appelant décide quoi supprimer.
+
+def encrypt_file_job(job: tuple[str, str, bytes, bytes]) -> str | None:
+    """job = (source, destination, clé, sel). Retourne None si réussi, sinon le message d'erreur."""
+    src, dst, key, salt = job
+    try:
+        encrypt_file(Path(src), Path(dst), key, salt)
+    except Exception as exc:
+        return str(exc) or exc.__class__.__name__
+    return None
+
+
+def decrypt_file_job(job: tuple[str, str, bytes]) -> tuple[str, str]:
+    """job = (source, destination, clé). Retourne ("ok" | "bad_key" | "error", message)."""
+    src, dst, key = job
+    try:
+        decrypt_file(Path(src), Path(dst), key)
+    except DecryptionError as exc:
+        return "bad_key", str(exc)
+    except Exception as exc:
+        return "error", str(exc) or exc.__class__.__name__
+    return "ok", ""
+
+
+# ──────────────────────────────────────────────
 # FORMAT HISTORIQUE (XOR) — lecture seule
 # ──────────────────────────────────────────────
 

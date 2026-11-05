@@ -6,6 +6,7 @@ Fragment de ui_dialogs.py extrait lors du découpage v1.0.2 en package.
 from __future__ import annotations
 
 import core
+import icons
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
@@ -118,7 +119,8 @@ class StatusDialog(QDialog):
 
         # Statuts par défaut (non modifiables)
         for status_id, status in core.PROJECT_STATUSES.items():
-            item = QListWidgetItem(f"{status.emoji} {status.name}  [défaut]")
+            item = QListWidgetItem(f"{status.name}  [défaut]")
+            item.setIcon(icons.icon(status.emoji, color=status.color))
             item.setData(Qt.UserRole, {
                 "id": status_id, "name": status.name,
                 "emoji": status.emoji, "color": status.color,
@@ -132,9 +134,8 @@ class StatusDialog(QDialog):
         cfg = core._load_config()
         custom_statuses = cfg.get("custom_statuses", {})
         for status_id, status_data in custom_statuses.items():
-            item = QListWidgetItem(
-                f"{status_data['emoji']} {status_data['name']}  [personnalisé]"
-            )
+            item = QListWidgetItem(f"{status_data['name']}  [personnalisé]")
+            item.setIcon(icons.icon(status_data["emoji"], color=status_data["color"]))
             item.setData(Qt.UserRole, {
                 "id":         status_id,
                 "name":       status_data["name"],
@@ -280,8 +281,9 @@ class EditStatusDialog(QDialog):
         self.name_edit = QLineEdit(status_data.get("name", ""))
         form.addRow("Nom :", self.name_edit)
 
-        self.emoji_edit = QLineEdit(status_data.get("emoji", ""))
-        form.addRow("Emoji :", self.emoji_edit)
+        from .emoji_picker_dialog import IconField
+        self.emoji_edit = IconField(status_data.get("emoji", ""))
+        form.addRow("Icône :", self.emoji_edit)
 
         self.color_preview = QLabel("■")
         self.color_preview.setStyleSheet(f"font-size: 24px; color: {self._color};")
@@ -321,7 +323,7 @@ class EditStatusDialog(QDialog):
     def get_data(self) -> dict:
         return {
             "name":  self.name_edit.text().strip(),
-            "emoji": self.emoji_edit.text().strip() or "📊",
+            "emoji": self.emoji_edit.text().strip() or "mdi:chart-bar",
             "color": self._color,
         }
 
