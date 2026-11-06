@@ -87,9 +87,15 @@ def record_open(project_path: Path) -> None:
 
 # ── Analyse ────────────────────────────────────────────────────────────────────
 
-def analyze_project(project_path: Path) -> ProjectHealth:
+def analyze_project(project_path: Path, quick: bool = False, usage_map: dict | None = None) -> ProjectHealth:
+    """Analyse un projet.
+
+    `quick=True` : uniquement des tests de présence (dossier, .git, .gitignore), AUCUN processus git
+    (la barre latérale analyse tous les projets à chaque rafraîchissement). `usage_map` évite de relire
+    le fichier d'usage pour chaque projet quand on en analyse beaucoup.
+    """
     h = ProjectHealth(path=project_path, name=project_path.name)
-    usage = load_usage().get(str(project_path), {})
+    usage = (usage_map if usage_map is not None else load_usage()).get(str(project_path), {})
     h.last_opened = usage.get("last_open", "jamais")
 
     # ── Existence du dossier ──
@@ -109,6 +115,8 @@ def analyze_project(project_path: Path) -> ProjectHealth:
 
         # Ahead / Behind
         try:
+            if quick:
+                raise StopIteration
             r = subprocess.run(
                 ["git", "rev-list", "--left-right", "--count", "HEAD...@{upstream}"],
                 cwd=str(project_path), capture_output=True, text=True, timeout=8, check=False,
@@ -125,6 +133,8 @@ def analyze_project(project_path: Path) -> ProjectHealth:
 
         # Branches non mergées
         try:
+            if quick:
+                raise StopIteration
             r = subprocess.run(
                 ["git", "branch", "--no-merged", "HEAD"],
                 cwd=str(project_path), capture_output=True, text=True, timeout=8, check=False,
@@ -138,6 +148,8 @@ def analyze_project(project_path: Path) -> ProjectHealth:
 
         # Nombre de commits
         try:
+            if quick:
+                raise StopIteration
             r = subprocess.run(
                 ["git", "rev-list", "--count", "HEAD"],
                 cwd=str(project_path), capture_output=True, text=True, timeout=8, check=False,
@@ -173,8 +185,8 @@ def generate_report(paths: list[Path] | None = None) -> DashboardReport:
         all_p  = cfg.get("projects", [])
         paths  = [Path(e["path"]) for e in all_p]
 
-    health     = [analyze_project(p) for p in paths]
     usage      = load_usage()
+    health     = [analyze_project(p, usage_map=usage) for p in paths]
     total_opens = sum(v.get("opens", 0) for v in usage.values())
     most_used  = sorted(usage.items(), key=lambda x: x[1].get("opens", 0), reverse=True)[:5]
 

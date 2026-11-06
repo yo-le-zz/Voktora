@@ -1,0 +1,55 @@
+name: Plugins (marketplace)
+
+# Contributions de plugins par Pull Request : validation automatique, puis régénération de l'index
+# après fusion par le mainteneur. Voir marketplace/README.md et doc/PLUGINS.md.
+on:
+  pull_request:
+    paths:
+      - "marketplace/**"
+      - "tools/plugin_tool.py"
+      - "voktora/plugins/manifest.py"
+  push:
+    branches: [main]
+    paths:
+      - "marketplace/plugins/**"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Valider les plugins
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.13" }
+      - name: Validation (manifeste, fichiers, analyse statique)
+        run: python tools/plugin_tool.py validate
+      - name: L'index est-il généré sans erreur ?
+        run: python tools/plugin_tool.py build-index && git diff --stat marketplace/index.json || true
+
+  index:
+    name: Régénérer index.json
+    needs: validate
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write          # uniquement ce job, uniquement sur main
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.13" }
+      - run: python tools/plugin_tool.py build-index
+      - name: Commit de l'index si modifié
+        run: |
+          if git diff --quiet -- marketplace/index.json; then
+            echo "Index déjà à jour."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add marketplace/index.json
+            git commit -m "chore(marketplace): régénère index.json [skip ci]"
+            git push
+          fi

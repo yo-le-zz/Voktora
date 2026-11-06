@@ -1,0 +1,12 @@
+{
+  "id": "git-insights",
+  "name": "Git Insights",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Statistiques Git du projet : branche, nombre de commits, dernier commit, principaux auteurs.",
+  "api": 2,
+  "entry": "main.py",
+  "permissions": ["ui", "shell"],
+  "tags": ["git", "statistiques"],
+  "homepage": "https://github.com/yo-le-zz/Voktora"
+}

@@ -1,162 +1,163 @@
-# Voktora — Système de Plugins
+# Plugins Voktora (API 2 — Voktora 1.0.6)
 
-> Les plugins permettent d'étendre Voktora avec des commandes, boutons et hooks personnalisés.
+Les plugins ajoutent des fonctions à Voktora **sans toucher à son code** : onglets de projet, menus,
+boutons, panneaux latéraux, widgets de barre d'état, styles, thèmes, réactions aux événements.
+Ils s'installent depuis le **Marketplace** (Paramètres → Plugins) ou à la main.
 
----
+> ⚠ **Sécurité.** Un plugin est du code Python exécuté avec vos droits. Les *permissions* sont une
+> déclaration vérifiée par l'API et relue par le mainteneur — **pas un bac à sable**. N'installez que
+> des plugins dont vous faites confiance à l'auteur. Désactiver un plugin n'exécute plus son code.
 
-## Emplacement
+## Utiliser les plugins
+
+*Paramètres → Plugins et marketplace…* (`Ctrl+Maj+P`)
+
+- **Installés** : activer/désactiver (immédiat, sans redémarrage), désinstaller, voir les erreurs et les
+  gestionnaires lents, installer depuis un dossier ou une archive `.zip`.
+- **Marketplace** : recherche, détails et permissions, installation et mise à jour en un clic.
+  Chaque fichier est téléchargé en HTTPS et **comparé à son empreinte SHA-256** de l'index : un fichier
+  modifié est refusé. Vous confirmez toujours les permissions avant l'installation.
+- Hors ligne, la dernière liste connue du marketplace reste consultable.
+
+Dossier des plugins : `<dossier de données Voktora>/plugins/` ; leurs réglages : `plugins_data/<id>/`.
+
+## Écrire un plugin
+
+```bash
+python tools/plugin_tool.py new mon-plugin --author votre-pseudo
+```
+
+Structure :
 
 ```
-~/.voktora/plugins/
-├── _example_plugin.py   ← exemple (généré automatiquement, préfixé _ = inactif)
-├── mon_plugin.py        ← plugin actif
-└── docker_plugin.py     ← autre plugin actif
+marketplace/plugins/mon-plugin/
+├── plugin.json     # identité + permissions
+└── main.py         # point d'entrée : def on_load(api)
 ```
 
-Un fichier préfixé par `_` est ignoré. Tout autre `.py` est chargé au démarrage.
+### `plugin.json`
 
----
+```json
+{
+  "id": "mon-plugin",
+  "name": "Mon plugin",
+  "version": "1.0.0",
+  "author": "votre-pseudo",
+  "description": "Ce qu'il fait, en une phrase.",
+  "api": 2,
+  "entry": "main.py",
+  "permissions": ["ui", "projects.read"],
+  "tags": ["productivité"],
+  "homepage": "https://github.com/..."
+}
+```
 
-## Structure minimale
+`id` : minuscules, chiffres, tirets. `version` : `MAJEUR.MINEUR.CORRECTIF`. `api` : version d'API visée
+(2 actuellement). `min_voktora` (facultatif) : version minimale de l'application.
+
+### Permissions
+
+| Permission | Autorise |
+|---|---|
+| `ui` | `add_menu_action`, `add_toolbar_button`, `add_project_tab`, `add_sidebar_panel`, `add_status_widget`, `add_context_action`, `set_stylesheet`, `register_theme`, `notify`, `message`, `confirm`, `ask_text`, `main_window`… |
+| `projects.read` | `projects()`, `project_info()`, `current_project()` |
+| `files` | déclaration : le plugin lit des fichiers de vos projets (affichée à l'installation) |
+| `network` | `http_get()` (HTTPS uniquement, 2 Mo max) |
+| `shell` | `run([...])` (liste d'arguments, jamais d'interpréteur de commandes) |
+
+Appeler une méthode sans la permission lève `PluginError` (le plugin est signalé, l'application continue).
+
+### Exemple minimal
 
 ```python
-# mon_plugin.py
-
-PLUGIN_NAME    = "MonPlugin"
-PLUGIN_VERSION = "1.0.0"
-PLUGIN_AUTHOR  = "votre_nom"
-
 def on_load(api):
-    """Appelé une fois au chargement. Enregistrez vos commandes, boutons et hooks ici."""
-    api.register_command("ma_commande", cmd_run, desc="Description courte")
-    api.register_button("🔧 Mon bouton", btn_click, tooltip="Tooltip affiché au survol")
-    api.register_hook("on_open", hook_on_open)
-    api.register_hook("on_create", hook_on_create)
+    api.add_menu_action("Plugins/Mon plugin", "Dire bonjour",
+                        lambda ctx: api.notify("Bonjour !"), icon="mdi:hand-wave-outline")
 ```
 
----
+## Référence de l'API (`api`)
 
-## PluginContext
+### Informations
+| | |
+|---|---|
+| `api.plugin_id`, `api.app_version`, `api.api_version` | identité et versions |
+| `api.data_dir` | dossier privé du plugin |
+| `api.plugin_dir` | dossier du plugin (fichiers annexes) |
+| `api.settings` | stockage persistant : `get(clé, défaut)`, `set`, `delete`, `all()` (JSON) |
 
-Tous les handlers reçoivent un objet `PluginContext` :
+### Interface (permission `ui`)
+| Méthode | Effet |
+|---|---|
+| `add_menu_action(menu, label, handler, icon="", shortcut="", checkable=False, checked=False, tooltip="")` | Action de menu. `menu` : `"Outils"` ou un chemin `"Mon plugin/Sous-menu"` (créé si besoin, inséré avant « Aide »). Si `checkable`, le handler reçoit l'état coché. |
+| `add_toolbar_button(label, handler, icon="", tooltip="")` | Bouton dans la barre d'outils des plugins (apparaît seulement s'il y en a). |
+| `add_project_tab(title, factory, icon="")` | Onglet dans la page d'un projet. `factory(ctx)` renvoie un `QWidget` ; s'il a une méthode `set_project(path)` (ou `None`), elle est appelée à chaque changement de projet. |
+| `add_sidebar_panel(title, factory, icon="")` | Panneau repliable en bas de la barre latérale. Même convention que les onglets. |
+| `add_status_widget(factory)` | Widget permanent à droite de la barre d'état. |
+| `add_context_action("project", label, handler, icon="")` | Entrée du menu clic droit d'un projet ; `ctx.project_path` = projet cliqué. |
+| `set_stylesheet(qss)` | Feuille de style Qt ajoutée **après** le thème (remplace celle du plugin). Retirée à la désactivation. |
+| `register_theme(id, name, colors, description="")` | Nouveau thème (Paramètres → Thème). Quelques couleurs suffisent (`base`, `text`, `blue`, `green`, `red`, `mauve`, `primary`…) : les autres sont dérivées. |
+| `notify(msg)`, `message(titre, texte)`, `confirm(titre, texte) -> bool`, `ask_text(titre, label, défaut) -> str\|None` | Messages et questions. |
+| `open_project(path)`, `refresh()` | Ouvrir un projet, rafraîchir la liste. |
+| `icon("mdi:nom", color=None)` | `QIcon` vectoriel (même catalogue que le sélecteur d'icônes). |
+| `theme_colors()` | Couleurs du thème courant. |
+| `main_window()` | La `QMainWindow` (accès avancé, à utiliser avec parcimonie). |
 
-```python
-def cmd_run(ctx):
-    # ctx.project_path : Path | None — chemin du projet actif
-    # ctx.log(msg)     : str        — écrire dans le journal Voktora
-    # ctx.args         : dict       — arguments supplémentaires (si fournis)
-    
-    ctx.log(f"Projet actif : {ctx.project_path}")
-    
-    if ctx.project_path:
-        import subprocess
-        subprocess.Popen(["code", str(ctx.project_path)])
-        ctx.log("VS Code lancé !")
+Tout ce qu'ajoute un plugin est **retiré proprement** quand on le désactive ou le désinstalle.
+
+### Données, réseau, système
+| Méthode | Permission |
+|---|---|
+| `projects()` → `[{name, path, category, …}]`, `project_info(path)`, `current_project()` | `projects.read` |
+| `http_get(url, timeout=10, max_bytes=2 Mo)` → `bytes` | `network` |
+| `run(["git", "status"], cwd=None, timeout=30)` → `(code, sortie)` | `shell` |
+| `run_async(travail, on_done=None, on_error=None)` | — (le résultat revient sur le thread d'interface) |
+
+Les tâches longues (analyse de fichiers, réseau, git) vont dans `run_async` : **ne bloquez jamais l'interface**.
+Un gestionnaire d'événement qui dépasse 0,25 s est signalé comme « lent » dans le gestionnaire de plugins.
+
+### Événements (`api.on(nom, handler)`)
+
+| Événement | Quand |
+|---|---|
+| `on_start` / `on_quit` | application prête / fermeture |
+| `on_open` / `on_close` | un projet est ouvert / on le quitte |
+| `on_create` / `on_delete` / `on_rename` | projet créé / supprimé / renommé (`ctx.data["old_path"]`) |
+| `on_refresh` | liste de projets rafraîchie |
+| `on_theme_changed` | thème changé (`ctx.data["theme"]`) |
+| `plugin:<nom>` | événements entre plugins : `api.emit("nom", clé=valeur)` → `ctx.data` |
+
+Le handler reçoit `ctx` : `ctx.project_path`, `ctx.data`, `ctx.log(msg)`.
+
+### Commandes et boutons (hérités)
+`register_command(nom, handler, desc)` et `register_button(label, handler, tooltip, icon)` restent disponibles
+(groupe « Plugins » de l'onglet Outils).
+
+### Cycle de vie
+`on_load(api)` à l'activation, `on_unload(api)` (facultatif) à la désactivation. Une exception dans votre
+code est capturée et affichée dans le gestionnaire de plugins ; elle n'arrête ni l'application ni les autres plugins.
+
+## Compatibilité : anciens plugins (fichier `.py`)
+
+Un fichier `plugins/mon_plugin.py` (avec `PLUGIN_NAME`, `PLUGIN_VERSION`, `PLUGIN_AUTHOR` et `on_load(api)`)
+fonctionne toujours, avec toutes les permissions. Il est signalé « ancien format » : passez à un dossier avec
+`plugin.json` pour déclarer vos permissions.
+
+## Publier sur le marketplace
+
+Fork → Pull Request, validation automatique, relecture du mainteneur : voir
+[`marketplace/README.md`](../marketplace/README.md). Outils :
+
+```bash
+python tools/plugin_tool.py validate [id]      # manifeste, fichiers, analyse statique
+python tools/plugin_tool.py zip mon-plugin     # archive installable (Installer depuis un fichier…)
+python tools/plugin_tool.py build-index        # régénère l'index (fait par la CI après fusion)
 ```
 
----
+L'analyse statique refuse `eval`/`exec`/`os.system`/`shell=True`, et les imports réseau ou `subprocess`
+sans la permission correspondante. Elle ne remplace pas la relecture humaine.
 
-## API complète
+## Plugins fournis (exemples à lire)
 
-### `api.register_command(name, handler, desc="")`
-
-Enregistre une commande accessible depuis la palette de commandes (`Ctrl+P`).
-
-```python
-api.register_command("docker_up", lambda ctx: run_docker(ctx), desc="docker compose up")
-```
-
-### `api.register_button(label, handler, tooltip="")`
-
-Ajoute un bouton dans l'onglet **Outils → Plugins** du panneau projet (max 5 affichés).
-
-```python
-api.register_button("🐳 Docker up", btn_docker_up, tooltip="Lance docker compose up -d")
-```
-
-### `api.register_hook(hook_name, handler)`
-
-Déclenché automatiquement par les événements Voktora.
-
-| Hook | Déclencheur |
-|------|-------------|
-| `on_create` | Nouveau projet créé |
-| `on_open` | Projet ouvert dans le panneau |
-| `on_delete` | Projet supprimé |
-| `on_clone` | Dépôt Git cloné |
-| `on_git_push` | Push Git effectué |
-| `on_git_commit` | Commit effectué |
-| `on_git_pull` | Pull effectué |
-
----
-
-## Exemple complet : plugin Docker
-
-```python
-# docker_plugin.py
-import subprocess
-from pathlib import Path
-
-PLUGIN_NAME    = "Docker"
-PLUGIN_VERSION = "1.0.0"
-PLUGIN_AUTHOR  = "yolezz"
-
-def on_load(api):
-    api.register_button("🐳 Up",    btn_up,    tooltip="docker compose up -d")
-    api.register_button("🛑 Down",  btn_down,  tooltip="docker compose down")
-    api.register_button("📋 Logs",  btn_logs,  tooltip="docker compose logs -f")
-    api.register_hook("on_open",   hook_check_compose)
-
-def _compose(ctx, *args):
-    if not ctx.project_path:
-        ctx.log("Aucun projet actif.")
-        return
-    compose_file = ctx.project_path / "docker-compose.yml"
-    if not compose_file.exists():
-        ctx.log("Pas de docker-compose.yml dans ce projet.")
-        return
-    try:
-        r = subprocess.run(
-            ["docker", "compose", *args],
-            cwd=str(ctx.project_path),
-            capture_output=True, text=True, timeout=30,
-        )
-        ctx.log((r.stdout + r.stderr).strip() or "OK")
-    except FileNotFoundError:
-        ctx.log("Docker non trouvé. Installez Docker Desktop.")
-    except Exception as e:
-        ctx.log(f"Erreur : {e}")
-
-def btn_up(ctx):    _compose(ctx, "up", "-d")
-def btn_down(ctx):  _compose(ctx, "down")
-def btn_logs(ctx):  _compose(ctx, "logs", "--tail=50")
-
-def hook_check_compose(ctx):
-    if ctx.project_path and (ctx.project_path / "docker-compose.yml").exists():
-        ctx.log("[Docker] docker-compose.yml détecté dans ce projet.")
-```
-
----
-
-## Rechargement à chaud
-
-Dans Voktora : **Onglet Outils → Plugins → Recharger**  
-(pas besoin de redémarrer l'application)
-
----
-
-## Accès aux APIs Voktora depuis un plugin
-
-```python
-import core   # config, vault, sessions GitHub
-import vault  # secrets chiffrés
-import git    # git automation
-
-def btn_auto_commit(ctx):
-    if not ctx.project_path:
-        return
-    token = core.get_effective_token(ctx.project_path)
-    ok = git.auto_commit(ctx.project_path, log_cb=ctx.log)
-    if ok:
-        git.push(ctx.project_path, log_cb=ctx.log, token=token)
-```
+`ui-tweaks` (styles), `quick-notes` (onglet + réglages), `focus-timer` (barre d'état), `todo-scanner`
+(analyse asynchrone), `git-insights` (`api.run`), `zen-mode` (barre d'outils, `main_window`),
+`neon-themes` (thèmes), `project-counter` (menu clic droit, événements) — dans `marketplace/plugins/`.

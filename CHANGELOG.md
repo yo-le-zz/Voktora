@@ -5,6 +5,65 @@ Format : [Semantic Versioning](https://semver.org/) — `MAJEUR.MINEUR.CORRECTIF
 
 ---
 
+## [1.0.6] — 2026-11-06
+
+### Performances et fluidité
+
+- **Démarrage 10× plus rapide avec 400 projets** (7,5 s → 0,6 s) : la vue grille n'est construite que si elle
+  est affichée, et par tranches de 40 cartes au-delà de 80 projets (l'interface ne gèle plus).
+- **Fin des « Voktora ne répond plus »** après une action : la santé des projets (barre latérale) est calculée
+  en arrière-plan et sans lancer de processus git ; les hooks `on_open` ne bloquent plus l'ouverture d'un projet.
+- IA : le contexte envoyé est **résumé** (≈ 700 caractères, sans badges ni code), seules 12 icônes présélectionnées
+  sont proposées au modèle, et la longueur de réponse est bornée (descriptions ≈ 3× plus rapides).
+- Compilation : Rust en LTO « fat » + `panic=abort` ; Nuitka avec `--lto=yes`, sans docstrings ni asserts,
+  sans modules de test, en parallèle ; l'extension Rust est incluse dans les paquets quand elle est installée.
+
+### Interface
+
+- Dialogue « Personnaliser le projet » plus grand, aéré et redimensionnable (contenu défilant, boutons fixes).
+- Menus : icônes détachées du texte (marges homogènes), cases à cocher alignées.
+- **25 thèmes intégrés** : Dracula, Nord, Gruvbox (sombre/clair), Solarized (sombre/clair), Tokyo Night, One Dark,
+  Monokai, Rosé Pine (+ Dawn), Catppuccin Macchiato/Frappé, Ayu Mirage, Everforest, Kanagawa, Synthwave,
+  Midnight OLED, Sunset, Forest, Sakura, Paper, Arctic, High Contrast.
+
+### Plugins (API 2) et marketplace
+
+- Nouveau système : plugins en dossier (`plugin.json` + `main.py`), permissions déclarées et vérifiées
+  (`ui`, `projects.read`, `files`, `network`, `shell`), activation/désactivation à chaud, réglages par plugin.
+- **API étendue** : onglets de projet, menus et sous-menus, barre d'outils, panneaux latéraux, widgets de barre d'état,
+  menu contextuel, feuilles de style (QSS), thèmes, `run_async`, `http_get`, `run`, 9 événements
+  (`on_start/quit/open/close/create/delete/rename/refresh/theme_changed`) et événements entre plugins.
+- **Onglet Marketplace** (Paramètres → Plugins) : recherche, permissions affichées, installation/mise à jour
+  vérifiées par SHA-256, copie hors ligne de l'index.
+- **Contributions par fork + Pull Request** : `marketplace/`, `tools/plugin_tool.py` (création, validation et analyse
+  statique), CI `plugins.yml` (validation, régénération de l'index après fusion), modèle de PR, CODEOWNERS.
+- 8 plugins fournis : UI Tweaks, Quick Notes, Focus Timer, TODO Scanner, Git Insights, Zen Mode, Neon Themes,
+  Project Counter.
+- Correction : les plugins n'étaient jamais chargés au démarrage ni accessibles depuis un menu.
+
+---
+
+## [1.0.5] — 2026-11-05
+
+### Ajouté
+
+- **Extension Rust optionnelle (`voktora_native`)** : parcours, copie et CRC32 parallèles (copie de
+  224 Mo / 12 000 fichiers : 0,18 s contre 4,9 s). Repli automatique en Python pur
+  (`VOKTORA_NO_NATIVE=1` pour le forcer).
+- **Multi-processus** (`core.parallel`) pour le chiffrement/déchiffrement de nombreux fichiers.
+- **Icônes vectorielles (Material Design Icons)** à la place des emojis, avec sélecteur d'icônes.
+- **Fournisseurs d'IA multiples** : Ollama, OmniRoute et API compatibles OpenAI (clés masquées dans les exports).
+- **Ajout des dépôts de mon compte GitHub** : clonage automatique en parallèle.
+- **Migration automatique** des anciens dossiers « Instances » / « Intents » vers le dossier des projets.
+- **Barres de progression** supplémentaires (clonage git, opérations longues, activité en arrière-plan).
+- **Compatibilité Linux élargie** : détection distribution / bureau / session, terminaux et gestionnaires de fichiers.
+
+### Modifié
+
+- Mentions légales : copyright « yolezz », `THIRD_PARTY_NOTICES.md`, boîte « À propos ».
+
+---
+
 ## [1.0.4] — 2026-10-30
 
 ### Sécurité

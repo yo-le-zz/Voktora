@@ -20,45 +20,45 @@ from . import constants
 # SYSTÈME — Windows + Linux
 # ──────────────────────────────────────────────
 
+def _import_linux_env():
+    import linux_env
+    return linux_env
+
+
 def open_explorer(path: Path) -> None:
-    """Ouvre l'explorateur de fichiers au chemin donné (Windows + Linux)."""
+    """Ouvre l'explorateur de fichiers au chemin donné (Windows, Linux, macOS)."""
     if constants.IS_WINDOWS:
         subprocess.Popen(["explorer", str(path)])
     elif constants.IS_LINUX:
-        # Essayer plusieurs gestionnaires de fichiers courants
-        for fm in ["xdg-open", "nautilus", "dolphin", "thunar", "nemo", "pcmanfm"]:
+        # xdg-open / gio d'abord (standard freedesktop, respecte le choix de l'utilisateur), puis le
+        # gestionnaire propre au bureau détecté (Nautilus, Dolphin, Thunar, Nemo, Caja, PCManFM…).
+        for command in _import_linux_env().file_manager_commands(path):
             try:
-                subprocess.Popen([fm, str(path)])
+                subprocess.Popen(command)
                 return
             except FileNotFoundError:
                 continue
+        raise RuntimeError("Aucun gestionnaire de fichiers trouvé (xdg-open, nautilus, dolphin, thunar…).")
     else:
-        # macOS
         subprocess.Popen(["open", str(path)])
 
 
 def open_terminal(path: Path) -> None:
-    """Ouvre un terminal au chemin donné (Windows + Linux)."""
+    """Ouvre un terminal au chemin donné (Windows, Linux, macOS)."""
     if constants.IS_WINDOWS:
         # Nouvelle console cmd démarrée DANS le dossier : pas de « cd /d "…" » à échapper.
         subprocess.Popen(["cmd", "/k"], cwd=str(path), creationflags=subprocess.CREATE_NEW_CONSOLE)
     elif constants.IS_LINUX:
-        # Essayer plusieurs émulateurs de terminal courants ; le dossier est
-        # transmis soit en argument dédié, soit via cwd (jamais dans un `cd '…'`).
-        terminals = [
-            (["gnome-terminal", f"--working-directory={path}"], None),
-            (["konsole", "--workdir", str(path)], None),
-            (["xterm"], str(path)),
-            (["xfce4-terminal", f"--working-directory={path}"], None),
-            (["tilix", f"--working-directory={path}"], None),
-            (["bash"], str(path)),
-        ]
-        for cmd, cwd in terminals:
+        # $TERMINAL, xdg-terminal-exec, terminal du bureau détecté (Ptyxis sous Fedora, Konsole, Xfce
+        # Terminal…), puis les émulateurs courants. Le dossier est transmis soit en argument dédié,
+        # soit via cwd — jamais dans un `cd '…'` interprété par un shell.
+        for command, cwd in _import_linux_env().terminal_commands(path):
             try:
-                subprocess.Popen(cmd, cwd=cwd)
+                subprocess.Popen(command, cwd=cwd)
                 return
-            except FileNotFoundError:
+            except (FileNotFoundError, PermissionError):
                 continue
+        raise RuntimeError("Aucun émulateur de terminal trouvé : installez-en un ou définissez la variable TERMINAL.")
     else:
         subprocess.Popen(["open", "-a", "Terminal", str(path)])
 

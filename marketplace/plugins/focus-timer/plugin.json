@@ -1,0 +1,12 @@
+{
+  "id": "focus-timer",
+  "name": "Focus Timer",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Minuteur Pomodoro dans la barre d'état (25 min de travail, 5 min de pause).",
+  "api": 2,
+  "entry": "main.py",
+  "permissions": ["ui"],
+  "tags": ["productivité", "pomodoro"],
+  "homepage": "https://github.com/yo-le-zz/Voktora"
+}

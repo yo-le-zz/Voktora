@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QProgressBar,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -84,6 +85,13 @@ class RepoPicker(QWidget):
         self.list.setMinimumHeight(230)
         layout.addWidget(self.list, 1)
 
+        self.busy = QProgressBar()
+        self.busy.setRange(0, 0)
+        self.busy.setTextVisible(False)
+        self.busy.setFixedHeight(6)
+        self.busy.hide()
+        layout.addWidget(self.busy)
+
         self.status = QLabel("")
         self.status.setStyleSheet("color: #a6adc8; font-size: 12px;")
         self.status.setWordWrap(True)
@@ -102,11 +110,12 @@ class RepoPicker(QWidget):
         if self._worker is not None and self._worker.isRunning():
             return
         self.btn_refresh.setEnabled(False)
+        self.busy.show()
         self.status.setText("Chargement des dépôts depuis GitHub…")
         self._worker = TaskWorker(load_repos_job)
         self._worker.succeeded.connect(self._on_loaded)
         self._worker.failed.connect(self._on_failed)
-        self._worker.cancelled.connect(lambda: self.btn_refresh.setEnabled(True))
+        self._worker.cancelled.connect(lambda: (self.btn_refresh.setEnabled(True), self.busy.hide()))
         self._worker.start()
 
     def stop(self) -> None:
@@ -118,6 +127,7 @@ class RepoPicker(QWidget):
     def _on_loaded(self, result) -> None:
         self._repos, owners = result
         self.btn_refresh.setEnabled(True)
+        self.busy.hide()
         current = self.owner_combo.currentData()
         self.owner_combo.blockSignals(True)
         self.owner_combo.clear()
@@ -132,6 +142,7 @@ class RepoPicker(QWidget):
 
     def _on_failed(self, message: str) -> None:
         self.btn_refresh.setEnabled(True)
+        self.busy.hide()
         self.status.setText(f"⚠  {message}")
 
     # ── affichage ────────────────────────────────

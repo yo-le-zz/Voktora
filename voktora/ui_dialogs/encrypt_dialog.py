@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 # ════════════ encrypt_dialog.py ════════════
+_PARALLEL_MIN_FILES = 4          # en deçà, un seul processus suffit (et la progression est plus fine)
 _operation_in_progress = False   # une seule opération longue à la fois (chiffrement ou copie)
 
 
@@ -111,19 +112,38 @@ class EncryptWorker(QThread):
         key  = core.derive_key(self._password, salt)
 
         failures = 0
-        for file_path in files:
-            if self._cancelled():
-                raise core.OperationCancelled("Opération annulée.")
-            self.progress_text.emit(f"Chiffrement : {file_path.name}")
-            try:
-                core.encrypt_file(file_path, file_path.with_name(file_path.name + core.SUFFIX),
-                                  key, salt, self._advance, self._cancelled)
-                file_path.unlink()          # l'original n'est supprimé qu'une fois la version chiffrée complète
-            except core.OperationCancelled:
-                raise
-            except Exception as e:
-                failures += 1
-                self.progress_text.emit(f"⚠ Ignoré : {file_path.name} ({e})")
+        if len(files) >= _PARALLEL_MIN_FILES:
+            sizes = [self._size(f) for f in files]
+            jobs = [(str(f), str(f.with_name(f.name + core.SUFFIX)), key, salt) for f in files]
+            failed: list[str] = []
+
+            def on_result(index: int, error: str | None) -> None:
+                if error is None:
+                    files[index].unlink()       # l'original n'est supprimé qu'une fois la version chiffrée complète
+                    self.progress_text.emit(f"Chiffré : {files[index].name}")
+                else:
+                    failed.append(files[index].name)
+                    self.progress_text.emit(f"⚠ Ignoré : {files[index].name} ({error})")
+                self._advance(sizes[index])
+
+            self.progress_text.emit(f"Chiffrement de {len(files)} fichiers sur {core.default_workers()} processus…")
+            core.process_map(core.encrypt_file_job, jobs, on_result=on_result,
+                             cancel=self._cancelled, min_items=_PARALLEL_MIN_FILES)
+            failures = len(failed)
+        else:
+            for file_path in files:
+                if self._cancelled():
+                    raise core.OperationCancelled("Opération annulée.")
+                self.progress_text.emit(f"Chiffrement : {file_path.name}")
+                try:
+                    core.encrypt_file(file_path, file_path.with_name(file_path.name + core.SUFFIX),
+                                      key, salt, self._advance, self._cancelled)
+                    file_path.unlink()          # l'original n'est supprimé qu'une fois la version chiffrée complète
+                except core.OperationCancelled:
+                    raise
+                except Exception as e:
+                    failures += 1
+                    self.progress_text.emit(f"⚠ Ignoré : {file_path.name} ({e})")
 
         (self._path / ".voktora_encrypted").write_text(
             f"Encrypted with Voktora v{core.APP_VERSION}\n"
@@ -149,6 +169,41 @@ class EncryptWorker(QThread):
         keys: dict[bytes, bytes] = {}      # sel -> clé (scrypt n'est calculé qu'une fois par sel)
         failures = 0
         legacy = 0
+        modern = [f for f in files if f.suffix == core.SUFFIX]
+        if len(modern) >= _PARALLEL_MIN_FILES:
+            # Lot de fichiers .vkenc : clés dérivées ici (une par sel), déchiffrement réparti sur les cœurs.
+            jobs, ready = [], []
+            for file_path in modern:
+                header = core.read_header(file_path)
+                if header is None:
+                    failures += 1
+                    self.progress_text.emit(f"⚠ Ignoré : {file_path.name} (format inconnu)")
+                    continue
+                if header[0] not in keys:
+                    self.progress_text.emit("Dérivation de la clé…")
+                    keys[header[0]] = core.derive_key(self._password, header[0])
+                jobs.append((str(file_path), str(file_path.with_suffix("")), keys[header[0]]))
+                ready.append(file_path)
+            sizes = [self._size(f) for f in ready]
+
+            def on_result(index: int, outcome: tuple[str, str]) -> None:
+                nonlocal failures
+                kind, message = outcome
+                if kind == "bad_key":
+                    # Mauvais mot de passe : inutile (et dangereux) de continuer sur les autres fichiers.
+                    raise core.DecryptionError(message)
+                if kind == "ok":
+                    ready[index].unlink()
+                    self.progress_text.emit(f"Déchiffré : {ready[index].name}")
+                else:
+                    failures += 1
+                    self.progress_text.emit(f"⚠ Ignoré : {ready[index].name} ({message})")
+                self._advance(sizes[index])
+
+            self.progress_text.emit(f"Déchiffrement de {len(ready)} fichiers sur {core.default_workers()} processus…")
+            core.process_map(core.decrypt_file_job, jobs, on_result=on_result,
+                             cancel=self._cancelled, min_items=_PARALLEL_MIN_FILES)
+            files = [f for f in files if f.suffix != core.SUFFIX]
         for file_path in files:
             if self._cancelled():
                 raise core.OperationCancelled("Opération annulée.")

@@ -28,9 +28,25 @@ voktora_compile() {
     rm -rf "$dist_dir/nuitka_out"
     mkdir -p "$dist_dir"
     echo ""
-    echo ">>> Compilation Nuitka..."
+    # Extension Rust : incluse seulement si elle est installée dans l'environnement.
+    local VOKTORA_NUITKA_EXTRA=()
+    if python -c "import voktora_native" 2>/dev/null; then
+        echo ">>> Extension native détectée : incluse dans le paquet"
+        VOKTORA_NUITKA_EXTRA+=(--include-module=voktora_native)
+    fi
+
+    echo ">>> Compilation Nuitka (LTO, sans docstrings ni asserts)..."
     python -m nuitka \
       --standalone \
+      --lto=yes \
+      --python-flag=no_docstrings \
+      --python-flag=no_asserts \
+      --noinclude-unittest-mode=nofollow \
+      --noinclude-pytest-mode=nofollow \
+      --noinclude-setuptools-mode=nofollow \
+      --nofollow-import-to=tkinter,test,pydoc,doctest,lib2to3 \
+      --jobs="$(nproc 2>/dev/null || echo 2)" \
+      ${VOKTORA_NUITKA_EXTRA[@]+"${VOKTORA_NUITKA_EXTRA[@]}"} \
       --remove-output \
       --enable-plugin=pyside6 \
       --include-qt-plugins=iconengines,imageformats,platforms,platformthemes,tls,xcbglintegrations \
@@ -70,7 +86,7 @@ voktora_stage_tree() {
 [Desktop Entry]
 Type=Application
 Name=Voktora
-Comment=Project Instance Manager — by yolezz
+Comment=Project Manager — by yolezz
 Exec=$install_dir/voktora
 Icon=voktora
 Categories=Development;Utility;
@@ -85,9 +101,9 @@ DESKTOP
 <component type="desktop-application">
   <id>io.github.yo_le_zz.Voktora</id>
   <name>Voktora</name>
-  <summary>Project Instance Manager</summary>
+  <summary>Project Manager</summary>
   <description>
-    <p>Gestionnaire de projets de développement : instances, intents, coffre chiffré,
+    <p>Gestionnaire de projets de développement : projets Git, catégories, coffre chiffré,
     profils d'exécution, hooks, snapshots, dashboard et plugins.</p>
   </description>
   <metadata_license>MIT</metadata_license>

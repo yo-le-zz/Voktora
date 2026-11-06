@@ -1,0 +1,12 @@
+{
+  "id": "todo-scanner",
+  "name": "TODO Scanner",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Liste les TODO, FIXME et HACK du projet ouvert, dans un onglet dédié.",
+  "api": 2,
+  "entry": "main.py",
+  "permissions": ["ui", "files"],
+  "tags": ["code", "qualité"],
+  "homepage": "https://github.com/yo-le-zz/Voktora"
+}

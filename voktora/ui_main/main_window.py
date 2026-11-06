@@ -8,13 +8,17 @@ fragmenter ses très nombreuses références internes à self.*).
 
 from __future__ import annotations
 
+import contextlib
 import html
 import json
+import threading
 from pathlib import Path
 
 import core
+import plugins
 import theme_manager
-from PySide6.QtCore import Qt, QTimer
+from plugins.ui_host import UIHost
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
@@ -27,6 +31,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QSizePolicy,
     QSplitter,
@@ -48,6 +53,7 @@ from ui_project_panel import ProjectPanel
 from ui_project_view import ProjectBrowser
 
 from . import (
+    account_sync_dialog,
     clone_dialog,
     create_dialog,
     diagnostic_dialog,
@@ -65,6 +71,8 @@ from . import (
 
 
 class MainWindow(QMainWindow):
+    _health_ready = Signal(int, int, int, int)
+    _hook_log = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -76,6 +84,9 @@ class MainWindow(QMainWindow):
         theme_manager.apply_theme_to_app(QApplication.instance())
         
         self._sel_path:   Path | None      = None
+        self._stats_generation = 0
+        self._health_ready.connect(self._apply_health_stats)
+        self._hook_log.connect(lambda msg: self._project_panel.log(msg))
         self._worker:     workers.Worker | None    = None
         self._git_worker: workers.GitWorker | None = None
         self._delete_worker: workers.DeleteWorker | None = None
@@ -92,6 +103,16 @@ class MainWindow(QMainWindow):
         self._build_statusbar()
         self._setup_shortcuts()
         self._refresh_all()
+
+        # Plugins : chargés juste après l'affichage de la fenêtre (ne retardent pas le démarrage).
+        self._ui_host = UIHost(self)
+        plugins.set_ui_host(self._ui_host)
+        self._browser.extra_actions = self._ui_host.context_actions
+        QTimer.singleShot(0, self._load_plugins)
+
+        # Fin de l'ancienne séparation Instances / Intents (1.0.5) : avant tout le reste,
+        # car la migration peut changer les chemins des projets.
+        self._run_legacy_layout_migration()
 
         # Tente de restaurer la session GitHub OAuth au démarrage
         self._restore_github_session()
@@ -191,10 +212,12 @@ class MainWindow(QMainWindow):
         """Lance la vérification des mises à jour en arrière-plan."""
         self._update_worker = workers.UpdateCheckWorker()
         self._update_worker.result.connect(self._on_update_result)
+        self._busy(True, "Recherche de mises à jour…")
         self._update_worker.start()
 
     def _on_update_result(self, available: bool, latest: str, url: str) -> None:
         self._update_worker = None
+        self._busy(False)
         if available:
             self._update_lbl.setText(
                 f"🚀  Mise à jour disponible : <b>v{latest}</b>"
@@ -208,6 +231,40 @@ class MainWindow(QMainWindow):
     # ──────────────────────────────────────────────
     #  CONTRÔLE DE SANTÉ AU DÉMARRAGE (v1.0.1)
     # ──────────────────────────────────────────────
+
+    def _run_legacy_layout_migration(self) -> None:
+        """Déplace les anciens dossiers « Instances » / « Intents » dans le dossier des projets."""
+        try:
+            plan = core.plan_migration()
+        except Exception as exc:
+            self._log(f"⚠  Détection de l'ancienne arborescence impossible : {html.escape(str(exc))}")
+            return
+        if plan is None:
+            return
+
+        def job(ctx):
+            return core.apply_migration(plan, ctx.progress, ctx.is_cancelled)
+
+        done = task_dialog.run_task(
+            self, "Mise à jour de l'arborescence", job, show_log=False, cancellable=True,
+            headline="Regroupement des anciens dossiers Instances / Intents", unit="percent")
+        if done.outcome == task_dialog.OUTCOME_OK:
+            result = done.result
+            moved = len(result.moved)
+            failed = sum(1 for line in result.log if line.startswith("❌"))
+            self._invalidate_cache()
+            self._refresh_all()
+            text = f"{moved} projet(s) déplacé(s) dans {plan.destination}."
+            if failed:
+                text += f"\n{failed} déplacement(s) ont échoué :\n" + "\n".join(
+                    line for line in result.log if line.startswith("❌"))
+            if result.leftovers:
+                text += "\nDossiers conservés (contiennent encore des fichiers) :\n" + "\n".join(
+                    str(p) for p in result.leftovers)
+            QMessageBox.information(self, "Voktora — Arborescence mise à jour", text)
+        elif done.outcome == task_dialog.OUTCOME_ERROR:
+            QMessageBox.warning(self, "Voktora — Migration impossible", done.error)
+            self._refresh_all()
 
     def _run_startup_health_check(self) -> None:
         try:
@@ -258,11 +315,28 @@ class MainWindow(QMainWindow):
         self._status_lbl = QLabel("Prêt")
         self._status_lbl.setObjectName("statusLbl")
         sb.addWidget(self._status_lbl)
+        # Barre d'activité (indéterminée) : visible pendant les opérations git et la recherche de mises à jour
+        self._busy_bar = QProgressBar()
+        self._busy_bar.setRange(0, 0)
+        self._busy_bar.setTextVisible(False)
+        self._busy_bar.setFixedSize(140, 10)
+        self._busy_bar.hide()
+        self._busy_count = 0
+        sb.addPermanentWidget(self._busy_bar)
         # Indicateur version à droite
         ver = core.APP_VERSION
         ver_lbl = QLabel(f"Voktora v{ver}")
         ver_lbl.setStyleSheet("color: #45475a; font-size: 11px; padding-right: 4px;")
         sb.addPermanentWidget(ver_lbl)
+
+    def _busy(self, active: bool, message: str = "") -> None:
+        """Affiche/masque la barre d'activité de la barre d'état (compteur : les appels s'additionnent)."""
+        self._busy_count = max(0, self._busy_count + (1 if active else -1))
+        self._busy_bar.setVisible(self._busy_count > 0)
+        if active and message:
+            self._set_status(message)
+        elif not self._busy_count:
+            self._set_status("Prêt")
 
     def _set_status(self, msg: str, timeout_ms: int = 0) -> None:
         """Met à jour le message de la statusbar."""
@@ -315,6 +389,9 @@ class MainWindow(QMainWindow):
         act_import.triggered.connect(self.act_import)
         act_clone_repo = QAction("🐙 Cloner un dépôt GitHub...", self)
         act_clone_repo.triggered.connect(self.act_clone_repo)
+        act_sync_account = QAction("🐙 Ajouter les dépôts de mon compte...", self)
+        act_sync_account.setToolTip("Clone automatiquement les dépôts de votre compte GitHub qui ne sont pas encore dans Voktora")
+        act_sync_account.triggered.connect(self.act_sync_account)
         act_import_cfg = QAction("🔄 Importer config Meridian / Voktora...", self)
         act_import_cfg.setToolTip("Fusionne un config.json d'une ancienne version Meridian ou Voktora")
         act_import_cfg.triggered.connect(self.act_import_meridian_config)
@@ -328,6 +405,7 @@ class MainWindow(QMainWindow):
         menu_file.addAction(act_new)
         menu_file.addAction(act_import)
         menu_file.addAction(act_clone_repo)
+        menu_file.addAction(act_sync_account)
         menu_file.addSeparator()
         menu_file.addAction(act_import_cfg)
         menu_file.addAction(act_export)
@@ -409,6 +487,9 @@ class MainWindow(QMainWindow):
         act_config.triggered.connect(self.act_open_config)
         act_theme = QAction("🎨 Thème...", self)
         act_theme.triggered.connect(self.act_theme_settings)
+        act_plugins = QAction("🧩 Plugins et marketplace...", self)
+        act_plugins.setShortcut(QKeySequence("Ctrl+Shift+P"))
+        act_plugins.triggered.connect(self.act_plugins)
         act_diag    = QAction("🔍 Diagnostic...", self)
         act_diag.triggered.connect(self.act_run_diagnostic)
         
@@ -416,6 +497,7 @@ class MainWindow(QMainWindow):
         menu_prefs.addAction(act_config)
         menu_prefs.addSeparator()
         menu_prefs.addAction(act_theme)
+        menu_prefs.addAction(act_plugins)
         menu_prefs.addSeparator()
         menu_prefs.addAction(act_diag)
 
@@ -490,6 +572,7 @@ class MainWindow(QMainWindow):
         lv.setContentsMargins(0, 0, 0, 0)
         lv.setSpacing(0)
         lv.addWidget(self._build_sidebar_header())
+        self._sidebar_layout = lv            # panneaux ajoutés par les plugins (en bas)
         self._main_splitter.addWidget(left)
 
         # ── Colonne droite : stack  ──────────────────────────────
@@ -653,26 +736,40 @@ class MainWindow(QMainWindow):
         except Exception:
             self._stat_drives.setText("—")
 
+        # Santé des projets : analyse en arrière-plan (jamais sur le thread de l'interface).
+        self._stats_generation = getattr(self, "_stats_generation", 0) + 1
+        generation = self._stats_generation
         try:
-            from pathlib import Path as _P
-
-            import dashboard as _dash
-            cfg   = core._load_config()
-            paths = [_P(e["path"]) for e in cfg.get("projects", [])]
-            if paths:
-                health = [_dash.analyze_project(p) for p in paths]
-                healthy  = sum(1 for h in health if h.score >= 80)
-                warnings = sum(1 for h in health if 50 <= h.score < 80)
-                broken   = sum(1 for h in health if h.score < 50)
-                self._stat_healthy.setText(str(healthy))
-                self._stat_warnings.setText(str(warnings))
-                self._stat_broken.setText(str(broken))
-            else:
-                for attr in ("_stat_healthy", "_stat_warnings", "_stat_broken"):
-                    getattr(self, attr).setText("0")
+            paths = [e["path"] for e in core.list_projects() if e.get("path")]
         except Exception:
-            for attr in ("_stat_healthy", "_stat_warnings", "_stat_broken"):
-                getattr(self, attr).setText("—")
+            paths = []
+        if not paths:
+            self._apply_health_stats(generation, 0, 0, 0)
+            return
+
+        def work() -> None:
+            try:
+                from pathlib import Path as _P
+
+                import dashboard as _dash
+                usage = _dash.load_usage()
+                scores = [_dash.analyze_project(_P(p), quick=True, usage_map=usage).score for p in paths]
+                counts = (sum(1 for x in scores if x >= 80),
+                          sum(1 for x in scores if 50 <= x < 80),
+                          sum(1 for x in scores if x < 50))
+            except Exception:
+                counts = (-1, -1, -1)
+            with contextlib.suppress(RuntimeError):      # fenêtre fermée entre-temps
+                self._health_ready.emit(generation, *counts)
+
+        threading.Thread(target=work, name="voktora-health", daemon=True).start()
+
+    def _apply_health_stats(self, generation: int, healthy: int, warnings: int, broken: int) -> None:
+        if generation != self._stats_generation:
+            return                                       # résultat périmé
+        values = ("—", "—", "—") if healthy < 0 else (str(healthy), str(warnings), str(broken))
+        for attr, value in zip(("_stat_healthy", "_stat_warnings", "_stat_broken"), values, strict=True):
+            getattr(self, attr).setText(value)
 
     def _build_welcome(self) -> QWidget:
         """Écran d'accueil quand aucun projet n'est sélectionné."""
@@ -854,6 +951,7 @@ class MainWindow(QMainWindow):
             return
 
         self._project_panel.set_git_busy(True)
+        self._busy(True, "Opération git en cours…")
 
         self._git_worker = workers.GitWorker(fn, *args, **kwargs)
         self._git_worker.log_line.connect(self._log)
@@ -862,6 +960,7 @@ class MainWindow(QMainWindow):
 
     def _on_git_worker_finished(self, success: bool) -> None:
         self._project_panel.set_git_busy(False)
+        self._busy(False)
         if success:
             self._log(
                 '<span style="color:#a6e3a1; font-weight:600">✅  Opération git terminée.</span>'
@@ -931,6 +1030,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_status_lbl"):
             self._set_status(f"{n} projet{'s' if n != 1 else ''}")
         self._browser.populate(projects)
+        plugins.fire_hook("on_refresh")
 
     def _on_projects_modified(self) -> None:
         """Un classement (catégorie, ordre, statut) a changé : tout recharger."""
@@ -956,15 +1056,43 @@ class MainWindow(QMainWindow):
         # Hook on_open + usage tracking
         import dashboard as _d
         import hooks as _h
-        _h.fire("on_open", self._sel_path, log_cb=self._project_panel.log)
-        _d.record_open(self._sel_path)
+        opened = self._sel_path
+
+        def after_open() -> None:      # hooks (processus externes) et usage : hors thread d'interface
+            with contextlib.suppress(Exception):
+                _d.record_open(opened)
+            _h.fire("on_open", opened, log_cb=self._hook_log.emit)
+
+        threading.Thread(target=after_open, name="voktora-on-open", daemon=True).start()
+        self._ui_host.project_changed()
+        plugins.fire_hook("on_open", opened, log_cb=self._log)
+
+    def _load_plugins(self) -> None:
+        plugins.load_all()
+        plugins.fire_hook("on_start", log_cb=self._log)
+
+    def act_plugins(self) -> None:
+        from ui_dialogs import PluginsDialog
+        PluginsDialog(self).exec()
+        self._refresh_project_panel()
+
+    def closeEvent(self, event) -> None:           # noqa: N802 - nom imposé par Qt
+        with contextlib.suppress(Exception):
+            plugins.fire_hook("on_quit", log_cb=None)
+        if plugins.get_ui_host() is getattr(self, "_ui_host", None):
+            plugins.set_ui_host(None)            # pas de référence à une fenêtre fermée
+        super().closeEvent(event)
 
     def _show_welcome(self) -> None:
         """Retour à la liste/grille des projets."""
+        left = self._sel_path
         self._right_stack.setCurrentIndex(0)
         self._sel_path = None
         if hasattr(self, "_status_lbl"):
             self._set_status("Pret")
+        self._ui_host.project_changed()
+        if left is not None:
+            plugins.fire_hook("on_close", left, log_cb=self._log)
 
     def _show_project_switcher(self) -> None:
         """Affiche le browser et met le focus sur la recherche."""
@@ -1071,6 +1199,7 @@ class MainWindow(QMainWindow):
         self._invalidate_cache()
         self._refresh_all()
         self._browser.select(str(path))
+        plugins.fire_hook("on_create", Path(path), log_cb=self._log)
         self._set_status(f"Projet ajouté : {Path(path).name}", 5000)
 
     def act_create(self, *_args) -> None:
@@ -1096,7 +1225,9 @@ class MainWindow(QMainWindow):
         try:
             new_path = core.rename_project(self._sel_path, new_name.strip())
             self._log(f"✏  Renommé : <b>{old_name}</b> → <b>{new_path.name}</b>")
+            old_path = self._sel_path
             self._sel_path = new_path
+            plugins.fire_hook("on_rename", new_path, log_cb=self._log, data={"old_path": str(old_path)})
             self._invalidate_cache()  # Invalider le cache pour refléter les changements
             self._refresh_lists()
             self._refresh_project_panel()
@@ -1142,6 +1273,9 @@ class MainWindow(QMainWindow):
                 self._after_project_removed()
 
     def _after_project_removed(self) -> None:
+        removed = self._sel_path
+        if removed is not None:
+            plugins.fire_hook("on_delete", removed, log_cb=self._log)
         self._sel_path = None
         self._invalidate_cache()
         self._refresh_all()
@@ -1192,6 +1326,14 @@ class MainWindow(QMainWindow):
         dlg = clone_dialog.CloneDialog(self._current_drive(), self)
         if dlg.exec() == QDialog.Accepted and dlg.cloned_path:
             self._after_project_added(dlg.cloned_path, "🐙  Cloné")
+
+    def act_sync_account(self, *_args) -> None:
+        """Cloner d'un coup les dépôts du compte GitHub connecté qui ne sont pas encore des projets."""
+        dlg = account_sync_dialog.AccountSyncDialog(self._current_drive(), self)
+        dlg.exec()
+        if dlg.outcomes:
+            self._invalidate_cache()
+            self._refresh_all()
 
     @staticmethod
     def _dropped_sources(mime) -> list[tuple[str, str]]:
@@ -1728,9 +1870,11 @@ class MainWindow(QMainWindow):
             self,
             "À propos de Voktora",
             f"""<b>Voktora v{core.APP_VERSION}</b><br><br>
-Project Manager pour Windows<br><br>
-Auteur : <a href='https://github.com/yo-le-zz'>yo-le-zz</a><br><br>
-Gestionnaire de projets avec intégration GitHub,<br>
-personnalisation avancée et chiffrement.<br><br>
-© 2026 - Tous droits réservés"""
+Gestionnaire de projets de développement (Windows et Linux)<br><br>
+Auteur : <a href='https://github.com/yo-le-zz'>yolezz</a><br><br>
+Intégration GitHub, personnalisation avancée et chiffrement.<br><br>
+© 2026 yolezz — distribué sous <a href='https://github.com/yo-le-zz/Voktora/blob/main/LICENSE'>licence MIT</a>.<br>
+Logiciel fourni « tel quel », sans garantie. Composants tiers :
+PySide6 (LGPLv3), cryptography (Apache-2.0/BSD), Material Design Icons (Apache-2.0),
+voir <code>THIRD_PARTY_NOTICES.md</code>."""
         )

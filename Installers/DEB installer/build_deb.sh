@@ -72,9 +72,9 @@ Maintainer: yolezz <https://github.com/yo-le-zz>
 Section: devel
 Priority: optional
 Depends: libgl1, libegl1, libopengl0, libglib2.0-0, libfontconfig1, libxcb-xinerama0, libxcb-icccm4, libxcb-image0, libxcb-keysyms1, libxcb-randr0, libxcb-render-util0, libxcb-xkb1, libxcb-cursor0, libxkbcommon-x11-0
-Description: Voktora — Project Instance Manager
+Description: Voktora — Project Manager
  Gestionnaire de projets de développement avec interface graphique.
- Supporte instances/intents, coffre chiffré (Fernet), profils d'exécution,
+ Supporte catégories et organisations GitHub, coffre chiffré (Fernet), profils d'exécution,
  hooks, snapshots, dashboard de santé et système de plugins.
  Thème Catppuccin Mocha. Authentification GitHub App ou OAuth.
  .

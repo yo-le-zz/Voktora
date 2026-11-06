@@ -47,6 +47,8 @@ from PySide6.QtWidgets import (
 _CARD_W   = 170
 _CARD_H   = 165
 _CARD_GAP = 12
+_CHUNK     = 40     # cartes construites par tranche (grille)
+_CHUNK_MIN = 80    # en dessous, construction immédiate
 _COLS_MIN = 2
 _COLS_MAX = 9
 
@@ -76,26 +78,28 @@ def _lang_color(lang: str) -> str:
 
 
 def _make_emoji_pixmap(emoji: str, size: int = 44) -> QPixmap:
+    """Pixmap de l'icône d'un projet (identifiant « mdi:… » ou emoji hérité, converti en icône)."""
+    import icons
     pix = QPixmap(size, size)
     pix.fill(Qt.transparent)
     painter = QPainter(pix)
-    font = QFont()
-    font.setPixelSize(int(size * 0.72))
-    painter.setFont(font)
-    painter.drawText(pix.rect(), Qt.AlignCenter, emoji)
+    icon = icons.icon(emoji)
+    if not icon.isNull():
+        side = int(size * 0.78)
+        offset = (size - side) // 2
+        painter.drawPixmap(offset, offset, icon.pixmap(side, side))
     painter.end()
     return pix
 
 
 def _status_labels() -> dict[str, str]:
     """Identifiant de statut → « emoji nom » (statuts intégrés + personnalisés)."""
-    return {s.id: f"{s.emoji} {s.name}" for s in core.get_all_project_statuses().values()}
+    return {s.id: s.name for s in core.get_all_project_statuses().values()}
 
 
 def _group_title(group, count: int | None = None) -> str:
-    icon = f"{group.emoji} " if group.emoji else ""
     n = len(group.entries) if count is None else count
-    return f"{icon}{group.label}  ({n})"
+    return f"{group.label}  ({n})"
 
 
 def _visible_groups(entries: list[dict], group_by: str, sort: str, filtering: bool):
@@ -116,10 +120,10 @@ def _visible_groups(entries: list[dict], group_by: str, sort: str, filtering: bo
 def _compute_ping(path: str) -> tuple[str, str]:
     p = Path(path)
     if not p.exists():
-        return "red", "❌ Dossier introuvable"
+        return "red", "Dossier introuvable"
     if (p / ".git").exists():
-        return "green", "✅ Dossier OK — dépôt Git présent"
-    return "yellow", "⚠️ Dossier OK — pas de dépôt Git"
+        return "green", "Dossier OK — dépôt Git présent"
+    return "yellow", "Dossier OK — pas de dépôt Git"
 
 
 _PING_COLORS = {"green": "#a6e3a1", "yellow": "#f9e2af", "red": "#f38ba8"}
@@ -216,7 +220,7 @@ class ProjectCard(QFrame):
         status_id = entry.get("status", "")
         if status_id:
             status = core.get_project_status_by_id(status_id)
-            text = f"{status.emoji} {status.name}" if status else status_id
+            text = status.name if status else status_id
             row2 = QHBoxLayout()
             row2.setAlignment(Qt.AlignHCenter)
             lbl_s = QLabel(text)
@@ -366,6 +370,26 @@ class ProjectGridView(QScrollArea):
         self._group_by:     str               = core.DEFAULT_GROUP
         self._filter_text:  str               = ""
         self._collapsed:    set[str]          = set()
+        # Rendu paresseux : une vue masquée ne construit rien (set_active la réveille), et au-delà de
+        # _CHUNK_MIN cartes, la construction est étalée en tranches pour ne jamais figer l'interface.
+        self._active:       bool              = True
+        self._dirty:        bool              = False
+        self._generation:   int               = 0
+        self._pending:      list[tuple]       = []
+        self._chunked:      bool              = False
+
+    def set_active(self, active: bool) -> None:
+        self._active = active
+        if active and self._dirty:
+            self._render()
+
+    def pending_cards(self) -> int:
+        return sum(len(entries) - done for _g, entries, _c, done in self._pending)
+
+    def flush(self) -> None:
+        """Termine tout de suite la construction étalée (tests, export…)."""
+        while self._pending:
+            self._pump()
 
     # ── Colonnes dynamiques ───────────────────────────────────────────────────
 
@@ -405,6 +429,8 @@ class ProjectGridView(QScrollArea):
         return [e for e in self._all_entries if core.entry_matches(e, needle)]
 
     def _clear(self) -> None:
+        self._generation += 1
+        self._pending = []
         while self._layout.count():
             item = self._layout.takeAt(0)
             widget = item.widget()
@@ -417,7 +443,45 @@ class ProjectGridView(QScrollArea):
         self._cards = []
 
     def _render(self) -> None:
+        if not self._active:
+            self._dirty = True
+            return
+        self._dirty = False
+        self.setUpdatesEnabled(False)
+        try:
+            self._render_now()
+        finally:
+            self.setUpdatesEnabled(True)
+        if self._pending:
+            QTimer.singleShot(0, lambda g=self._generation: self._pump_later(g))
+
+    def _pump_later(self, generation: int) -> None:
+        if generation != self._generation or not self._pending:
+            return
+        self._pump()
+        if self._pending:
+            QTimer.singleShot(0, lambda: self._pump_later(generation))
+
+    def _pump(self) -> None:
+        """Construit au plus _CHUNK cartes (le reste suit au prochain passage de la boucle d'événements)."""
+        budget = _CHUNK
+        self.setUpdatesEnabled(False)
+        try:
+            while self._pending and budget > 0:
+                grid, entries, colors, done = self._pending[0]
+                take = entries[done:done + budget]
+                self._add_cards(grid, take, colors, done)
+                budget -= len(take)
+                if done + len(take) >= len(entries):
+                    self._pending.pop(0)
+                else:
+                    self._pending[0] = (grid, entries, colors, done + len(take))
+        finally:
+            self.setUpdatesEnabled(True)
+
+    def _render_now(self) -> None:
         self._clear()
+        self._chunked = len(self._filtered()) > _CHUNK_MIN
         self._cols = self._calc_cols()
         filtering = bool(self._filter_text.strip())
         groups, ordered = _visible_groups(self._filtered(), self._group_by, self._sort_key, filtering)
@@ -458,14 +522,21 @@ class ProjectGridView(QScrollArea):
         grid.setSpacing(_CARD_GAP)
         grid.setContentsMargins(0, 0, 0, 6)
         grid.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        for i, entry in enumerate(entries):
+        if self._chunked:
+            self._pending.append((grid, list(entries), colors, 0))
+        else:
+            self._add_cards(grid, entries, colors, 0)
+        return holder
+
+    def _add_cards(self, grid: QGridLayout, entries: list[dict], colors: dict[str, str], offset: int) -> None:
+        for n, entry in enumerate(entries):
+            i = offset + n
             card = ProjectCard(entry, colors.get((entry.get("category") or "").lower(), ""))
             card.clicked.connect(self._on_card_click)
             card.context_requested.connect(self.context_requested)
             card.set_active(entry.get("path") == self._active_path)
             grid.addWidget(card, i // self._cols, i % self._cols)
             self._cards.append(card)
-        return holder
 
     # ── Ping global ───────────────────────────────────────────────────────────
 
@@ -591,12 +662,15 @@ class ProjectListView(QWidget):
     def _make_project_item(self, entry: dict) -> QTreeWidgetItem:
         name = entry.get("name", Path(entry["path"]).name)
         emoji = entry.get("emoji", "")
-        text = f"{emoji} {name}" if emoji else name
+        text = name
         status_id = entry.get("status", "")
         if status_id and status_id != core.DEFAULT_PROJECT_STATUS:
             status = core.get_project_status_by_id(status_id)
             text += f"  [{status.name if status else status_id}]"
         item = QTreeWidgetItem([text])
+        if emoji:
+            import icons
+            item.setIcon(0, icons.icon(emoji, color=entry.get("color") or None))
         item.setData(0, _ROLE_PATH, entry["path"])
         item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsDragEnabled)
         if entry.get("color"):
@@ -625,6 +699,9 @@ class ProjectListView(QWidget):
                 header.setFont(0, font)
                 if group.color:
                     header.setForeground(0, QColor(group.color))
+                if group.emoji:
+                    import icons
+                    header.setIcon(0, icons.icon(group.emoji, color=group.color or None))
                 tree.addTopLevelItem(header)
                 for entry in group.entries:
                     header.addChild(self._make_project_item(entry))
@@ -837,6 +914,7 @@ class ProjectBrowser(QWidget):
         v.addWidget(self._list_view, 1)
         v.addWidget(self._grid_view, 1)
         self._grid_view.setVisible(False)
+        self._grid_view.set_active(False)     # rendu paresseux : réveillée au passage en mode grille
 
         # ── Séparateur + boutons ──────────────────────────────────────────────
         sep = QFrame()
@@ -872,6 +950,7 @@ class ProjectBrowser(QWidget):
         self._btn_grid.setChecked(mode == self._MODE_GRID)
         self._list_view.setVisible(mode == self._MODE_LIST)
         self._grid_view.setVisible(mode == self._MODE_GRID)
+        self._grid_view.set_active(mode == self._MODE_GRID)
         if emit:
             self._emit_state()
 
@@ -950,12 +1029,23 @@ class ProjectBrowser(QWidget):
         menu = QMenu(self)
         sub = menu.addMenu(f"📂 Catégorie ({len(paths)} projet(s))" if len(paths) > 1 else "📂 Catégorie")
         for cat in core.list_categories():
-            label = f"{cat['emoji']} {cat['name']}".strip()
-            sub.addAction(label, lambda n=cat["name"]: self.assign_category(paths, n))
+            action = sub.addAction(cat["name"], lambda n=cat["name"]: self.assign_category(paths, n))
+            if cat.get("emoji"):
+                import icons
+                action.setIcon(icons.icon(cat["emoji"], color=cat.get("color") or None))
         if sub.actions():
             sub.addSeparator()
         sub.addAction("➕ Nouvelle catégorie…", lambda: self._assign_new_category(paths))
         sub.addAction("✕ Aucune catégorie", lambda: self.assign_category(paths, None))
+        provider = getattr(self, "extra_actions", None)       # entrées ajoutées par les plugins
+        extra = provider(paths) if callable(provider) else []
+        if extra:
+            menu.addSeparator()
+            import icons
+            for label, icon_id, run in extra:
+                action = menu.addAction(label, run)
+                if icon_id:
+                    action.setIcon(icons.icon(icon_id))
         menu.exec(pos)
 
     def _assign_new_category(self, paths: list[str]) -> None:

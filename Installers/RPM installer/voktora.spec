@@ -21,7 +21,7 @@ AutoReqProv: no
 Name:           voktora
 Version:        %{voktora_version}
 Release:        1
-Summary:        Voktora — Project Instance Manager
+Summary:        Voktora — Project Manager
 License:        MIT
 URL:            https://github.com/yo-le-zz/Voktora
 ExclusiveArch:  x86_64
@@ -46,7 +46,7 @@ Requires:       libxcb-cursor.so.0()(64bit)
 
 %description
 Voktora est un gestionnaire de projets de développement avec interface
-graphique : instances et intents, coffre chiffré, profils d'exécution, hooks,
+graphique : projets Git, catégories, coffre chiffré, profils d'exécution, hooks,
 snapshots, dashboard de santé et système de plugins. Authentification GitHub
 App ou OAuth. Créé par yolezz.
 

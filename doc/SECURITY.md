@@ -100,3 +100,17 @@ Tests : `tests/test_vault.py`, `tests/test_file_crypto.py`, `tests/test_snapshot
 ## Signaler une vulnérabilité
 
 Ouvrez une *security advisory* privée sur le dépôt GitHub plutôt qu'une issue publique.
+
+## Plugins et marketplace (1.0.6)
+
+- Un plugin est du code exécuté avec les droits de l'utilisateur : les permissions (`ui`, `projects.read`, `files`,
+  `network`, `shell`) sont déclarées, affichées avant l'installation et vérifiées par l'API, mais **ce n'est pas un
+  bac à sable**.
+- Le marketplace n'est lu qu'en HTTPS ; chaque fichier téléchargé est comparé à son empreinte SHA-256 de l'index
+  (un fichier modifié est refusé), les noms de fichiers sont filtrés (pas de `..`, de chemin absolu, de lien
+  symbolique, extensions autorisées uniquement) et la taille est bornée. Une installation échouée laisse
+  l'ancienne version intacte.
+- Les contributions passent par Pull Request : validation automatique (`tools/plugin_tool.py validate` : manifeste,
+  analyse statique refusant `eval`/`exec`/`os.system`/`shell=True` et les imports réseau/`subprocess` non déclarés)
+  puis relecture du mainteneur (CODEOWNERS).
+- Un plugin en erreur est isolé : ses exceptions sont capturées et affichées, sans arrêter l'application.

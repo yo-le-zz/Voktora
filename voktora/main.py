@@ -5,6 +5,7 @@ Point d'entrée de l'application.
 
 from __future__ import annotations
 
+import multiprocessing
 import os
 import sys
 
@@ -19,12 +20,24 @@ os.environ.setdefault(
 sys.path.insert(0, os.path.dirname(__file__))
 
 import core
+import linux_env
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 
 def main() -> None:
+    # Indispensable pour les processus de calcul (core.parallel) dans la version compilée ; sans effet sinon.
+    multiprocessing.freeze_support()
+    linux_env.prepare_environment()      # AVANT la création de QApplication (choix Wayland/X11, thème…)
+    missing = linux_env.missing_system_libs()
+    if missing:
+        # Qt va probablement échouer à charger son plugin xcb : on dit quoi installer, au lieu de laisser
+        # son message technique (« could not load the Qt platform plugin "xcb" ») sans explication.
+        family = linux_env.detect_distro()["family"]
+        print(f"Voktora : bibliothèques système manquantes ({', '.join(missing)}). "
+              f"Installation : {linux_env.install_hint(family)}", file=sys.stderr)
+
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
@@ -32,7 +45,12 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("Voktora")
     app.setApplicationVersion(core.APP_VERSION)
+    app.setDesktopFileName("voktora")   # relie la fenêtre à voktora.desktop (icône sous Wayland : GNOME, KDE…)
     app.setStyle("Fusion")
+
+    # Icônes vectorielles à la place des emojis (absents de nombreux Linux)
+    import icons
+    icons.install(app)
 
     # Icône
     assets = core.get_app_dir() / "assets"

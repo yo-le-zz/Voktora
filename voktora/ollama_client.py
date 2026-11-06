@@ -49,11 +49,14 @@ def list_models(host: str = DEFAULT_HOST, timeout: float = 5.0) -> list[str]:
     return [m.get("name", "") for m in data.get("models", []) if m.get("name")]
 
 
-def _generate(host: str, model: str, prompt: str, timeout: float) -> str:
+def _generate(host: str, model: str, prompt: str, timeout: float, max_tokens: int | None = None) -> str:
     """Appel bas niveau à /api/generate en mode non-streaming."""
     if not model:
         raise OllamaError("Aucun modèle Ollama sélectionné.")
-    payload = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode("utf-8")
+    body: dict = {"model": model, "prompt": prompt, "stream": False}
+    if max_tokens:
+        body["options"] = {"num_predict": int(max_tokens)}     # borne la longueur : réponse plus rapide
+    payload = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(
         f"{host.rstrip('/')}/api/generate", data=payload,
         headers={"Content-Type": "application/json"},

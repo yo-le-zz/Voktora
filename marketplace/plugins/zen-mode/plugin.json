@@ -1,0 +1,12 @@
+{
+  "id": "zen-mode",
+  "name": "Zen Mode",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Masque la barre latérale, la barre de menus et la barre d'état pour se concentrer (Ctrl+Shift+Z).",
+  "api": 2,
+  "entry": "main.py",
+  "permissions": ["ui"],
+  "tags": ["interface", "concentration"],
+  "homepage": "https://github.com/yo-le-zz/Voktora"
+}

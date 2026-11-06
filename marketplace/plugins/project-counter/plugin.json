@@ -1,0 +1,12 @@
+{
+  "id": "project-counter",
+  "name": "Project Counter",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Compteur de projets dans la barre d'état, et entrée « Copier le chemin » dans le menu clic droit.",
+  "api": 2,
+  "entry": "main.py",
+  "permissions": ["ui", "projects.read"],
+  "tags": ["interface", "projets"],
+  "homepage": "https://github.com/yo-le-zz/Voktora"
+}

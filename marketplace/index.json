@@ -1,0 +1,193 @@
+{
+  "plugins": [
+    {
+      "api": 2,
+      "author": "yolezz",
+      "description": "Minuteur Pomodoro dans la barre d'état (25 min de travail, 5 min de pause).",
+      "entry": "main.py",
+      "files": {
+        "main.py": "6f3f44610a9d835d095bd7999fa7e877ea79f6e7440c0d2c3a18f6f4ea9f838f",
+        "plugin.json": "d4015f1971787337c2dbd5fbbf6724af08798bafcdab5892ae307f25c9953278"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "focus-timer",
+      "min_voktora": "",
+      "name": "Focus Timer",
+      "path": "plugins/focus-timer",
+      "permissions": [
+        "ui"
+      ],
+      "tags": [
+        "productivité",
+        "pomodoro"
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "api": 2,
+      "author": "yolezz",
+      "description": "Statistiques Git du projet : branche, nombre de commits, dernier commit, principaux auteurs.",
+      "entry": "main.py",
+      "files": {
+        "main.py": "4f87c75d1edf1d00ae358aec8504b5abe5fd4e6aa5ef5efcb73a3ebc0823aaa2",
+        "plugin.json": "2b9b0126fa4d8c7cd03002348643c073f48feee4f1c5d76aed11e2f46b4277c3"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "git-insights",
+      "min_voktora": "",
+      "name": "Git Insights",
+      "path": "plugins/git-insights",
+      "permissions": [
+        "shell",
+        "ui"
+      ],
+      "tags": [
+        "git",
+        "statistiques"
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "api": 2,
+      "author": "yolezz",
+      "description": "Trois thèmes supplémentaires : Neon Night, Coffee et Mint (Paramètres → Thème).",
+      "entry": "main.py",
+      "files": {
+        "main.py": "99e604223ebb2a3d906f31316b8c5a49e0d47a46551f7167a05797a2a66ced58",
+        "plugin.json": "4f7124e351e1964fc619458c523cb51359c66430bb121849f7e1228f43e7aafd"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "neon-themes",
+      "min_voktora": "",
+      "name": "Neon Themes",
+      "path": "plugins/neon-themes",
+      "permissions": [
+        "ui"
+      ],
+      "tags": [
+        "thème",
+        "style"
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "api": 2,
+      "author": "yolezz",
+      "description": "Compteur de projets dans la barre d'état, et entrée « Copier le chemin » dans le menu clic droit.",
+      "entry": "main.py",
+      "files": {
+        "main.py": "d16d993fb8e94c89a0335611a52e5fe71a319a4948909b27d4ce7de68559187a",
+        "plugin.json": "e2f26582354bc2c4daa02410e3785c743adb3df3fca0699795689e7c99be412f"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "project-counter",
+      "min_voktora": "",
+      "name": "Project Counter",
+      "path": "plugins/project-counter",
+      "permissions": [
+        "projects.read",
+        "ui"
+      ],
+      "tags": [
+        "interface",
+        "projets"
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "api": 2,
+      "author": "yolezz",
+      "description": "Un bloc-notes par projet, dans un onglet dédié, sauvegardé automatiquement.",
+      "entry": "main.py",
+      "files": {
+        "main.py": "b4584d017dd6b03ed1c8e992210c5fab5cfe07616efb97b8e17432bad1ad9402",
+        "plugin.json": "01cd49e9bdbb5a65b1309dc5183f9b5806deed8b28a55f4225e79492208f84db"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "quick-notes",
+      "min_voktora": "",
+      "name": "Quick Notes",
+      "path": "plugins/quick-notes",
+      "permissions": [
+        "projects.read",
+        "ui"
+      ],
+      "tags": [
+        "notes",
+        "productivité"
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "api": 2,
+      "author": "yolezz",
+      "description": "Liste les TODO, FIXME et HACK du projet ouvert, dans un onglet dédié.",
+      "entry": "main.py",
+      "files": {
+        "main.py": "bd3fa16802259d3b1ba836f5afe02081161d1494296610b007065fbeb4e8d72d",
+        "plugin.json": "5d27df1f2c995b43bf9d1257decd1f823fabaaf26594f508dcde610ad739599a"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "todo-scanner",
+      "min_voktora": "",
+      "name": "TODO Scanner",
+      "path": "plugins/todo-scanner",
+      "permissions": [
+        "files",
+        "ui"
+      ],
+      "tags": [
+        "code",
+        "qualité"
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "api": 2,
+      "author": "yolezz",
+      "description": "Ajuste l'apparence : mode compact, coins arrondis, police plus grande, barres de défilement fines.",
+      "entry": "main.py",
+      "files": {
+        "main.py": "5d1941c9c5ea129df05319734f7e297527ae2c2d824e95fd32772426a4da8444",
+        "plugin.json": "5eb7886e23514616b7a3c1e379b0dd9596ce38e3a98ad4f08615fc988fe98e42"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "ui-tweaks",
+      "min_voktora": "",
+      "name": "UI Tweaks",
+      "path": "plugins/ui-tweaks",
+      "permissions": [
+        "ui"
+      ],
+      "tags": [
+        "interface",
+        "style"
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "api": 2,
+      "author": "yolezz",
+      "description": "Masque la barre latérale, la barre de menus et la barre d'état pour se concentrer (Ctrl+Shift+Z).",
+      "entry": "main.py",
+      "files": {
+        "main.py": "1b95cb35e10bdc92ec0b2d52ef3251c6e16ae9ad736fd39147938a20645f7875",
+        "plugin.json": "e354fee8e92b3c697deee0c9f7a729ef1c3ef73f5971072824d5ef8b82f823b4"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "zen-mode",
+      "min_voktora": "",
+      "name": "Zen Mode",
+      "path": "plugins/zen-mode",
+      "permissions": [
+        "ui"
+      ],
+      "tags": [
+        "interface",
+        "concentration"
+      ],
+      "version": "1.0.0"
+    }
+  ],
+  "schema": 1
+}

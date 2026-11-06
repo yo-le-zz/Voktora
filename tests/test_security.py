@@ -48,7 +48,7 @@ class TestNoShellInterpolation:
 
         def popen(cmd, cwd=None, **kw):
             calls.append((cmd, cwd))
-            if cmd[0] in ("gnome-terminal", "konsole"):
+            if cmd[0] != "xterm":
                 raise FileNotFoundError(cmd[0])
 
         monkeypatch.setattr(subprocess, "Popen", popen)

@@ -63,7 +63,7 @@ class UninstallDialog(QDialog):
             "• Les fichiers de configuration (<code>data/config.json</code>)<br>"
             "• Les backups automatiques (<code>data/backups/</code>)<br>"
             "• Les assets de l'application (<code>assets/</code>)<br><br>"
-            "<b>Les instances et intents sur vos disques externes ne sont PAS supprimés</b><br>"
+            "<b>Vos projets sur vos disques (dossier « Projects ») ne sont PAS supprimés</b><br>"
             "sauf si vous les avez stockés dans le dossier de l'application.<br><br>"
             "<span style='color:#f38ba8;'>⚠  Assurez-vous d'avoir fait des backups avant de continuer.</span>"
         )
@@ -97,7 +97,7 @@ class UninstallDialog(QDialog):
         v.addWidget(lbl_title)
         v.addWidget(workers._make_sep())
         info = QLabel(
-            "Voktora peut exporter <b>toutes vos instances et intents</b> en .zip<br>"
+            "Voktora peut exporter <b>tous vos projets</b> en .zip<br>"
             "et déplacer vos backups existants vers un dossier de votre choix.<br><br>"
             "Cette étape est <b>facultative</b> mais fortement recommandée."
         )
@@ -189,7 +189,7 @@ class UninstallDialog(QDialog):
         lines: list[str] = []
         if self._do_backup and self._backup_dir:
             lines.append(
-                f"✅  Backup de toutes les instances et intents vers :<br>"
+                f"✅  Backup de tous les projets vers :<br>"
                 f"<code>{self._backup_dir}</code>"
             )
         else:

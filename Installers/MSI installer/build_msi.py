@@ -11,6 +11,7 @@ Usage :
     python "Installers/MSI installer/build_msi.py" [VERSION]
 """
 
+import os
 import shutil
 import subprocess
 import sys
@@ -156,7 +157,14 @@ def main():
     DIST.mkdir(parents=True)
 
     # -- Compilation Nuitka ---------------------------------------------------
-    print("\n>>> Compilation Nuitka...")
+    native_flags: list[str] = []
+    try:
+        import voktora_native  # noqa: F401
+        native_flags = ["--include-module=voktora_native"]
+        print("\n>>> Extension native détectée : incluse dans le paquet")
+    except ImportError:
+        pass
+    print("\n>>> Compilation Nuitka (LTO, sans docstrings ni asserts)...")
     run([
         sys.executable, "-m", "nuitka",
         "--standalone",
@@ -164,6 +172,15 @@ def main():
         "--enable-plugin=pyside6",
         "--include-qt-plugins=iconengines,imageformats,platforms,styles,tls",
         "--assume-yes-for-downloads",
+        "--lto=yes",
+        "--python-flag=no_docstrings",
+        "--python-flag=no_asserts",
+        "--noinclude-unittest-mode=nofollow",
+        "--noinclude-pytest-mode=nofollow",
+        "--noinclude-setuptools-mode=nofollow",
+        "--nofollow-import-to=tkinter,test,pydoc,doctest,lib2to3",
+        f"--jobs={os.cpu_count() or 2}",
+        *native_flags,
         f"--windows-icon-from-ico={ROOT / 'assets' / 'Voktora.ico'}",
         "--windows-console-mode=disable",
         f"--output-dir={DIST}",

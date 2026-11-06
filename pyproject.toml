@@ -1,14 +1,21 @@
 [project]
 name = "voktora"
-version = "1.0.4"
+version = "1.0.6"
 description = "Voktora centralise la gestion de vos projets dans une interface unifiée et extensible."
 readme = "README.md"
 requires-python = ">=3.13"
+license = { text = "MIT" }
+authors = [{ name = "yolezz" }]
 dependencies = ["pyside6>=6.5", "cryptography>=42.0"]
 
 [dependency-groups]
 build = [
     "nuitka>=2.8",
+]
+# Extension Rust optionnelle (native/) : `uv sync --group native` puis
+# `cd native && uv run maturin develop --release`. Sans elle, tout fonctionne en Python pur.
+native = [
+    "maturin>=1.7,<2",
 ]
 dev = [
     "pytest>=8.0",

@@ -42,11 +42,10 @@ class CategoryEditor(QDialog):
         self.name_edit = QLineEdit(name)
         self.name_edit.setMaxLength(core.MAX_CATEGORY_NAME_LENGTH)
         self.name_edit.setPlaceholderText("ex: Clients, Perso, Open source…")
-        self.emoji_edit = QLineEdit(emoji)
-        self.emoji_edit.setMaxLength(8)
-        self.emoji_edit.setPlaceholderText("📁 (facultatif)")
+        from .emoji_picker_dialog import IconField
+        self.emoji_edit = IconField(emoji)
         form.addRow("Nom :", self.name_edit)
-        form.addRow("Emoji :", self.emoji_edit)
+        form.addRow("Icône :", self.emoji_edit)
 
         color_row = QHBoxLayout()
         self.color_btn = QPushButton()
@@ -161,7 +160,10 @@ class CategoriesDialog(QDialog):
         self.categories_list.clear()
         for cat in core.list_categories():
             n = counts.get(cat["name"], 0)
-            item = QListWidgetItem(f"{cat['emoji']} {cat['name']}  —  {n} projet(s)".strip())
+            item = QListWidgetItem(f"{cat['name']}  —  {n} projet(s)")
+            if cat["emoji"]:
+                import icons
+                item.setIcon(icons.icon(cat["emoji"], color=cat["color"] or None))
             item.setData(Qt.UserRole, cat["name"])
             if cat["color"]:
                 item.setForeground(QBrush(QColor(cat["color"])))

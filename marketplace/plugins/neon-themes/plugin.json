@@ -1,0 +1,12 @@
+{
+  "id": "neon-themes",
+  "name": "Neon Themes",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Trois thèmes supplémentaires : Neon Night, Coffee et Mint (Paramètres → Thème).",
+  "api": 2,
+  "entry": "main.py",
+  "permissions": ["ui"],
+  "tags": ["thème", "style"],
+  "homepage": "https://github.com/yo-le-zz/Voktora"
+}

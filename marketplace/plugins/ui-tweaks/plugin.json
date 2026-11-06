@@ -1,0 +1,12 @@
+{
+  "id": "ui-tweaks",
+  "name": "UI Tweaks",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Ajuste l'apparence : mode compact, coins arrondis, police plus grande, barres de défilement fines.",
+  "api": 2,
+  "entry": "main.py",
+  "permissions": ["ui"],
+  "tags": ["interface", "style"],
+  "homepage": "https://github.com/yo-le-zz/Voktora"
+}

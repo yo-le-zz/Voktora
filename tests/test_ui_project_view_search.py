@@ -68,6 +68,7 @@ class TestSharedSearchAcrossModes:
         assert browser._list_view.visible_paths() == ["/tmp/beta"]
 
     def test_clearing_search_restores_all_entries(self, browser):
+        browser._switch(browser._MODE_GRID)
         browser.get_search_widget().setText("urgent")
         browser.get_search_widget().setText("")
         assert len(browser._grid_view._cards) == 3
@@ -75,7 +76,36 @@ class TestSharedSearchAcrossModes:
     def test_sort_change_preserves_active_grid_filter(self, browser):
         # Régression : changer le tri en mode grille pendant une recherche
         # active réinitialisait le filtre avant ce correctif.
+        browser._switch(browser._MODE_GRID)
         browser.get_search_widget().setText("urgent")
         browser._sort_combo.setCurrentIndex(1)
         paths = [c._path for c in browser._grid_view._cards]
         assert set(paths) == {"/tmp/alpha", "/tmp/gamma"}
+
+
+class TestLazyAndChunkedGrid:
+    """1.0.6 : la grille masquée ne construit rien ; une grande grille est construite par tranches."""
+
+    def test_hidden_grid_builds_nothing_until_shown(self, browser):
+        assert browser._grid_view._cards == []
+        browser._switch(browser._MODE_GRID)
+        assert len(browser._grid_view._cards) == 3
+
+    def test_large_grid_is_built_in_chunks(self, isolated_data_dir):
+        import ui_project_view as view
+        grid = view.ProjectGridView()
+        entries = [{"name": f"p{i}", "path": f"/tmp/p{i}"} for i in range(view._CHUNK_MIN + 100)]
+        grid.populate(entries)
+        assert grid.pending_cards() > 0                    # tout n'est pas construit d'un coup
+        assert len(grid._cards) < len(entries)
+        grid.flush()
+        assert len(grid._cards) == len(entries)
+        assert grid.pending_cards() == 0
+
+    def test_new_render_cancels_pending_chunks(self, isolated_data_dir):
+        import ui_project_view as view
+        grid = view.ProjectGridView()
+        grid.populate([{"name": f"p{i}", "path": f"/tmp/p{i}"} for i in range(view._CHUNK_MIN + 100)])
+        grid.populate([{"name": "solo", "path": "/tmp/solo"}])
+        grid.flush()
+        assert [c._path for c in grid._cards] == ["/tmp/solo"]

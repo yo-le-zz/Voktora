@@ -268,6 +268,13 @@ _BUILTIN_THEMES: dict[str, dict[str, Any]] = {
 }
 
 
+# Thèmes supplémentaires (1.0.6) : voir theme_presets.py
+from theme_presets import PRESET_THEMES as _PRESETS  # noqa: E402
+
+for _key, _theme in _PRESETS.items():
+    _BUILTIN_THEMES.setdefault(_key, _theme)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # API PUBLIQUE
 # ══════════════════════════════════════════════════════════════════════════════
@@ -278,6 +285,11 @@ def get_available_themes() -> list[str]:
     for f in sorted(THEMES_DIR.glob("*.json")):
         if f.stem not in names:
             names.append(f.stem)
+    try:
+        import plugins
+        names += [k for k in plugins.extra_themes() if k not in names]      # thèmes fournis par des plugins
+    except Exception:
+        pass
     return names
 
 
@@ -288,6 +300,15 @@ def load_theme(name: str) -> dict:
     """
     if name in _BUILTIN_THEMES:
         t = dict(_BUILTIN_THEMES[name])
+        t["colors"] = _normalize_colors(t["colors"])
+        return t
+    try:
+        import plugins
+        plugin_theme = plugins.extra_themes().get(name)
+    except Exception:
+        plugin_theme = None
+    if plugin_theme is not None:
+        t = dict(plugin_theme)
         t["colors"] = _normalize_colors(t["colors"])
         return t
 
@@ -317,6 +338,11 @@ def set_theme(name: str) -> None:
     app_cfg = core.get_app_config()
     app_cfg["theme"] = name
     core.set_app_config(app_cfg)
+    try:
+        import plugins
+        plugins.fire_hook("on_theme_changed", data={"theme": name})
+    except Exception:
+        pass         # les plugins ne doivent jamais empêcher de changer de thème
 
 
 def apply_theme_to_app(app) -> None:
@@ -329,7 +355,17 @@ def apply_theme_to_app(app) -> None:
     except (KeyError, ValueError):
         theme = load_theme("default")
     qss = _build_qss(theme)
+    try:
+        import plugins
+        qss += "\n" + plugins.extra_stylesheet()        # styles ajoutés par les plugins (après le thème)
+    except Exception:
+        pass         # un plugin ne doit jamais empêcher d'appliquer le thème
     app.setStyleSheet(qss)
+    try:
+        import icons
+        icons.set_default_color(theme.get("text", "#cdd6f4"))
+    except Exception:
+        pass         # les icônes gardent leur couleur par défaut
 
 
 def import_theme(path: Path) -> str:
@@ -579,7 +615,16 @@ QMenu {{
     padding: 4px 0;
 }}
 QMenu::item {{
-    padding: 5px 28px 5px 16px;
+    padding: 7px 30px 7px 38px;
+    margin: 1px 4px;
+    border-radius: 4px;
+}}
+QMenu::icon {{
+    position: absolute;
+    left: 12px;
+}}
+QMenu::indicator {{
+    left: 12px;
 }}
 QMenu::item:selected {{
     background-color: {c('surface0')};

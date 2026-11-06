@@ -1,0 +1,4 @@
+# Le mainteneur relit tout ce qui touche au marketplace (code exécuté chez les utilisateurs).
+/marketplace/            @yo-le-zz
+/tools/plugin_tool.py    @yo-le-zz
+/voktora/plugins/        @yo-le-zz

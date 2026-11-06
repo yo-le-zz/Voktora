@@ -7,6 +7,7 @@ Anciennement un unique fichier ui_main.py. Découpé en :
                               OAuthPollWorker, _make_sep (TaskWorker vient de task_worker.py)
   task_dialog.py           — TaskDialog : fenêtre de progression avec annulation
   import_dialog.py         — ImportDialog : import d'un dossier ou d'un ZIP
+  account_sync_dialog.py   — AccountSyncDialog : cloner d'un coup les dépôts de son compte
   clone_dialog.py          — CloneDialog : clone depuis ses dépôts GitHub ou une URL
   repo_picker.py           — RepoPicker : liste de dépôts filtrable par organisation
   github_dialog.py         — GitHubDialog : compte, organisations, classement automatique

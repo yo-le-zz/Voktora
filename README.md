@@ -8,7 +8,7 @@
 
 par [**yolezz**](https://github.com/yo-le-zz)
 
-[![Version](https://img.shields.io/badge/version-1.0.4-89b4fa?style=flat-square)](https://github.com/yo-le-zz/Voktora/releases)
+[![Version](https://img.shields.io/badge/version-1.0.6-89b4fa?style=flat-square)](https://github.com/yo-le-zz/Voktora/releases)
 [![Python](https://img.shields.io/badge/python-3.13+-cba6f7?style=flat-square)](https://python.org)
 [![PySide6](https://img.shields.io/badge/PySide6-6.x-a6e3a1?style=flat-square)](https://pypi.org/project/PySide6/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-fab387?style=flat-square)](#installation)
@@ -30,9 +30,9 @@ Voktora est un gestionnaire de projets de développement avec interface graphiqu
 
 | Plateforme | Téléchargement | Commande |
 |-----------|---------------|---------|
-| 🐧 Linux (Debian/Ubuntu) | `voktora_1.0.4_amd64.deb` | `sudo apt install ./voktora_*.deb` |
-| 🐧 Linux (Fedora/RHEL/openSUSE) | `voktora-1.0.4-1.x86_64.rpm` | `sudo dnf install ./voktora-*.rpm` |
-| 🪟 Windows 10/11 x64 | `Voktora_1.0.4_x64.msi` | Double-cliquer |
+| 🐧 Linux (Debian/Ubuntu) | `voktora_1.0.6_amd64.deb` | `sudo apt install ./voktora_*.deb` |
+| 🐧 Linux (Fedora/RHEL/openSUSE) | `voktora-1.0.6-1.x86_64.rpm` | `sudo dnf install ./voktora-*.rpm` |
+| 🪟 Windows 10/11 x64 | `Voktora_1.0.6_x64.msi` | Double-cliquer |
 
 → [Guide d'installation complet](doc/INSTALL.md)
 
@@ -52,7 +52,9 @@ Voktora est un gestionnaire de projets de développement avec interface graphiqu
 | 📸 Snapshots | Capture, restauration, diff entre états d'un projet |
 | 🧱 Templates | Python, C++, Web, Discord Bot, Minecraft Mod |
 | 📊 Dashboard | Score de santé 0–100, stats d'usage, .gitignore check |
-| 🧩 Plugins | Système extensible, rechargement à chaud |
+| 🧩 Plugins & marketplace | API v2 (onglets, menus, panneaux, styles, thèmes, événements), installation en un clic, contributions par Pull Request |
+| 🎨 Thèmes | Plus de 25 thèmes intégrés (Catppuccin, Dracula, Nord, Tokyo Night, Gruvbox, OLED, clairs…) + thèmes de plugins |
+| ⚡ Python × Rust | Extension native optionnelle (copie/analyse parallèles) et interface sans blocage, même avec des centaines de projets |
 | 🐙 GitHub App | JWT RS256, token renouvelé automatiquement |
 | 🧠 Smart commit | Messages Conventional Commits sans IA |
 
@@ -64,7 +66,8 @@ Voktora est un gestionnaire de projets de développement avec interface graphiqu
 |-----|---------|
 | [INSTALL.md](doc/INSTALL.md) | Installation .deb, .rpm, .msi, depuis les sources |
 | [BUILD.md](doc/BUILD.md) | Compilation Nuitka, packaging .deb / .rpm / .msi |
-| [PLUGINS.md](doc/PLUGINS.md) | Développer des plugins |
+| [PLUGINS.md](doc/PLUGINS.md) | Développer des plugins (API v2) |
+| [marketplace/README.md](marketplace/README.md) | Proposer un plugin : fork → Pull Request |
 | [VAULT.md](doc/VAULT.md) | Vault & sécurité |
 | [HOOKS.md](doc/HOOKS.md) | Système de hooks |
 | [PROFILES.md](doc/PROFILES.md) | Profils d'exécution |
@@ -99,8 +102,11 @@ Voktora/
 │   ├── ui_project_panel.py Panneau projet
 │   ├── task_worker.py      Thread de travail (progression, annulation)
 │   ├── vault.py · hooks.py · profiles.py · templates.py · snapshots.py
-│   ├── dashboard.py · plugins.py · theme_manager.py · mc.py · git.py
+│   ├── plugins/            Plugins : manifeste, API, interface, marketplace
+│   ├── dashboard.py · theme_manager.py · theme_presets.py · mc.py · git.py
 │   └── themes/             CSS Catppuccin
+├── marketplace/            Catalogue de plugins (index.json + plugins/, par Pull Request)
+├── tools/                  plugin_tool.py : création/validation de plugins
 ├── tests/                  Suite pytest (`uv run pytest`)
 ├── assets/                 Icônes
 ├── Installers/             Scripts .deb / .rpm (Linux) et .msi (Windows)
@@ -120,6 +126,7 @@ Voktora/
 | `Ctrl+N` | Nouveau projet |
 | `Ctrl+I` | Importer un dossier ou un ZIP |
 | `Ctrl+F` | Rechercher / switcher projet |
+| `Ctrl+Maj+P` | Plugins et marketplace |
 | `Escape` | Effacer la recherche |
 
 ---

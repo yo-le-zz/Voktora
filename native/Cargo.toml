@@ -1,0 +1,24 @@
+[package]
+name = "voktora_native"
+version = "1.0.6"
+edition = "2021"
+authors = ["yolezz"]
+license = "MIT"
+description = "Accélérations natives optionnelles pour Voktora (parcours, hachage, copie, recherche)."
+publish = false
+
+[lib]
+name = "voktora_native"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module"] }
+rayon = "1.10"
+crc32fast = "1.4"
+
+[profile.release]
+opt-level = 3
+lto = "fat"          # optimisation inter-crates maximale
+codegen-units = 1    # une seule unité : le compilateur voit tout le code
+panic = "abort"      # pas de déroulement de pile : binaire plus petit et plus rapide
+strip = true

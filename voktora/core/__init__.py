@@ -8,6 +8,9 @@ par domaine pour être plus lisible et plus facile à maintenir :
   config_store.py — lecture/écriture/migration de config.json
   drives.py       — disques disponibles, racine des projets
   crypto.py       — chiffrement Fernet (AES-128-CBC + HMAC) + vault
+  native.py       — passerelle vers l'extension Rust optionnelle (repli Python pur)
+  parallel.py     — multi-processus / multi-threads pour les tâches lourdes
+  legacy_layout.py — fin de l'ancienne séparation Instances/Intents sur le disque
   github_auth.py  — OAuth device flow, GitHub App, sessions
   projects.py     — CRUD projets, import (zip/dossier/clone), export
   archive.py      — extraction/copie/déplacement/export avec progression
@@ -51,7 +54,10 @@ from . import (
     git_ops,
     github_api,
     github_auth,
+    legacy_layout,
+    native,
     organize,
+    parallel,
     paths,
     projects,
     system,
@@ -74,6 +80,9 @@ _SUBMODULES = (
     github_auth,
     system,
     diagnostics,
+    legacy_layout,
+    native,
+    parallel,
 )
 
 
