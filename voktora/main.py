@@ -29,6 +29,8 @@ from PySide6.QtWidgets import QApplication
 def main() -> None:
     # Indispensable pour les processus de calcul (core.parallel) dans la version compilée ; sans effet sinon.
     multiprocessing.freeze_support()
+    from core import tls
+    tls.install()                        # certificats HTTPS (version compilée : « CERTIFICATE_VERIFY_FAILED »)
     linux_env.prepare_environment()      # AVANT la création de QApplication (choix Wayland/X11, thème…)
     missing = linux_env.missing_system_libs()
     if missing:
@@ -70,6 +72,10 @@ def main() -> None:
         if dlg.exec() != 1:  # QDialog.Accepted
             sys.exit(0)
         core.vault_init(dlg.get_password())
+
+    # Vault : propose le déverrouillage seulement s'il contient des secrets (« Plus tard » possible)
+    from ui_dialogs import prompt_at_startup
+    prompt_at_startup()
 
     # Thème
     import theme_manager

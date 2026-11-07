@@ -242,6 +242,8 @@ def _migrate_config(cfg: dict) -> tuple:
         "quick_apps": [],          # [{"name": "VS Code", "cmd": "code", "icon": "💙"}, ...]
         "cache_mode": "memory",    # "memory" ou "disk"
         "cache_size_limit_mb": 256,
+        "disk_reset_confirm_mb": 500,   # au-delà : « tout réinitialiser » demande une double confirmation
+        "snapshot_keep": 0,             # snapshots conservés par projet (0 = illimité)
     })
 
     # Garantir les nouveaux champs dans app_config
@@ -249,6 +251,7 @@ def _migrate_config(cfg: dict) -> tuple:
     for key, val in [
         ("hide_github_not_connected", False), ("quick_apps", []),
         ("cache_mode", "memory"), ("cache_size_limit_mb", 256),
+        ("disk_reset_confirm_mb", 500), ("snapshot_keep", 0),
         ("auth_method", constants.AUTH_METHOD_OAUTH), ("github_client_id", ""),
     ]:
         if key not in app_cfg:
@@ -294,6 +297,8 @@ def _get_default_config() -> dict:
             "quick_apps": [],
             "cache_mode": "memory",
             "cache_size_limit_mb": 256,
+            "disk_reset_confirm_mb": 500,
+            "snapshot_keep": 0,
             "auth_method": constants.AUTH_METHOD_OAUTH,
             "github_client_id": "",
         },

@@ -10,7 +10,7 @@
 #   VERSION par défaut : contenu de voktora/version.txt
 #
 # Dépendances build :
-#   pip install nuitka pyside6 cryptography
+#   uv  (https://docs.astral.sh/uv/) : installe tout le reste (Nuitka, PySide6, cryptography) depuis uv.lock
 #   sudo apt install patchelf rpm        # Debian/Ubuntu (fournit rpmbuild)
 #   sudo dnf install patchelf rpm-build  # Fedora/RHEL
 #

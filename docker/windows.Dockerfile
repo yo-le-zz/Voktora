@@ -31,9 +31,12 @@ RUN dotnet tool install --global wix --version 4.0.6 ; \
     [Environment]::SetEnvironmentVariable('PATH', $env:PATH, 'Machine') ; \
     wix extension add --global WixToolset.UI.wixext/4.0.6
 
-RUN python -m pip install --no-cache-dir nuitka pyside6 cryptography
+# uv (jamais pip) : Nuitka, PySide6 et cryptography viennent de uv.lock.
+RUN powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/install.ps1 | iex"
+ENV PATH="C:\\Users\\ContainerAdministrator\\.local\\bin;${PATH}"
 
 WORKDIR C:/app
 COPY . C:/app
+RUN uv sync --frozen --group build
 
-ENTRYPOINT ["python", "Installers/MSI installer/build_msi.py"]
+ENTRYPOINT ["uv", "run", "--frozen", "--group", "build", "python", "Installers/MSI installer/build_msi.py"]

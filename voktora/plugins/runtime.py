@@ -13,7 +13,10 @@ dont vous avez confiance en l'auteur.
 
 from __future__ import annotations
 
+import builtins
 import contextlib
+import importlib.abc
+import importlib.machinery
 import importlib.util
 import json
 import os
@@ -33,6 +36,7 @@ from typing import Any
 
 import core
 
+from . import audit, lock
 from . import manifest as manifest_mod
 
 # ── Événements ────────────────────────────────────────────────────────────────
@@ -97,6 +101,10 @@ class PluginInfo:
     module_name: str = ""
     teardown:    list[Callable] = field(default_factory=list)
     on_unload:   Callable | None = None
+    origin:      str = "local"                # « market » (vérifié) ou « local » (installé par vous)
+    tier:        str = ""                     # « official » / « community » (marketplace uniquement)
+    repo:        str = ""
+    commit:      str = ""
 
     def note_error(self, message: str) -> None:
         self.errors.append(message)
@@ -128,6 +136,37 @@ _lock = threading.RLock()
 
 def plugins_dir() -> Path:
     return core.get_data_dir() / "plugins"
+
+
+def revoked_path() -> Path:
+    return core.get_data_dir() / "plugins_data" / "_revoked.json"
+
+
+def revoked_entry(plugin_id: str, commit: str = "") -> dict | None:
+    """Retrait décidé par le mainteneur (liste téléchargée avec l'index) : raison, ou None."""
+    try:
+        items = json.loads(revoked_path().read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    for item in items if isinstance(items, list) else []:
+        if isinstance(item, dict) and item.get("id") == plugin_id and (not item.get("commit") or item["commit"] == commit):
+            return item
+    return None
+
+
+def enforce_revocations() -> list[str]:
+    """Décharge (et bloque) les plugins du marketplace retirés. Retourne leurs identifiants."""
+    removed = []
+    with _lock:
+        for info in list(_plugins):
+            if info.origin != "market":
+                continue
+            item = revoked_entry(info.id, info.commit)
+            if item is not None:
+                unload(info)
+                info.error = f"Plugin retiré par le mainteneur : {item.get('reason') or 'raison non précisée'}"
+                removed.append(info.id)
+    return removed
 
 
 def plugin_data_dir(plugin_id: str) -> Path:
@@ -553,9 +592,84 @@ def _describe(entry: Path, disabled: set[str]) -> PluginInfo | None:
         info.module_name = f"voktora_plugin_{entry.stem}"
     else:
         return None
+    if not info.legacy:
+        _check_trust(info)
     if info.id in disabled:
         info.enabled = False
     return info
+
+
+def _check_trust(info: PluginInfo) -> None:
+    """Plugins du marketplace : intégrité (SHA-256), analyse statique et retrait, AVANT toute exécution."""
+    data = lock.read_lock(info.path)
+    if not lock.is_market_install(data):
+        return
+    info.origin = "market"
+    info.tier = str(data.get("tier", ""))
+    info.repo = str(data.get("repo", ""))
+    info.commit = str(data.get("commit", ""))
+    problems = lock.verify(info.path, data)
+    if problems:
+        info.error = ("Intégrité : les fichiers ne correspondent plus à ceux installés depuis le marketplace ("
+                      + ", ".join(problems[:4]) + "). Réinstallez le plugin depuis le marketplace.")
+        return
+    errors, _warnings = audit.scan_folder(info.path, info.permissions)
+    if errors:
+        info.error = "Analyse de sécurité : " + " ; ".join(errors[:4])
+        return
+    item = revoked_entry(info.id, info.commit)
+    if item is not None:
+        info.error = f"Plugin retiré par le mainteneur : {item.get('reason') or 'raison non précisée'}"
+
+
+
+
+def _guarded_builtins(permissions: list[str], plugin_id: str) -> dict[str, Any]:
+    """Copie des builtins sans eval/exec/compile/breakpoint et avec un __import__ filtré par permissions."""
+    real_import = builtins.__import__
+
+    def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):      # noqa: A002
+        if level == 0:
+            candidates = [name] + [f"{name}.{item}" for item in (fromlist or ()) if isinstance(item, str)]
+            for candidate in candidates:
+                if audit.is_blocked(candidate, permissions):
+                    raise ImportError(f"Le plugin « {plugin_id} » n'a pas le droit d'importer « {candidate} » "
+                                      f"(permission manquante ou module interdit).")
+        return real_import(name, globals, locals, fromlist, level)
+
+    safe = {k: v for k, v in vars(builtins).items()
+            if k not in {"eval", "exec", "compile", "breakpoint", "__loader__", "__spec__"}}
+    safe["__import__"] = guarded_import
+    return safe
+
+
+class _GuardedLoader(importlib.machinery.SourceFileLoader):
+    """Charge un module de plugin du marketplace avec des builtins filtrés."""
+
+    def __init__(self, fullname: str, path: str, permissions: list[str], plugin_id: str):
+        super().__init__(fullname, path)
+        self._permissions, self._plugin_id = permissions, plugin_id
+
+    def exec_module(self, module) -> None:
+        module.__dict__["__builtins__"] = _guarded_builtins(self._permissions, self._plugin_id)
+        super().exec_module(module)
+
+
+class _GuardedFinder(importlib.abc.MetaPathFinder):
+    """Les modules annexes d'un plugin du marketplace (`from . import util`) sont filtrés eux aussi."""
+
+    def find_spec(self, fullname, path=None, target=None):
+        for prefix, (permissions, plugin_id) in _GUARDED_FINDER_DATA.items():
+            if fullname.startswith(prefix + ".") and path:
+                spec = importlib.machinery.PathFinder.find_spec(fullname, path, target)
+                if spec is not None and spec.origin and spec.origin.endswith(".py"):
+                    spec.loader = _GuardedLoader(fullname, spec.origin, permissions, plugin_id)
+                return spec
+        return None
+
+
+_GUARDED_FINDER_DATA: dict[str, tuple[list[str], str]] = {}
+_finder = _GuardedFinder()
 
 
 def _entry_file(info: PluginInfo) -> Path:
@@ -569,6 +683,15 @@ def _load_into(info: PluginInfo) -> None:
     try:
         entry = _entry_file(info)
         kwargs = {} if info.legacy else {"submodule_search_locations": [str(info.path)]}
+        if info.origin == "market":
+            # Revérifie juste avant d'exécuter (le fichier a pu changer depuis le démarrage).
+            _check_trust(info)
+            if info.error:
+                return
+            _GUARDED_FINDER_DATA[info.module_name] = (list(info.permissions), info.id)
+            if _finder not in sys.meta_path:
+                sys.meta_path.insert(0, _finder)
+            kwargs["loader"] = _GuardedLoader(info.module_name, str(entry), list(info.permissions), info.id)
         spec = importlib.util.spec_from_file_location(info.module_name, entry, **kwargs)
         if spec is None or spec.loader is None:
             raise ImportError(f"Impossible de charger {entry}")
@@ -608,6 +731,7 @@ def unload(info: PluginInfo, keep_error: bool = False) -> None:
     had_style = bool(info.stylesheet)
     info.stylesheet = ""
     info.loaded = False
+    _GUARDED_FINDER_DATA.pop(info.module_name, None)
     if info.module_name:
         for name in [n for n in sys.modules if n == info.module_name or n.startswith(info.module_name + ".")]:
             sys.modules.pop(name, None)

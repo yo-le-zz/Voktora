@@ -21,10 +21,12 @@
 | Outil | Version | Installation |
 |-------|---------|--------------|
 | Python | 3.11+ | [python.org](https://python.org) |
-| uv | dernière | `pip install uv` |
-| Nuitka | 2.x | `uv pip install nuitka` |
-| PySide6 | 6.x | `uv pip install pyside6` |
-| cryptography | dernière | `uv pip install cryptography` |
+| uv | dernière | `curl -LsSf https://astral.sh/uv/install.sh \| sh` (Windows : `irm https://astral.sh/uv/install.ps1 \| iex`) |
+| Rust (optionnel) | stable | [rustup.rs](https://rustup.rs) — pour l'extension native ; sans lui, Python pur |
+
+Nuitka, PySide6 et cryptography sont installés **par uv** depuis `uv.lock` : n'utilisez jamais `pip`.
+Les scripts `Installers/*` lancent tout via `uv run` : un simple `./Installers/RPM\ installer/build_rpm.sh`
+suffit (uv synchronise l'environnement, compile l'extension Rust si `cargo` est présent, puis Nuitka).
 
 **Linux uniquement :**
 ```bash
@@ -47,10 +49,8 @@ wix extension add WixToolset.UI.wixext
 ```bash
 git clone https://github.com/yo-le-zz/Voktora.git
 cd Voktora
-uv venv
-source .venv/bin/activate  # Windows : .venv\Scripts\activate
-uv pip install pyside6 cryptography
-python src/main.py
+uv sync                          # environnement + dépendances depuis uv.lock
+uv run python voktora/main.py
 ```
 
 ---
@@ -60,7 +60,7 @@ python src/main.py
 ### Linux
 
 ```bash
-python -m nuitka \
+uv run --group build python -m nuitka \
   --standalone \
   --remove-output \
   --enable-plugin=pyside6 \
@@ -68,12 +68,12 @@ python -m nuitka \
   --linux-icon=assets/Voktora.png \
   --output-dir=dist/linux \
   --output-filename=voktora \
-  src/main.py
+  voktora/main.py
 
 # Copier les ressources
-cp -r src/themes dist/linux/main.dist/themes
+cp -r voktora/themes dist/linux/main.dist/themes
 cp -r assets     dist/linux/main.dist/assets
-cp src/version.txt dist/linux/main.dist/version.txt
+cp voktora/version.txt dist/linux/main.dist/version.txt
 
 # Lancer
 ./dist/linux/main.dist/voktora
@@ -82,7 +82,7 @@ cp src/version.txt dist/linux/main.dist/version.txt
 ### Windows (PowerShell)
 
 ```powershell
-python -m nuitka `
+uv run --group build python -m nuitka `
   --standalone `
   --remove-output `
   --enable-plugin=pyside6 `
@@ -90,12 +90,12 @@ python -m nuitka `
   --windows-console-mode=disable `
   --output-dir=dist\windows `
   --output-filename=voktora `
-  src\main.py
+  voktora\main.py
 
 # Copier les ressources
-Copy-Item -Recurse src\themes dist\windows\main.dist\themes
+Copy-Item -Recurse voktora\themes dist\windows\main.dist\themes
 Copy-Item -Recurse assets     dist\windows\main.dist\assets
-Copy-Item src\version.txt     dist\windows\main.dist\version.txt
+Copy-Item voktora\version.txt     dist\windows\main.dist\version.txt
 
 # Lancer
 .\dist\windows\main.dist\voktora.exe
@@ -107,10 +107,10 @@ Copy-Item src\version.txt     dist\windows\main.dist\version.txt
 
 ```bash
 # Script automatique (compile + package en .deb)
-bash "Installers/DEB installer/build_deb.sh" 1.0.6
+bash "Installers/DEB installer/build_deb.sh" 1.0.7
 
 # Résultat
-ls dist/linux/voktora_1.0.6_amd64.deb
+ls dist/linux/voktora_1.0.7_amd64.deb
 ```
 
 Le script :
@@ -127,11 +127,23 @@ Le script :
 
 ```bash
 # Prérequis : paquet « rpm » (Debian/Ubuntu) ou « rpm-build » (Fedora/RHEL)
-bash "Installers/RPM installer/build_rpm.sh" 1.0.6
+bash "Installers/RPM installer/build_rpm.sh" 1.0.7
 
 # Résultat
-ls dist/linux/voktora-1.0.6-1.x86_64.rpm
+ls dist/linux/voktora-1.0.7-1.x86_64.rpm
 ```
+## Paquet Arch / Omarchy (`.pkg.tar.zst`)
+
+Assemblé à la main (`.PKGINFO` + `.INSTALL` + arbre de fichiers, zstd) : se construit depuis n'importe quelle
+distribution, sans `makepkg`. Réutilise la compilation Nuitka du `.deb`. Dépend de `zstd`.
+
+```bash
+bash "Installers/Arch installer/build_arch.sh" 1.0.7
+ls dist/linux/voktora-1.0.7-1-x86_64.pkg.tar.zst
+```
+
+`1.0.7-rc1` devient `1.0.7rc1` (pacman interdit le tiret dans `pkgver`).
+
 
 Le script réutilise la compilation Nuitka du `.deb` si elle existe (la CI compile **une seule fois**
 puis produit les deux paquets), construit la même arborescence installée, puis lance `rpmbuild -bb`
@@ -139,7 +151,7 @@ avec `Installers/RPM installer/voktora.spec`. Particularités :
 
 - paquet binaire (`ExclusiveArch: x86_64`), compression xz, sans `debuginfo` ni strip (Nuitka embarque Qt) ;
 - dépendances déclarées **par bibliothèque** (`libGL.so.1()(64bit)`…) : valables sur Fedora, RHEL et openSUSE ;
-- une version de préversion `1.0.6-rc1` devient `1.0.6~rc1` (le tiret est interdit dans le champ `Version`) ;
+- une version de préversion `1.0.7-rc1` devient `1.0.7~rc1` (le tiret est interdit dans le champ `Version`) ;
 - contrôle rapide : `rpm -qpl`, `rpm -qpR` et `rpm -qpi` sur le fichier produit.
 
 ---
@@ -148,10 +160,10 @@ avec `Installers/RPM installer/voktora.spec`. Particularités :
 
 ```powershell
 # Script automatique (compile + package en .msi via WiX)
-python "Installers\MSI installer\build_msi.py" 1.0.6
+uv run --group build python "Installers\MSI installer\build_msi.py" 1.0.7
 
 # Résultat
-dir dist\windows\Voktora_1.0.6_x64.msi
+dir dist\windows\Voktora_1.0.7_x64.msi
 ```
 
 Le script :

@@ -10,10 +10,10 @@
 
 ```bash
 # 1. Télécharger le .deb depuis la dernière release
-wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora_1.0.6_amd64.deb
+wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora_1.0.7_amd64.deb
 
 # 2. Installer
-sudo apt install ./voktora_1.0.6_amd64.deb   # résout aussi les dépendances
+sudo apt install ./voktora_1.0.7_amd64.deb   # résout aussi les dépendances
 
 # 4. Lancer
 voktora
@@ -24,15 +24,24 @@ voktora
 
 ```bash
 # 1. Télécharger le .rpm depuis la dernière release
-wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora-1.0.6-1.x86_64.rpm
+wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora-1.0.7-1.x86_64.rpm
 
 # 2. Installer (les bibliothèques Qt nécessaires sont résolues automatiquement)
-sudo dnf install ./voktora-1.0.6-1.x86_64.rpm        # Fedora / RHEL
-sudo zypper install ./voktora-1.0.6-1.x86_64.rpm     # openSUSE
+sudo dnf install ./voktora-1.0.7-1.x86_64.rpm        # Fedora / RHEL
+sudo zypper install ./voktora-1.0.7-1.x86_64.rpm     # openSUSE
 
 # 3. Lancer
 voktora
 ```
+## Arch Linux, Omarchy, EndeavourOS, Manjaro, CachyOS (`.pkg.tar.zst`)
+
+```bash
+wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora-1.0.7-1-x86_64.pkg.tar.zst
+sudo pacman -U ./voktora-1.0.7-1-x86_64.pkg.tar.zst
+```
+
+Un `PKGBUILD` de référence (`voktora-bin`) est fourni dans `Installers/Arch installer/`.
+
 
 Désinstallation : `sudo dnf remove voktora` (ou `sudo zypper remove voktora`).
 
@@ -60,7 +69,7 @@ Les données utilisateur (`~/.voktora/`) ne sont **pas** supprimées.
 
 ### Via le .msi (recommandé)
 
-1. Télécharger `Voktora_1.0.6_x64.msi` depuis [les releases GitHub](https://github.com/yo-le-zz/Voktora/releases/latest)
+1. Télécharger `Voktora_1.0.7_x64.msi` depuis [les releases GitHub](https://github.com/yo-le-zz/Voktora/releases/latest)
 2. Double-cliquer sur le `.msi`
 3. Suivre l'assistant d'installation (Next → Install → Finish)
 4. Voktora est disponible dans le menu Démarrer et sur le Bureau
@@ -89,9 +98,9 @@ Les données utilisateur (`%LOCALAPPDATA%\Voktora\` ou `~/.voktora/`) ne sont **
 ```bash
 git clone https://github.com/yo-le-zz/Voktora.git
 cd Voktora
-pip install uv
-uv pip install pyside6 cryptography
-python src/main.py
+curl -LsSf https://astral.sh/uv/install.sh | sh   # installe uv (une seule fois)
+uv sync
+uv run python voktora/main.py
 ```
 
 Voir [BUILD.md](BUILD.md) pour les détails de compilation.

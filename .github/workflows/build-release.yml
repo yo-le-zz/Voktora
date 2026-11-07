@@ -170,7 +170,7 @@ jobs:
             libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
             libxcb-xkb1 libxkbcommon-x11-0 libgl1 libglib2.0-0 \
             libegl1 libopengl0 libxcb-cursor0 \
-            patchelf dpkg-dev rpm
+            patchelf dpkg-dev rpm zstd
 
       - name: Build Linux (.deb) - compile Voktora avec Nuitka
         if: matrix.platform == 'linux'
@@ -183,6 +183,12 @@ jobs:
         env:
           VERSION: ${{ needs.version.outputs.number }}
         run: uv run --frozen --group build bash "Installers/RPM installer/build_rpm.sh" "$VERSION"
+
+      - name: Build Linux (.pkg.tar.zst Arch / Omarchy) - reutilise la compilation du .deb
+        if: matrix.platform == 'linux'
+        env:
+          VERSION: ${{ needs.version.outputs.number }}
+        run: uv run --frozen --group build bash "Installers/Arch installer/build_arch.sh" "$VERSION"
 
       # -- Windows ----------------------------------------------------------------
       - name: Installer WiX Toolset (Windows)
@@ -216,6 +222,14 @@ jobs:
           path: dist/linux/voktora-*.rpm
           if-no-files-found: error
 
+      - name: Upload Arch artifact
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-arch
+          path: dist/linux/voktora-*.pkg.tar.zst
+          if-no-files-found: error
+
       - name: Upload MSI artifact
         if: matrix.platform == 'windows'
         uses: actions/upload-artifact@v7
@@ -236,7 +250,7 @@ jobs:
       # Empreintes SHA-256 : permettent de verifier l'integrite des fichiers telecharges.
       - name: Calculer les empreintes SHA-256
         run: |
-          sha256sum linux-deb/voktora_*.deb linux-rpm/voktora-*.rpm windows-msi/Voktora_*_x64.msi \
+          sha256sum linux-deb/voktora_*.deb linux-rpm/voktora-*.rpm linux-arch/voktora-*.pkg.tar.zst windows-msi/Voktora_*_x64.msi \
             | sed 's# [^ ]*/# #' > SHA256SUMS
           cat SHA256SUMS
 
@@ -254,6 +268,7 @@ jobs:
             |-----------|---------|-------------|
             | Linux (Debian/Ubuntu) | `.deb` | `sudo apt install ./voktora_*.deb` |
             | Linux (Fedora/RHEL/openSUSE) | `.rpm` | `sudo dnf install ./voktora-*.rpm` (openSUSE : `sudo zypper install ./voktora-*.rpm`) |
+            | Linux (Arch, Omarchy, EndeavourOS, Manjaro, CachyOS) | `.pkg.tar.zst` | `sudo pacman -U ./voktora-*.pkg.tar.zst` |
             | Windows 10/11 x64 | `.msi` | Double-cliquer |
 
             ### Notes d'installation
@@ -265,5 +280,6 @@ jobs:
           files: |
             linux-deb/voktora_*.deb
             linux-rpm/voktora-*.rpm
+            linux-arch/voktora-*.pkg.tar.zst
             windows-msi/Voktora_*_x64.msi
             SHA256SUMS

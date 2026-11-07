@@ -113,4 +113,17 @@ Ouvrez une *security advisory* privée sur le dépôt GitHub plutôt qu'une issu
 - Les contributions passent par Pull Request : validation automatique (`tools/plugin_tool.py validate` : manifeste,
   analyse statique refusant `eval`/`exec`/`os.system`/`shell=True` et les imports réseau/`subprocess` non déclarés)
   puis relecture du mainteneur (CODEOWNERS).
+- **Plugins communautaires** (sous-modules Git) : le code est **épinglé sur un commit** ; l'index contient
+  l'adresse du dépôt, le SHA du commit et le SHA-256 de chaque fichier ; l'application télécharge
+  `raw.githubusercontent.com/<dépôt>/<commit>/…` (immuable). Si l'auteur modifie son dépôt, rien ne change chez
+  les utilisateurs : une nouvelle PR (nouveau commit, `version` augmentée) et une nouvelle relecture sont
+  nécessaires, même pour un plugin déjà accepté. Les PR communautaires ne peuvent modifier que leur
+  sous-module ; `.gitmodules` n'accepte que `path` et `url` (`https://github.com/<auteur>/<dépôt>`).
+- **Intégrité locale** : `.source.json` enregistre le SHA-256 de chaque fichier installé ; à chaque démarrage et
+  juste avant l'exécution, tout écart (modifié, ajouté, supprimé) bloque le chargement.
+- **Défense en profondeur** : analyse statique identique CI/application ; builtins filtrés et garde d'imports par
+  permission à l'exécution ; liste de retraits (`revoked.json`) vérifiée au plus toutes les 24 h en arrière-plan ;
+  les contrôles de PR utilisent l'outil de la branche `main`, jamais celui de la PR.
+- Limite connue : du code Python déterminé peut contourner une analyse statique ou une garde d'imports ; ce n'est
+  pas un bac à sable. La relecture humaine du commit épinglé reste la barrière principale.
 - Un plugin en erreur est isolé : ses exceptions sont capturées et affichées, sans arrêter l'application.

@@ -242,6 +242,14 @@ class ProjectPanel(QWidget):
             self._btn_explorer, self._btn_terminal,
             self._btn_vscode, self._btn_open_with))
 
+        # Groupe : Actions rapides (configurées par l'utilisateur ; reconstruit à chaque ouverture de projet)
+        self._quick_layout = QHBoxLayout()
+        self._quick_layout.setSpacing(8)
+        self._quick_box = QGroupBox("⚡ Actions rapides")
+        quick_v = QVBoxLayout(self._quick_box)
+        quick_v.addLayout(self._quick_layout)
+        v.addWidget(self._quick_box)
+
         # Groupe : Note
         self._note_edit = QTextEdit()
         self._note_edit.setPlaceholderText("Notes, to-do, remarques… (Markdown supporté)")
@@ -408,8 +416,8 @@ class ProjectPanel(QWidget):
         v.setContentsMargins(14, 14, 14, 14)
 
         desc = QLabel(
-            "Les snapshots capturent l'état complet du projet (fichiers + config).\n"
-            "Vous pouvez comparer deux snapshots pour voir les différences."
+            "Les snapshots sont de vraies sauvegardes versionnées (fichiers + historique git), vérifiables,\n"
+            "restaurables sur place ou fichier par fichier, et comparables (renommages détectés)."
         )
         desc.setStyleSheet("color:#a6adc8; font-size:12px;")
         desc.setWordWrap(True)
@@ -521,6 +529,38 @@ class ProjectPanel(QWidget):
         self._refresh_details()
         self._wire_buttons()
         self._refresh_plugin_buttons()
+        self._refresh_quick_actions()
+
+    def _refresh_quick_actions(self) -> None:
+        """Boutons des actions rapides de l'utilisateur + bouton « Modifier »."""
+        import icons as _icons
+        import quick_actions as qa
+        while self._quick_layout.count():
+            item = self._quick_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        for action in qa.load():
+            btn = _btn(" " + action.name, "subtle", f"{action.cmd}")
+            btn.setIcon(_icons.icon(action.icon))
+            btn.clicked.connect(lambda _=False, a=action: self._run_quick_action(a))
+            self._quick_layout.addWidget(btn)
+        edit = _btn(" Modifier", "subtle", "Ajouter, modifier ou réordonner les actions rapides")
+        edit.setIcon(_icons.icon("mdi:pencil"))
+        edit.clicked.connect(self._edit_quick_actions)
+        self._quick_layout.addWidget(edit)
+        self._quick_layout.addStretch()
+
+    def _run_quick_action(self, action) -> None:
+        import quick_actions as qa
+        if self._path is None:
+            return
+        error = qa.launch(action, self._path)
+        self.log(f"⚡ {action.name} : {error}" if error else f"⚡ {action.name} lancé.")
+
+    def _edit_quick_actions(self) -> None:
+        from ui_dialogs.quick_actions_dialog import QuickActionsDialog
+        QuickActionsDialog(self).exec()
+        self._refresh_quick_actions()
 
     def log(self, msg: str) -> None:
         from datetime import datetime
@@ -861,13 +901,20 @@ class ProjectPanel(QWidget):
             SnapshotDialog(self._path, self).exec()
 
     def _quick_snapshot(self) -> None:
+        """Snapshot complet en arrière-plan avec barre de progression (l'interface ne se fige plus)."""
         if not self._path:
             return
-        try:
-            out = snapshots.create(self._path, "rapide")
-            self.log(f"Snapshot créé : {out.name} ({out.stat().st_size // 1024} KB)")
-        except Exception as e:
-            self.log(f"Erreur snapshot : {e}")
+        from ui_main import task_dialog
+        path = self._path
+        keep = int(core.get_app_config().get("snapshot_keep", 0) or 0)
+        done = task_dialog.run_task(
+            self, "Snapshot rapide",
+            lambda ctx: snapshots.create(path, "", on_progress=ctx.progress, cancel=ctx.is_cancelled, keep=keep),
+            headline=f"Snapshot de {path.name}")
+        if done.outcome == task_dialog.OUTCOME_OK:
+            self.log(f"Snapshot créé : {done.result.name} ({done.result.stat().st_size // 1024} Ko)")
+        elif done.outcome == task_dialog.OUTCOME_ERROR:
+            self.log(f"Erreur snapshot : {done.error}")
 
     def _show_smart_message(self) -> None:
         if not self._path:

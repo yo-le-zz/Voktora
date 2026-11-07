@@ -41,6 +41,13 @@ WARNING = (
 )
 
 
+COMMUNITY_WARNING = (
+    "PLUGIN COMMUNAUTAIRE : écrit et hébergé par un tiers, pas par le mainteneur de Voktora. Son code est figé "
+    "sur le commit indiqué (relu à l'acceptation) ; toute modification ultérieure de son dépôt n'est PAS "
+    "installée tant qu'une nouvelle version n'a pas été re-validée."
+)
+
+
 def _permission_lines(permissions: list[str]) -> str:
     if not permissions:
         return "• Aucune permission demandée"
@@ -145,7 +152,8 @@ class PluginsDialog(QDialog):
             elif not info.enabled:
                 status = "Désactivé"
             else:
-                status = "Actif" + (" (ancien format)" if info.legacy else "")
+                status = "Actif" + (" (ancien format)" if info.legacy else "") \
+                + (" · communauté" if info.tier == "community" else "")
             item = QTreeWidgetItem([info.name, info.version, info.author, status])
             item.setData(0, Qt.UserRole, info.id)
             if info.error:
@@ -176,6 +184,12 @@ class PluginsDialog(QDialog):
         if info.legacy:
             extra += ("<p><b>Ancien format (fichier .py)</b> : toutes les permissions. "
                       "Préférez un dossier avec <code>plugin.json</code>.</p>")
+        if info.origin == "market":
+            where = f" — <a href='{info.repo}'>{info.repo}</a> @ <code>{info.commit[:7]}</code>" if info.repo else ""
+            extra += ("<p><b>" + ("Communauté" if info.tier == "community" else "Officiel")
+                      + f"</b> : fichiers verrouillés (SHA-256 vérifié à chaque démarrage){where}</p>")
+        elif not info.legacy:
+            extra += "<p><b>Installé localement</b> : non vérifié par le marketplace.</p>"
         if info.slow:
             extra += "<p><b>Lent :</b> " + ", ".join(info.slow) + "</p>"
         if info.error:
@@ -283,7 +297,7 @@ class PluginsDialog(QDialog):
         v.addLayout(top)
 
         self._market_tree = QTreeWidget()
-        self._market_tree.setHeaderLabels(["Plugin", "Version", "Auteur", "État"])
+        self._market_tree.setHeaderLabels(["Plugin", "Version", "Auteur", "Origine", "État"])
         self._market_tree.setRootIsDecorated(False)
         self._market_tree.setColumnWidth(0, 220)
         self._market_tree.currentItemChanged.connect(self._on_market_selected)
@@ -350,7 +364,8 @@ class PluginsDialog(QDialog):
                 continue
             state = market.status(entry)
             label = self._STATE_LABEL[state] if entry.compatible else "Incompatible"
-            item = QTreeWidgetItem([entry.name, entry.version, entry.author, label])
+            origin = "Communauté" if entry.community else "Officiel"
+            item = QTreeWidgetItem([entry.name, entry.version, entry.author, origin, label])
             item.setData(0, Qt.UserRole, entry.id)
             item.setIcon(0, icons.icon("mdi:check-circle-outline", color="#a6e3a1") if state == "installed"
                          else icons.icon("mdi:puzzle-outline"))
@@ -379,6 +394,16 @@ class PluginsDialog(QDialog):
             return
         state = market.status(entry)
         extra = f"<p><a href='{entry.homepage}'>{entry.homepage}</a></p>" if entry.homepage else ""
+        if entry.community:
+            extra += (f"<p><b>Communauté</b> — dépôt <a href='{entry.repo}'>{entry.repo}</a><br>"
+                      f"commit épinglé <code>{entry.short_commit}</code> (code figé, vérifié à chaque démarrage)</p>")
+        else:
+            extra += "<p><b>Officiel</b> — écrit par le mainteneur.</p>"
+        added = market.permission_changes(market.installed_permissions(entry.id) or entry.permissions,
+                                          entry.permissions) if state == "update" else []
+        if added:
+            extra += ("<p style='color:#f38ba8'><b>Cette mise à jour demande de NOUVELLES permissions : "
+                      + ", ".join(added) + "</b></p>")
         if entry.tags:
             extra += "<p>Mots-clés : " + ", ".join(entry.tags) + "</p>"
         if not entry.compatible:
@@ -389,13 +414,16 @@ class PluginsDialog(QDialog):
         self._btn_install.setEnabled(entry.compatible and not self._installing)
 
     def _confirm_install(self, name: str, version: str, author: str, permissions: list[str],
-                         local: bool = False) -> bool:
+                         local: bool = False, entry: market.MarketEntry | None = None) -> bool:
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Warning)
         box.setWindowTitle("Installer un plugin")
         box.setText(f"Installer « {name} » v{version} (par {author}) ?")
         box.setInformativeText(
             f"Ce plugin demande :\n{_permission_lines(permissions)}\n\n{WARNING}"
+            + (f"\n\n{COMMUNITY_WARNING}\nDépôt : {entry.repo}\nCommit : {entry.commit}"
+               if entry is not None and entry.community else "")
+            + (self._new_permissions_text(entry) if entry is not None else "")
             + ("\n\nSource : fichier local (non vérifié par le marketplace)." if local else ""))
         box.addButton("Installer", QMessageBox.AcceptRole)
         cancel = box.addButton("Annuler", QMessageBox.RejectRole)
@@ -403,11 +431,17 @@ class PluginsDialog(QDialog):
         box.exec()
         return box.clickedButton() is not cancel
 
+    @staticmethod
+    def _new_permissions_text(entry: market.MarketEntry) -> str:
+        old = market.installed_permissions(entry.id)
+        added = market.permission_changes(old, entry.permissions) if old is not None else []
+        return f"\n\nATTENTION — nouvelles permissions par rapport à la version installée : {', '.join(added)}" if added else ""
+
     def _install_selected(self) -> None:
         entry = self._selected_entry()
         if entry is None or (self._worker is not None and self._worker.isRunning()):
             return
-        if not self._confirm_install(entry.name, entry.version, entry.author, entry.permissions):
+        if not self._confirm_install(entry.name, entry.version, entry.author, entry.permissions, entry=entry):
             return
         self._busy(True, f"Installation de « {entry.name} »…")
         self._installing = True

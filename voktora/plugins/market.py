@@ -9,6 +9,14 @@ Fonctionnement (voir doc/PLUGINS.md et marketplace/README.md) :
     fichier dont l'empreinte SHA-256 diffère de celle de l'index ;
   • rien n'est exécuté avant que l'utilisateur ait vu les permissions et confirmé.
 
+Deux niveaux (« tier ») :
+  • officiel   — dossier `marketplace/plugins/<id>/`, écrit par le mainteneur ;
+  • communauté — le contributeur fait son propre fork/dépôt, que la PR ajoute comme SOUS-MODULE Git
+    (`marketplace/community/<id>`) épinglé sur un commit précis. L'index contient ce commit, et
+    l'application télécharge les fichiers à CETTE révision exacte (raw.githubusercontent.com/<dépôt>/<commit>/…).
+    Si le code du dépôt du contributeur change, rien ne change chez les utilisateurs : une NOUVELLE Pull
+    Request (nouveau commit épinglé, nouvelle relecture) est nécessaire, même pour un plugin déjà accepté.
+
 Limites de sécurité appliquées : HTTPS obligatoire, taille bornée, noms de fichiers relatifs et
 filtrés (pas de « .. », de chemin absolu ni de lien), extensions autorisées uniquement.
 """
@@ -31,8 +39,8 @@ from pathlib import Path, PurePosixPath
 
 import core
 
+from . import audit, lock, runtime
 from . import manifest as manifest_mod
-from . import runtime
 
 DEFAULT_URL = "https://raw.githubusercontent.com/yo-le-zz/Voktora/main/marketplace"
 INDEX_NAME = "index.json"
@@ -45,6 +53,11 @@ MAX_PLUGIN_BYTES = 2 * 1024 * 1024
 MAX_INDEX_BYTES = 1024 * 1024
 TIMEOUT = 15.0
 _SHA_RE = re.compile(r"^[0-9a-f]{64}$")
+_REPO_RE = re.compile(r"^https://github\.com/([A-Za-z0-9_.-]{1,39})/([A-Za-z0-9_.-]{1,100})$")
+_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+TIER_OFFICIAL, TIER_COMMUNITY = "official", "community"
+RAW_HOST = "https://raw.githubusercontent.com"
+REVOKE_CHECK_SECONDS = 24 * 3600
 _PATH_PART_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$")
 
 ProgressCallback = Callable[[int, int, str], None]
@@ -68,6 +81,17 @@ class MarketEntry:
     path: str = ""                                   # dossier relatif à la base (plugins/<id>)
     files: dict[str, str] = field(default_factory=dict)    # nom -> sha256
     min_voktora: str = ""
+    tier: str = TIER_OFFICIAL
+    repo: str = ""                                   # communauté : https://github.com/<auteur>/<dépôt>
+    commit: str = ""                                 # communauté : SHA complet du commit épinglé
+
+    @property
+    def community(self) -> bool:
+        return self.tier == TIER_COMMUNITY
+
+    @property
+    def short_commit(self) -> str:
+        return self.commit[:7]
 
     @property
     def compatible(self) -> bool:
@@ -131,14 +155,24 @@ def parse_entry(raw: object) -> MarketEntry:
         clean[safe_relative(name)] = digest
     if manifest_mod.MANIFEST_NAME not in clean or manifest.entry not in clean:
         raise MarketError(f"{manifest.id} : {manifest_mod.MANIFEST_NAME} et {manifest.entry} sont obligatoires.")
-    folder = raw.get("path") or f"plugins/{manifest.id}"
-    if folder != f"plugins/{manifest.id}":
-        raise MarketError(f"{manifest.id} : le dossier doit être plugins/{manifest.id}.")
+    tier = raw.get("tier", TIER_OFFICIAL)
+    repo = commit = ""
+    if tier == TIER_COMMUNITY:
+        repo, commit = str(raw.get("repo", "")), str(raw.get("commit", ""))
+        if not _REPO_RE.match(repo) or not _COMMIT_RE.match(commit):
+            raise MarketError(f"{manifest.id} : dépôt GitHub ou commit épinglé invalide.")
+        folder = ""
+    elif tier == TIER_OFFICIAL:
+        folder = raw.get("path") or f"plugins/{manifest.id}"
+        if folder != f"plugins/{manifest.id}":
+            raise MarketError(f"{manifest.id} : le dossier doit être plugins/{manifest.id}.")
+    else:
+        raise MarketError(f"{manifest.id} : niveau « {tier} » inconnu.")
     return MarketEntry(
         id=manifest.id, name=manifest.name, version=manifest.version, author=manifest.author,
         description=manifest.description, api=manifest.api, permissions=list(manifest.permissions),
         tags=list(manifest.tags), homepage=manifest.homepage, path=folder, files=clean,
-        min_voktora=manifest.min_voktora,
+        min_voktora=manifest.min_voktora, tier=tier, repo=repo, commit=commit,
     )
 
 
@@ -162,6 +196,78 @@ def parse_index(data: bytes) -> list[MarketEntry]:
     return sorted(entries, key=lambda e: e.name.lower())
 
 
+def parse_revoked(data: bytes) -> list[dict]:
+    """Liste de retraits : [{"id", "reason", "commit"?}]. `commit` absent = toutes les versions."""
+    try:
+        document = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return []
+    items = document.get("revoked", []) if isinstance(document, dict) else []
+    result = []
+    for item in items if isinstance(items, list) else []:
+        if isinstance(item, dict) and isinstance(item.get("id"), str) and manifest_mod.ID_RE.match(item["id"]):
+            commit = item.get("commit", "")
+            result.append({"id": item["id"], "reason": str(item.get("reason", ""))[:300],
+                           "commit": commit if isinstance(commit, str) and _COMMIT_RE.match(commit) else ""})
+    return result
+
+
+def file_url(entry: MarketEntry, base: str, name: str) -> str:
+    """Adresse d'un fichier du plugin. Communauté : commit exact (immuable), sinon dossier de l'index."""
+    if entry.community:
+        match = _REPO_RE.match(entry.repo)
+        if not match or not _COMMIT_RE.match(entry.commit):
+            raise MarketError(f"{entry.id} : source invalide.")
+        return f"{RAW_HOST}/{match.group(1)}/{match.group(2)}/{entry.commit}/{name}"
+    return f"{base}/{entry.path}/{name}"
+
+
+def permission_changes(old: list[str], new: list[str]) -> list[str]:
+    """Permissions ajoutées par une mise à jour (à mettre en évidence avant de confirmer)."""
+    return sorted(set(new) - set(old))
+
+
+def installed_permissions(plugin_id: str) -> list[str] | None:
+    info = runtime.find(plugin_id)
+    if info is not None:
+        return list(info.permissions)
+    try:
+        return list(manifest_mod.load(runtime.plugins_dir() / plugin_id).permissions)
+    except (manifest_mod.ManifestError, OSError):
+        return None
+
+
+def _revoked_path() -> Path:
+    return runtime.revoked_path()
+
+
+def _save_revoked(data: bytes) -> None:
+    with contextlib.suppress(OSError):
+        _revoked_path().parent.mkdir(parents=True, exist_ok=True)
+        _revoked_path().write_text(json.dumps(parse_revoked(data), ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def refresh_revocations(force: bool = False) -> bool:
+    """Télécharge la liste de retraits (au plus 1 fois / 24 h). Réseau seulement : peut tourner dans un thread.
+    Retourne True si la liste a été mise à jour. Silencieux hors ligne."""
+    import time
+    if not force:
+        with contextlib.suppress(OSError):
+            if time.time() - _revoked_path().stat().st_mtime < REVOKE_CHECK_SECONDS:
+                return False
+    try:
+        _save_revoked(_fetch(f"{base_url()}/{INDEX_NAME}", limit=MAX_INDEX_BYTES))
+    except MarketError:
+        return False
+    return True
+
+
+def check_revocations(force: bool = False) -> list[str]:
+    """refresh_revocations puis déchargement des plugins retirés (à appeler depuis le thread de l'interface)."""
+    refresh_revocations(force)
+    return runtime.enforce_revocations()
+
+
 def _cache_path() -> Path:
     return runtime.plugins_dir().parent / "plugins_data" / "_market_cache.json"
 
@@ -182,6 +288,7 @@ def fetch_index(base: str | None = None, use_cache_on_error: bool = True) -> tup
     with contextlib.suppress(OSError):
         _cache_path().parent.mkdir(parents=True, exist_ok=True)
         _cache_path().write_bytes(data)
+    _save_revoked(data)
     return entries, False
 
 
@@ -218,7 +325,8 @@ def _verify_manifest_matches(entry: MarketEntry, files: dict[str, bytes]) -> Non
         raise MarketError(f"{entry.id} : le manifeste ne correspond pas à l'index (id, version ou permissions).")
 
 
-def _write_plugin(plugin_id: str, files: dict[str, bytes], source: dict) -> Path:
+def _write_plugin(plugin_id: str, files: dict[str, bytes], source: dict,
+                  audit_permissions: list[str] | None = None) -> Path:
     """Écrit le plugin dans un dossier temporaire puis le substitue à l'ancien (quasi atomique)."""
     root = runtime.plugins_dir()
     root.mkdir(parents=True, exist_ok=True)
@@ -231,7 +339,12 @@ def _write_plugin(plugin_id: str, files: dict[str, bytes], source: dict) -> Path
                 raise MarketError(f"Chemin refusé : {name}")
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(content)
-        (staging / ".source.json").write_text(json.dumps(source, ensure_ascii=False, indent=2), encoding="utf-8")
+        if audit_permissions is not None:
+            errors, _warnings = audit.scan_folder(staging, audit_permissions)
+            if errors:
+                raise MarketError("Analyse de sécurité : " + " ; ".join(errors[:5]))
+            source = {**source, "origin": "market", "files": lock.hash_tree(staging)}
+        lock.write_lock(staging, source)
         backup = None
         if target.exists():
             backup = root / f".replaced-{plugin_id}"
@@ -261,7 +374,7 @@ def install(entry: MarketEntry, base: str | None = None, on_progress: ProgressCa
     for index, (name, digest) in enumerate(sorted(entry.files.items()), start=1):
         if on_progress:
             on_progress(index - 1, total, name)
-        content = _fetch(f"{base}/{entry.path}/{name}", limit=MAX_FILE_BYTES)
+        content = _fetch(file_url(entry, base, name), limit=MAX_FILE_BYTES)
         size += len(content)
         if size > MAX_PLUGIN_BYTES:
             raise MarketError(f"{entry.name} dépasse {MAX_PLUGIN_BYTES // 1024} Ko : installation refusée.")
@@ -272,7 +385,10 @@ def install(entry: MarketEntry, base: str | None = None, on_progress: ProgressCa
     _verify_manifest_matches(entry, files)
     if on_progress:
         on_progress(total, total, "")
-    return _write_plugin(entry.id, files, {"market": base, "version": entry.version})
+    source = {"market": base, "version": entry.version, "tier": entry.tier}
+    if entry.community:
+        source |= {"repo": entry.repo, "commit": entry.commit}
+    return _write_plugin(entry.id, files, source, audit_permissions=list(entry.permissions))
 
 
 def install_from_path(source: Path) -> tuple[str, Path]:
@@ -319,7 +435,7 @@ def install_from_path(source: Path) -> tuple[str, Path]:
         raise MarketError(" ".join(errors))
     if manifest.entry not in files:
         raise MarketError(f"Fichier d'entrée « {manifest.entry} » absent.")
-    return manifest.id, _write_plugin(manifest.id, files, {"local": str(source), "version": manifest.version})
+    return manifest.id, _write_plugin(manifest.id, files, {"origin": "local", "local": str(source), "version": manifest.version})
 
 
 def read_local_manifest(source: Path) -> manifest_mod.Manifest:

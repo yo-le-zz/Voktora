@@ -45,7 +45,13 @@ class VaultDialog(QDialog):
         status_text  = "Deverrouille" if core.vault_is_unlocked() else "Verrouille"
         self._status_lbl = QLabel(status_text)
         self._status_lbl.setStyleSheet(f"color:{status_color}; font-size:12px;")
-        v.addWidget(self._status_lbl)
+        self._btn_lock = QPushButton()
+        self._btn_lock.clicked.connect(self._toggle_lock)
+        status_row = QHBoxLayout()
+        status_row.addWidget(self._status_lbl)
+        status_row.addStretch()
+        status_row.addWidget(self._btn_lock)
+        v.addLayout(status_row)
 
         self._list = QListWidget()
         v.addWidget(self._list)
@@ -67,7 +73,33 @@ class VaultDialog(QDialog):
 
         self._refresh()
 
+    def _toggle_lock(self) -> None:
+        """Déverrouille (demande le mot de passe maître) ou verrouille le vault."""
+        if core.vault_is_unlocked():
+            core.vault_lock()
+        else:
+            from ui_dialogs.vault_unlock_dialog import ensure_unlocked
+            if not core.vault_is_initialized():
+                QMessageBox.information(self, "Vault", "Aucun mot de passe maître n'est encore défini.")
+                return
+            ensure_unlocked(self)
+        self._refresh()
+
+    def _sync_status(self) -> None:
+        unlocked = core.vault_is_unlocked()
+        self._status_lbl.setText("Déverrouillé" if unlocked else "Verrouillé")
+        self._status_lbl.setStyleSheet(f"color:{'#a6e3a1' if unlocked else '#f38ba8'}; font-size:12px;")
+        self._btn_lock.setText("Verrouiller" if unlocked else "Déverrouiller…")
+
+    def _need_unlock(self) -> bool:
+        """Propose le déverrouillage ; True si le vault est utilisable."""
+        from ui_dialogs.vault_unlock_dialog import ensure_unlocked
+        ok = ensure_unlocked(self, "Ce secret est chiffré : entrez le mot de passe maître.")
+        self._sync_status()
+        return ok
+
     def _refresh(self) -> None:
+        self._sync_status()
         self._list.clear()
         for entry in vault.list_entries():
             item = QListWidgetItem(f"{entry.kind}  /  {entry.label}")
@@ -75,8 +107,7 @@ class VaultDialog(QDialog):
             self._list.addItem(item)
 
     def _add_secret(self) -> None:
-        if not core.vault_is_unlocked():
-            QMessageBox.warning(self, "Vault verrouille", "Deverrouillez le vault d'abord.")
+        if not self._need_unlock():
             return
         key, ok = QInputDialog.getText(self, "Cle", "Nom de la cle (ex: MY_API_KEY) :")
         if not ok or not key.strip():
@@ -102,8 +133,7 @@ class VaultDialog(QDialog):
             self._refresh()
 
     def _view_secret(self) -> None:
-        if not core.vault_is_unlocked():
-            QMessageBox.warning(self, "Vault verrouille", "Deverrouillez le vault d'abord.")
+        if not self._need_unlock():
             return
         item = self._list.currentItem()
         if not item:
