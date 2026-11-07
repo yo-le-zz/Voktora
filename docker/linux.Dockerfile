@@ -1,7 +1,7 @@
 # Voktora — image de compilation Linux (.deb)
 #
 # Fournit un environnement reproductible pour compiler Voktora avec Nuitka
-# et l'empaqueter en .deb et .rpm, identique en local et en CI.
+# et l'empaqueter en .deb, .rpm et .pkg.tar.zst (Arch/Omarchy), identique en local et en CI.
 #
 # Utilisation :
 #   docker build -f docker/linux.Dockerfile -t voktora-build-linux .
@@ -17,6 +17,7 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
         patchelf \
         dpkg-dev \
         rpm \
+        zstd \
         ccache \
         libxcb-xinerama0 \
         libxcb-icccm4 \
@@ -40,10 +41,14 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
 ENV CC=gcc
 ENV CXX=g++
 
-RUN pip install --no-cache-dir nuitka pyside6 cryptography
+# uv (binaire officiel) : installe Nuitka, PySide6 et cryptography depuis uv.lock, jamais via pip.
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+ENV UV_PYTHON_PREFERENCE=only-system \
+    UV_LINK_MODE=copy
 
 WORKDIR /app
 COPY . /app
+RUN uv sync --frozen --group build
 
 # Compile une fois (build_deb.sh) puis reutilise la compilation pour le .rpm.
-ENTRYPOINT ["bash", "-c", "bash 'Installers/DEB installer/build_deb.sh' \"$@\" && bash 'Installers/RPM installer/build_rpm.sh' \"$@\"", "--"]
+ENTRYPOINT ["bash", "-c", "bash 'Installers/DEB installer/build_deb.sh' \"$@\" && bash 'Installers/RPM installer/build_rpm.sh' \"$@\" && bash 'Installers/Arch installer/build_arch.sh' \"$@\"", "--"]

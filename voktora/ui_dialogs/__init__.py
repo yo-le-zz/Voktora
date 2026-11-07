@@ -35,6 +35,7 @@ from .categories_dialog import CategoriesDialog
 from .config_dialog import ConfigDialog
 from .customize_dialog import CustomizeProjectDialog
 from .dashboard_dialog import DashboardDialog
+from .disk_dialog import DiskUsageDialog
 from .emoji_picker_dialog import EmojiPickerDialog, IconPickerDialog
 from .encrypt_dialog import CopyWorker, EncryptProjectDialog, EncryptWorker
 from .hooks_dialog import HooksDialog
@@ -43,16 +44,23 @@ from .master_password_dialog import MasterPasswordSetupDialog
 from .migrate_dialog import ExportWorker, ImportWorker, MigrateDialog
 from .plugins_dialog import PluginsDialog
 from .profiles_dialog import ProfilesDialog
+from .quick_actions_dialog import QuickActionEditDialog, QuickActionsDialog
 from .snapshot_dialog import SnapshotDialog
 from .status_dialog import EditStatusDialog, StatusDialog
+from .sync_dialog import SyncBridge, SyncDialog, ask_source
 from .theme_dialog import CustomThemeDialog, ThemeSettingsDialog
 from .vault_dialog import VaultDialog
+from .vault_unlock_dialog import VaultUnlockDialog, ensure_unlocked, prompt_at_startup
 
 __all__ = [
     "CategoriesDialog",
     "ConfigDialog",
     "CustomizeProjectDialog",
     "DashboardDialog",
+    "DiskUsageDialog",
+    "SyncBridge",
+    "SyncDialog",
+    "ask_source",
     "EmojiPickerDialog",
     "IconPickerDialog",
     "CopyWorker", "EncryptProjectDialog", "EncryptWorker",
@@ -65,5 +73,10 @@ __all__ = [
     "SnapshotDialog",
     "EditStatusDialog", "StatusDialog",
     "CustomThemeDialog", "ThemeSettingsDialog",
+    "QuickActionEditDialog",
+    "QuickActionsDialog",
     "VaultDialog",
+    "VaultUnlockDialog",
+    "ensure_unlocked",
+    "prompt_at_startup",
 ]

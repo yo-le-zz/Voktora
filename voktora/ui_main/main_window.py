@@ -72,6 +72,7 @@ from . import (
 
 class MainWindow(QMainWindow):
     _health_ready = Signal(int, int, int, int)
+    _revocations_ready = Signal()
     _hook_log = Signal(str)
 
     def __init__(self):
@@ -86,6 +87,7 @@ class MainWindow(QMainWindow):
         self._sel_path:   Path | None      = None
         self._stats_generation = 0
         self._health_ready.connect(self._apply_health_stats)
+        self._revocations_ready.connect(self._apply_revocations)
         self._hook_log.connect(lambda msg: self._project_panel.log(msg))
         self._worker:     workers.Worker | None    = None
         self._git_worker: workers.GitWorker | None = None
@@ -103,6 +105,7 @@ class MainWindow(QMainWindow):
         self._build_statusbar()
         self._setup_shortcuts()
         self._refresh_all()
+        self._init_sync()
 
         # Plugins : chargés juste après l'affichage de la fenêtre (ne retardent pas le démarrage).
         self._ui_host = UIHost(self)
@@ -474,7 +477,13 @@ class MainWindow(QMainWindow):
         act_explorer = QAction("📁 Ouvrir l'explorateur", self)
         act_explorer.triggered.connect(self.act_open_explorer)
         
+        act_disk = QAction("💽 Espace disque des projets...", self)
+        act_disk.triggered.connect(self.act_disk_usage)
         menu_tools.addAction(act_builder)
+        menu_tools.addAction(act_disk)
+        act_sync = QAction("🔄 Synchronisation entre PC...", self)
+        act_sync.triggered.connect(self.act_sync)
+        menu_tools.addAction(act_sync)
         menu_tools.addSeparator()
         menu_tools.addAction(act_terminal)
         menu_tools.addAction(act_explorer)
@@ -1070,6 +1079,89 @@ class MainWindow(QMainWindow):
     def _load_plugins(self) -> None:
         plugins.load_all()
         plugins.fire_hook("on_start", log_cb=self._log)
+        if any(p.origin == "market" for p in plugins.get_all()):
+            # Liste de retraits du mainteneur : téléchargée en arrière-plan (24 h max), appliquée ici.
+            from plugins import market as plugin_market
+
+            def fetch() -> None:
+                with contextlib.suppress(Exception):
+                    if plugin_market.refresh_revocations():
+                        self._revocations_ready.emit()
+            threading.Thread(target=fetch, daemon=True, name="voktora-revocations").start()
+
+    def _apply_revocations(self) -> None:
+        removed = plugins.runtime.enforce_revocations()
+        if removed:
+            self._set_status("Plugin(s) retiré(s) par le mainteneur : " + ", ".join(removed))
+
+    def act_disk_usage(self) -> None:
+        from ui_dialogs import DiskUsageDialog
+        DiskUsageDialog(self).exec()
+        self._refresh_project_panel()
+
+    # ──────────────────────────────────────────────
+    #  SYNCHRONISATION ENTRE PC (1.0.7)
+    # ──────────────────────────────────────────────
+
+    def _init_sync(self) -> None:
+        from sync import get_service
+        from ui_dialogs import SyncBridge
+        self._sync_prompted: set[str] = set()
+        self._sync_seen: dict[str, float] = {}
+        self._sync_lbl = QLabel("")
+        self._sync_lbl.setStyleSheet("font-size: 11px; padding-right: 8px;")
+        self._sync_lbl.hide()
+        self.statusBar().insertPermanentWidget(0, self._sync_lbl)
+        self._sync_bridge = SyncBridge(get_service())
+        self._sync_bridge.changed.connect(self._on_sync_changed)
+        QTimer.singleShot(1500, get_service().start)
+
+    def _on_sync_changed(self, snap: dict) -> None:
+        peers = snap.get("peers", {})
+        if not snap.get("enabled") or not peers:
+            self._sync_lbl.hide()
+            return
+        parts, busy = [], False
+        for pid, st in peers.items():
+            state = st.get("state")
+            remote = st.get("remote") or {}
+            if state == "syncing":
+                busy = True
+                text = f"{st.get('name', '?')} : ce PC {st.get('percent', 0)} %"
+                if remote.get("state") == "syncing":
+                    text += f" · lui {remote.get('percent', 0)} %"
+                parts.append(text)
+            elif state == "done":
+                parts.append(f"{st.get('name', '?')} 100 %")
+            elif state in ("paused", "error", "decision"):
+                parts.append(f"{st.get('name', '?')} ⏸")
+            elif state == "online":
+                parts.append(f"{st.get('name', '?')} 🟢")
+            if state == "decision" and pid not in self._sync_prompted:
+                self._sync_prompted.add(pid)
+                name, summary = st.get("name", ""), st.get("summary", "")
+                QTimer.singleShot(0, lambda p=pid, n=name, m=summary: self._prompt_sync_source(p, n, m))
+            elif state != "decision":
+                self._sync_prompted.discard(pid)
+            if state == "done" and st.get("last_sync", 0) > self._sync_seen.get(pid, 0):
+                self._sync_seen[pid] = st["last_sync"]
+                if st.get("summary") and st["summary"] != "Tout est à jour.":
+                    core.invalidate_cache()
+                    self._refresh_all()
+        self._sync_lbl.setText("🔄 " + "  |  ".join(parts) if parts else "")
+        self._sync_lbl.setVisible(bool(parts))
+        del busy
+
+    def _prompt_sync_source(self, peer_id: str, name: str, summary: str) -> None:
+        from sync import get_service
+        from ui_dialogs import ask_source
+        choice = ask_source(self, name, summary)
+        get_service().resolve(peer_id, choice)
+
+    def act_sync(self) -> None:
+        from ui_dialogs import SyncDialog
+        SyncDialog(self, self._sync_bridge).exec()
+        self._refresh_all()
 
     def act_plugins(self) -> None:
         from ui_dialogs import PluginsDialog
@@ -1077,6 +1169,9 @@ class MainWindow(QMainWindow):
         self._refresh_project_panel()
 
     def closeEvent(self, event) -> None:           # noqa: N802 - nom imposé par Qt
+        with contextlib.suppress(Exception):
+            from sync import get_service
+            get_service().stop()
         with contextlib.suppress(Exception):
             plugins.fire_hook("on_quit", log_cb=None)
         if plugins.get_ui_host() is getattr(self, "_ui_host", None):

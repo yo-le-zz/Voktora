@@ -8,6 +8,16 @@
 # Ainsi les deux paquets contiennent exactement les mêmes fichiers.
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Tout passe par uv (jamais pip) : uv crée/synchronise l'environnement du projet depuis uv.lock,
+# donc Nuitka, PySide6 et cryptography sont toujours présents, quel que soit le Python du système.
+voktora_require_uv() {
+    if ! command -v uv >/dev/null 2>&1; then
+        echo "uv est introuvable. Installez-le :  curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
+        echo "(ou : sudo dnf install uv / pipx install uv / brew install uv)" >&2
+        return 1
+    fi
+}
+
 # Retire un éventuel préfixe « v »/« V » (convention de tag git, ex. « v1.0.4 »).
 voktora_clean_version() {
     local v="${1#v}"
@@ -25,18 +35,25 @@ voktora_compile() {
         echo ">>> Compilation Nuitka déjà présente : $ONEDIR (réutilisée)"
         return 0
     fi
+    voktora_require_uv || return 1
+    local UV=(uv run --frozen --project "$root")
     rm -rf "$dist_dir/nuitka_out"
     mkdir -p "$dist_dir"
     echo ""
-    # Extension Rust : incluse seulement si elle est installée dans l'environnement.
+    # Extension Rust : compilée avec maturin (via uv) si cargo est présent, puis incluse dans le paquet.
     local VOKTORA_NUITKA_EXTRA=()
-    if python -c "import voktora_native" 2>/dev/null; then
+    if ! "${UV[@]}" python -c "import voktora_native" 2>/dev/null && command -v cargo >/dev/null 2>&1; then
+        echo ">>> Compilation de l'extension Rust (maturin)..."
+        "${UV[@]}" --group native maturin develop --release --manifest-path "$root/native/Cargo.toml" \
+            || echo "!!! Extension Rust non compilée : le paquet utilisera le Python pur."
+    fi
+    if "${UV[@]}" python -c "import voktora_native" 2>/dev/null; then
         echo ">>> Extension native détectée : incluse dans le paquet"
         VOKTORA_NUITKA_EXTRA+=(--include-module=voktora_native)
     fi
 
     echo ">>> Compilation Nuitka (LTO, sans docstrings ni asserts)..."
-    python -m nuitka \
+    "${UV[@]}" --group build python -m nuitka \
       --standalone \
       --lto=yes \
       --python-flag=no_docstrings \

@@ -144,17 +144,29 @@ fonctionne toujours, avec toutes les permissions. Il est signalé « ancien form
 
 ## Publier sur le marketplace
 
-Fork → Pull Request, validation automatique, relecture du mainteneur : voir
-[`marketplace/README.md`](../marketplace/README.md). Outils :
+Plugins **officiels** (par défaut, écrits par le mainteneur) : dossier `marketplace/plugins/<id>/`.
+Plugins **communautaires** : vous gardez votre dépôt/fork ; la PR ajoute un **sous-module Git épinglé sur un
+commit** (`marketplace/community/<id>`). L'application ne télécharge que les fichiers du plugin à ce commit
+exact. Modifier votre code ne change rien chez les utilisateurs tant qu'une **nouvelle PR** (nouveau commit
+épinglé, `version` augmentée) n'est pas relue et fusionnée — même pour un plugin déjà accepté.
+Détails et sécurité : [`marketplace/README.md`](../marketplace/README.md). Outils :
 
 ```bash
+python tools/plugin_tool.py submit https://github.com/vous/mon-plugin   # ajoute VOTRE dépôt en sous-module
+python tools/plugin_tool.py check-pr --base origin/main                 # règles d'une PR communautaire
+python tools/plugin_tool.py pr-summary --base origin/main               # diff ancien → nouveau commit
+python tools/plugin_tool.py drift                                       # dépôts ayant avancé depuis l'épinglage
 python tools/plugin_tool.py validate [id]      # manifeste, fichiers, analyse statique
 python tools/plugin_tool.py zip mon-plugin     # archive installable (Installer depuis un fichier…)
 python tools/plugin_tool.py build-index        # régénère l'index (fait par la CI après fusion)
 ```
 
-L'analyse statique refuse `eval`/`exec`/`os.system`/`shell=True`, et les imports réseau ou `subprocess`
-sans la permission correspondante. Elle ne remplace pas la relecture humaine.
+L'analyse statique (module `voktora/plugins/audit.py`, **la même** dans la CI et dans l'application) refuse
+`eval`/`exec`/`compile`/`__import__`, `os.system`, `shell=True`, `ctypes`/`importlib`/`pickle`/`builtins`, l'accès à
+`__subclasses__`/`__globals__`/`__builtins__`, et les imports réseau ou `subprocess` sans la permission
+correspondante. Au chargement, un plugin du marketplace tourne en plus avec des `builtins` filtrés (sans
+`eval`/`exec`, `__import__` contrôlé par permissions). Cela ne remplace pas la relecture humaine : ce n'est pas
+un bac à sable.
 
 ## Plugins fournis (exemples à lire)
 

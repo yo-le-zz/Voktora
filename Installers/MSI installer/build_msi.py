@@ -3,7 +3,7 @@ build_msi.py - Voktora Windows MSI builder
 Compile avec Nuitka (--onedir) puis empaquete en .msi via WiX Toolset 4.x
 
 Prerequis :
-    pip install nuitka pyside6 cryptography
+    uv (https://docs.astral.sh/uv/) : installe Nuitka, PySide6 et cryptography depuis uv.lock
     winget install WiXToolset.WiX
     wix extension add --global WixToolset.UI.wixext/4.0.6
 
@@ -157,16 +157,27 @@ def main():
     DIST.mkdir(parents=True)
 
     # -- Compilation Nuitka ---------------------------------------------------
+    # Tout passe par uv (jamais pip) : environnement synchronisé depuis uv.lock, Nuitka inclus.
+    if shutil.which("uv") is None:
+        sys.exit("uv est introuvable. Installez-le : https://docs.astral.sh/uv/getting-started/installation/")
+    uv = ["uv", "run", "--frozen", "--project", str(ROOT)]
+
+    def uv_python_ok(code: str) -> bool:
+        return subprocess.run([*uv, "python", "-c", code], capture_output=True, check=False).returncode == 0
+
     native_flags: list[str] = []
-    try:
-        import voktora_native  # noqa: F401
+    if not uv_python_ok("import voktora_native") and shutil.which("cargo"):
+        print("\n>>> Compilation de l'extension Rust (maturin)...")
+        done = subprocess.run([*uv, "--group", "native", "maturin", "develop", "--release",
+                               "--manifest-path", str(ROOT / "native" / "Cargo.toml")], check=False)
+        if done.returncode != 0:
+            print("!!! Extension Rust non compilée : le paquet utilisera le Python pur.")
+    if uv_python_ok("import voktora_native"):
         native_flags = ["--include-module=voktora_native"]
         print("\n>>> Extension native détectée : incluse dans le paquet")
-    except ImportError:
-        pass
     print("\n>>> Compilation Nuitka (LTO, sans docstrings ni asserts)...")
     run([
-        sys.executable, "-m", "nuitka",
+        *uv, "--group", "build", "python", "-m", "nuitka",
         "--standalone",
         "--remove-output",
         "--enable-plugin=pyside6",

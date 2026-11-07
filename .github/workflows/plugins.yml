@@ -1,17 +1,26 @@
 name: Plugins (marketplace)
 
-# Contributions de plugins par Pull Request : validation automatique, puis régénération de l'index
-# après fusion par le mainteneur. Voir marketplace/README.md et doc/PLUGINS.md.
+# Contributions de plugins par Pull Request.
+#  • Plugin officiel  : dossier marketplace/plugins/<id>/ (mainteneur).
+#  • Plugin communauté: SOUS-MODULE Git marketplace/community/<id> pointant vers le dépôt/fork de l'auteur,
+#    épinglé sur un commit. Toute modification du code de l'auteur = nouvelle PR (nouveau commit épinglé).
+# Sécurité : les contrôles s'exécutent avec l'outil de la branche de base (de confiance) sur le code de la PR
+# (non fiable) ; aucun secret n'est exposé aux PR (événement pull_request, permissions en lecture seule).
+# Voir marketplace/README.md et doc/PLUGINS.md.
 on:
   pull_request:
     paths:
       - "marketplace/**"
+      - ".gitmodules"
       - "tools/plugin_tool.py"
-      - "voktora/plugins/manifest.py"
+      - "voktora/plugins/**"
   push:
     branches: [main]
     paths:
       - "marketplace/plugins/**"
+      - "marketplace/community/**"
+      - "marketplace/revoked.json"
+      - ".gitmodules"
 
 permissions:
   contents: read
@@ -19,28 +28,65 @@ permissions:
 jobs:
   validate:
     name: Valider les plugins
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    env:
+      PLUGIN_REPO_ROOT: ${{ github.workspace }}/pr
+      GIT_TERMINAL_PROMPT: "0"
     steps:
-      - uses: actions/checkout@v7
-        with: { persist-credentials: false }
+      - name: Outil de confiance (branche de base)
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
+          persist-credentials: false
+      - name: Code de la Pull Request (sans sous-modules)
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr
+          fetch-depth: 0
+          submodules: false
+          persist-credentials: false
       - uses: actions/setup-python@v6
         with: { python-version: "3.13" }
-      - name: Validation (manifeste, fichiers, analyse statique)
-        run: python tools/plugin_tool.py validate
-      - name: L'index est-il généré sans erreur ?
-        run: python tools/plugin_tool.py build-index && git diff --stat marketplace/index.json || true
+      - name: Règles de PR (un seul sous-module, URL GitHub https, version incrémentée…)
+        run: |
+          cd pr
+          git fetch --no-tags origin "${{ github.event.pull_request.base.sha }}"
+          python ../trusted/tools/plugin_tool.py check-pr --base "${{ github.event.pull_request.base.sha }}"
+      - name: Récupérer UNIQUEMENT les sous-modules modifiés par la PR
+        run: |
+          cd pr
+          for path in $(git diff --name-only --no-renames "${{ github.event.pull_request.base.sha }}" HEAD \
+                        | grep -E '^marketplace/community/[^/]+$' || true); do
+            git submodule update --init --depth 1 -- "$path" \
+              || git submodule update --init -- "$path"
+          done
+      - name: Validation (manifeste, fichiers publiés, analyse statique, épinglage)
+        run: |
+          cd pr
+          python ../trusted/tools/plugin_tool.py validate $(git diff --name-only --no-renames \
+            "${{ github.event.pull_request.base.sha }}" HEAD | sed -n 's#^marketplace/\(plugins\|community\)/\([^/]*\).*#\2#p' | sort -u)
+      - name: Résumé pour la relecture du mainteneur
+        run: |
+          cd pr
+          python ../trusted/tools/plugin_tool.py pr-summary --base "${{ github.event.pull_request.base.sha }}" | tee -a "$GITHUB_STEP_SUMMARY"
 
   index:
     name: Régénérer index.json
-    needs: validate
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
-      contents: write          # uniquement ce job, uniquement sur main
+      contents: write          # uniquement ce job, uniquement sur main (code déjà relu et fusionné)
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with: { python-version: "3.13" }
+      - run: python tools/plugin_tool.py validate
       - run: python tools/plugin_tool.py build-index
       - name: Commit de l'index si modifié
         run: |

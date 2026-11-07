@@ -7,6 +7,10 @@ Outil des contributeurs et de la CI pour les plugins Voktora (bibliothèque stan
     python tools/plugin_tool.py build-index                      # régénère marketplace/index.json
     python tools/plugin_tool.py build-index --check              # échoue si index.json n'est pas à jour
     python tools/plugin_tool.py zip mon-plugin                   # archive .zip installable depuis l'application
+    python tools/plugin_tool.py submit https://github.com/vous/mon-plugin   # ajoute VOTRE fork en sous-module
+    python tools/plugin_tool.py check-pr --base origin/main      # règles d'une PR communautaire (CI)
+    python tools/plugin_tool.py drift                            # dépôts communautaires ayant changé depuis l'épinglage
+    python tools/plugin_tool.py pr-summary --base origin/main    # ce qui change entre l'ancien et le nouveau commit
 
 Codes de sortie : 0 = OK, 1 = erreurs de validation / index périmé, 2 = usage.
 """
@@ -14,25 +18,36 @@ Codes de sortie : 0 = OK, 1 = erreurs de validation / index périmé, 2 = usage.
 from __future__ import annotations
 
 import argparse
-import ast
 import hashlib
 import importlib.util
 import json
+import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import zipfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+CODE_ROOT = Path(__file__).resolve().parents[1]       # d'où viennent l'outil et les règles (audit, manifeste)
+# Dépôt analysé : par défaut le même ; la CI l'exécute avec l'outil de la branche principale (de confiance)
+# sur le code de la Pull Request (non fiable) pour qu'une PR ne puisse pas affaiblir ses propres contrôles.
+ROOT = Path(os.environ.get("PLUGIN_REPO_ROOT") or CODE_ROOT).resolve()
 MARKET = ROOT / "marketplace"
 PLUGINS = MARKET / "plugins"
+COMMUNITY = MARKET / "community"
+REVOKED = MARKET / "revoked.json"
+GITMODULES = ROOT / ".gitmodules"
+REPO_RE = re.compile(r"^https://github\.com/([A-Za-z0-9_.-]{1,39})/([A-Za-z0-9_.-]{1,100})$")
+COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 INDEX = MARKET / "index.json"
 SCHEMA = 1
 
 
 def _load_manifest_module():
     """manifest.py est autonome : on le charge par son chemin, sans importer toute l'application."""
-    path = ROOT / "voktora" / "plugins" / "manifest.py"
+    path = CODE_ROOT / "voktora" / "plugins" / "manifest.py"
     spec = importlib.util.spec_from_file_location("voktora_plugin_manifest", path)
     module = importlib.util.module_from_spec(spec)
     sys.modules["voktora_plugin_manifest"] = module     # requis par @dataclass
@@ -45,16 +60,17 @@ manifest = _load_manifest_module()
 ALLOWED_SUFFIXES = {".py", ".json", ".md", ".txt", ".qss", ".svg", ".png", ".css"}
 MAX_FILES, MAX_FILE_BYTES, MAX_PLUGIN_BYTES = 40, 512 * 1024, 2 * 1024 * 1024
 
-# Imports qui exigent une permission déclarée.
-NEEDS_PERMISSION = {
-    "network": {"urllib.request", "urllib3", "requests", "httpx", "socket", "http.client", "ftplib",
-                "smtplib", "aiohttp", "websockets"},
-    "shell":   {"subprocess", "pty"},
-}
-# Appels toujours refusés dans un plugin du marketplace.
-FORBIDDEN_CALLS = {"eval", "exec", "compile", "__import__"}
-FORBIDDEN_ATTRS = {("os", "system"), ("os", "popen"), ("os", "execv"), ("os", "execvp"), ("os", "spawnv")}
-SUSPICIOUS_IMPORTS = {"ctypes", "base64", "marshal", "pickle", "winreg", "zlib"}
+def _load_by_path(name: str, filename: str):
+    path = CODE_ROOT / "voktora" / "plugins" / filename
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+audit = _load_by_path("voktora_plugin_audit", "audit.py")      # MÊMES règles que dans l'application
+lock = _load_by_path("voktora_plugin_lock", "lock.py")
 
 
 def _show(path: Path) -> str:
@@ -64,63 +80,110 @@ def _show(path: Path) -> str:
         return str(path)
 
 
+def _dirs(root: Path) -> list[Path]:
+    return sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith((".", "_"))) if root.exists() else []
+
+
 def _plugin_dirs(names: list[str]) -> list[Path]:
+    """Plugins officiels (dossiers) puis communautaires (sous-modules)."""
     if names:
-        return [PLUGINS / n for n in names]
-    return sorted(p for p in PLUGINS.iterdir() if p.is_dir() and not p.name.startswith((".", "_"))) if PLUGINS.exists() else []
+        return [(COMMUNITY / n if (COMMUNITY / n).exists() else PLUGINS / n) for n in names]
+    return _dirs(PLUGINS) + _dirs(COMMUNITY)
 
 
-def _imports(tree: ast.AST) -> set[str]:
-    found: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                found.add(alias.name)
-                found.add(alias.name.split(".")[0])
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            found.add(node.module)
-            found.add(node.module.split(".")[0])
-            for alias in node.names:
-                found.add(f"{node.module}.{alias.name}")
-    return found
+def _is_community(folder: Path) -> bool:
+    return folder.parent == COMMUNITY
 
 
-def check_source(path: Path, permissions: list[str]) -> tuple[list[str], list[str]]:
-    """Analyse statique d'un fichier .py : (erreurs, avertissements). Ce n'est PAS un antivirus :
-    c'est un filet de sécurité avant la relecture humaine du mainteneur."""
-    errors: list[str] = []
-    warnings: list[str] = []
+def _published(folder: Path, community: bool) -> list[Path]:
+    """Fichiers réellement téléchargés par l'application. Communauté : seulement les fichiers visibles aux
+    extensions autorisées (README, LICENSE, .github, tests… du dépôt de l'auteur ne sont ni publiés ni exécutés)."""
+    result = []
+    for path in sorted(folder.rglob("*")):
+        rel = path.relative_to(folder)
+        if not (path.is_file() or path.is_symlink()):
+            continue
+        if community and (any(part.startswith(".") or part == "__pycache__" for part in rel.parts)
+                          or path.suffix.lower() not in ALLOWED_SUFFIXES):
+            continue
+        if not community and any(part == "__pycache__" for part in rel.parts):
+            continue
+        result.append(path)
+    return result
+
+
+def _git(*args: str, cwd: Path | None = None) -> str:
+    result = subprocess.run(["git", *args], cwd=cwd or ROOT, capture_output=True, text=True,       # noqa: S603, S607
+                            check=False)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or f"git {' '.join(args)} a échoué")
+    return result.stdout
+
+
+def gitmodules() -> dict[str, str]:
+    """{chemin du sous-module: url} d'après .gitmodules."""
+    if not GITMODULES.is_file():
+        return {}
     try:
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    except (SyntaxError, UnicodeDecodeError) as exc:
-        return [f"{path.name} : code illisible ({exc})"], []
-    imports = _imports(tree)
-    for permission, modules in NEEDS_PERMISSION.items():
-        used = sorted(imports & modules)
-        if used and permission not in permissions:
-            errors.append(f"{path.name} : utilise {', '.join(used)} mais ne déclare pas la permission « {permission} ».")
-    for name in sorted(imports & SUSPICIOUS_IMPORTS):
-        warnings.append(f"{path.name} : import « {name} » — à justifier dans la Pull Request.")
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Call):
-            func = node.func
-            if isinstance(func, ast.Name) and func.id in FORBIDDEN_CALLS:
-                errors.append(f"{path.name}:{node.lineno} : appel à {func.id}() interdit.")
-            if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) \
-                    and (func.value.id, func.attr) in FORBIDDEN_ATTRS:
-                errors.append(f"{path.name}:{node.lineno} : {func.value.id}.{func.attr}() interdit (utilisez api.run).")
-            for keyword in node.keywords:
-                if keyword.arg == "shell" and isinstance(keyword.value, ast.Constant) and keyword.value.value:
-                    errors.append(f"{path.name}:{node.lineno} : shell=True interdit.")
-    text = path.read_text(encoding="utf-8")
-    if re.search(r"[A-Za-z0-9+/]{200,}={0,2}", text):
-        warnings.append(f"{path.name} : longue chaîne opaque (base64 ?) — à justifier dans la Pull Request.")
-    return errors, warnings
+        out = _git("config", "--file", str(GITMODULES), "--get-regexp", r"^submodule\..*\.(path|url)$")
+    except RuntimeError:
+        return {}
+    paths: dict[str, str] = {}
+    urls: dict[str, str] = {}
+    for line in out.splitlines():
+        key, _, value = line.partition(" ")
+        name, _, field = key[len("submodule."):].rpartition(".")
+        (paths if field == "path" else urls)[name] = value
+    return {paths[n]: urls.get(n, "") for n in paths}
+
+
+def pinned_commit(rel_path: str, ref: str = "HEAD") -> str:
+    """SHA épinglé (gitlink) d'un sous-module dans `ref`."""
+    try:
+        parts = _git("ls-tree", ref, rel_path).split()
+    except RuntimeError:
+        parts = []
+    if len(parts) >= 3 and parts[0] == "160000":
+        return parts[2]
+    if ref == "HEAD":                       # sous-module ajouté mais pas encore committé (outil « submit »)
+        try:
+            staged = _git("ls-files", "-s", "--", rel_path).split()
+        except RuntimeError:
+            return ""
+        return staged[1] if len(staged) >= 2 and staged[0] == "160000" else ""
+    return ""
+
+
+def _community_source(folder: Path) -> tuple[str, str, list[str]]:
+    """(url, commit épinglé, erreurs) d'un sous-module communautaire."""
+    rel = f"marketplace/community/{folder.name}"
+    errors: list[str] = []
+    url = gitmodules().get(rel, "")
+    if not REPO_RE.match(url):
+        errors.append(f"{folder.name} : l'URL du sous-module doit être https://github.com/<auteur>/<dépôt> "
+                      f"(trouvé : {url or 'rien'}).")
+    pinned = pinned_commit(rel)
+    if not COMMIT_RE.match(pinned):
+        errors.append(f"{folder.name} : le dossier n'est pas un sous-module Git épinglé (git submodule add).")
+    elif (folder / ".git").exists():
+        try:
+            head = _git("rev-parse", "HEAD", cwd=folder).strip()
+        except RuntimeError:
+            head = ""
+        if head != pinned:
+            errors.append(f"{folder.name} : le sous-module n'est pas extrait sur le commit épinglé "
+                          f"({head[:7] or '?'} ≠ {pinned[:7]}).")
+    else:
+        errors.append(f"{folder.name} : sous-module non initialisé (git submodule update --init).")
+    return url, pinned, errors
 
 
 def validate_plugin(folder: Path) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
+    community = _is_community(folder)
+    if community:
+        errors += _community_source(folder)[2]
     if not folder.is_dir():
         return [f"{folder.name} : dossier introuvable."], []
     manifest_path = folder / manifest.MANIFEST_NAME
@@ -136,7 +199,7 @@ def validate_plugin(folder: Path) -> tuple[list[str], list[str]]:
         return errors, warnings
     if parsed.id != folder.name:
         errors.append(f"{folder.name} : « id » ({parsed.id}) doit être identique au nom du dossier.")
-    files = [p for p in sorted(folder.rglob("*")) if p.is_file()]
+    files = _published(folder, community)
     if len(files) > MAX_FILES:
         errors.append(f"{folder.name} : trop de fichiers ({len(files)} > {MAX_FILES}).")
     total = 0
@@ -155,11 +218,15 @@ def validate_plugin(folder: Path) -> tuple[list[str], list[str]]:
         errors.append(f"{folder.name} : plugin trop volumineux ({total // 1024} Ko).")
     if not (folder / parsed.entry).is_file():
         errors.append(f"{folder.name} : fichier d'entrée « {parsed.entry} » introuvable.")
-    for path in files:
-        if path.suffix == ".py" and not path.is_symlink():
-            e, w = check_source(path, parsed.permissions)
-            errors += [f"{folder.name}/{m}" for m in e]
-            warnings += [f"{folder.name}/{m}" for m in w]
+    with tempfile.TemporaryDirectory() as tmp:          # on n'analyse que ce qui sera réellement exécuté
+        for path in files:
+            if path.suffix == ".py" and not path.is_symlink():
+                target = Path(tmp) / path.relative_to(folder)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(path, target)
+        e, w = audit.scan_folder(Path(tmp), parsed.permissions)
+    errors += [f"{folder.name}/{m}" for m in e]
+    warnings += [f"{folder.name}/{m}" for m in w]
     if not parsed.description:
         warnings.append(f"{folder.name} : pas de description.")
     return errors, warnings
@@ -167,7 +234,15 @@ def validate_plugin(folder: Path) -> tuple[list[str], list[str]]:
 
 def _file_hashes(folder: Path) -> dict[str, str]:
     return {p.relative_to(folder).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-            for p in sorted(folder.rglob("*")) if p.is_file() and not p.is_symlink()}
+            for p in _published(folder, _is_community(folder)) if not p.is_symlink()}
+
+
+def _revoked() -> list[dict]:
+    try:
+        data = json.loads(REVOKED.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    return data if isinstance(data, list) else []
 
 
 def build_index() -> dict:
@@ -175,12 +250,15 @@ def build_index() -> dict:
     for folder in _plugin_dirs([]):
         parsed = manifest.load(folder)
         entry = parsed.to_dict()
-        entry["path"] = f"plugins/{parsed.id}"
         entry["files"] = _file_hashes(folder)
-        del entry["entry"]
-        entry["entry"] = parsed.entry
+        if _is_community(folder):
+            url, commit, _ = _community_source(folder)
+            entry.update(tier="community", repo=url, commit=commit)
+            entry.pop("path", None)
+        else:
+            entry.update(tier="official", path=f"plugins/{parsed.id}")
         entries.append(entry)
-    return {"schema": SCHEMA, "plugins": sorted(entries, key=lambda e: e["id"])}
+    return {"schema": SCHEMA, "plugins": sorted(entries, key=lambda e: e["id"]), "revoked": _revoked()}
 
 
 def _render(index: dict) -> str:
@@ -278,6 +356,183 @@ def cmd_zip(args: argparse.Namespace) -> int:
     return 0
 
 
+# ── Plugins communautaires (sous-modules Git) ───────────────────────────────────────
+
+ALLOWED_SUBMODULE_KEYS = {"path", "url"}
+
+
+def _blob_gitmodules(ref: str) -> dict[str, dict[str, str]]:
+    """{nom: {clé: valeur}} de .gitmodules à la révision `ref` (vide si absent)."""
+    try:
+        out = _git("config", "--blob", f"{ref}:.gitmodules", "--list")
+    except RuntimeError:
+        return {}
+    result: dict[str, dict[str, str]] = {}
+    for line in out.splitlines():
+        key, _, value = line.partition("=")
+        if not key.startswith("submodule."):
+            continue
+        name, _, field = key[len("submodule."):].rpartition(".")
+        result.setdefault(name, {})[field] = value
+    return result
+
+
+def _changed_gitlinks(base: str) -> tuple[list[str], list[str]]:
+    """(chemins de sous-modules communautaires modifiés, autres chemins modifiés) entre `base` et HEAD."""
+    names = [n for n in _git("diff", "--name-only", "--no-renames", base, "HEAD").splitlines() if n]
+    links = [n for n in names if re.fullmatch(r"marketplace/community/[^/]+", n)]
+    others = [n for n in names if n not in links]
+    return links, others
+
+
+def check_pr(base: str) -> list[str]:
+    """Règles d'une PR communautaire. Liste d'erreurs (vide = conforme)."""
+    errors: list[str] = []
+    links, others = _changed_gitlinks(base)
+    if not links:
+        return errors
+    if len(links) > 1:
+        errors.append("Une PR communautaire ne modifie qu'UN sous-module à la fois : " + ", ".join(links))
+    extra = [n for n in others if n != ".gitmodules"]
+    if extra:
+        errors.append("Une PR communautaire ne doit rien modifier d'autre que le sous-module et .gitmodules "
+                      "(fichiers en trop : " + ", ".join(extra[:5]) + ").")
+    old_mods, new_mods = _blob_gitmodules(base), _blob_gitmodules("HEAD")
+    for rel in links:
+        plugin_id = rel.rsplit("/", 1)[1]
+        if not manifest.ID_RE.match(plugin_id):
+            errors.append(f"{plugin_id} : identifiant invalide.")
+        entry = next((v for v in new_mods.values() if v.get("path") == rel), None)
+        if entry is None:
+            errors.append(f"{rel} : absent de .gitmodules.")
+            continue
+        url = entry.get("url", "")
+        m = REPO_RE.match(url)
+        if not m or m.group(2).endswith(".git"):
+            errors.append(f"{rel} : URL « {url} » refusée — format exigé : https://github.com/<auteur>/<dépôt> "
+                          f"(pas de ssh, file://, git://, identifiants, ni suffixe .git).")
+        bad = sorted(set(entry) - ALLOWED_SUBMODULE_KEYS)
+        if bad:
+            errors.append(f"{rel} : clés .gitmodules interdites : {', '.join(bad)} (« update = !commande » exécuterait du code).")
+        if not COMMIT_RE.match(pinned_commit(rel)):
+            errors.append(f"{rel} : ce n'est pas un sous-module Git épinglé sur un commit.")
+        old_entry = next((v for v in old_mods.values() if v.get("path") == rel), None)
+        if old_entry is not None and old_entry.get("url") != url:
+            errors.append(f"{rel} : changer l'URL d'un plugin déjà accepté est refusé (nouvel identifiant requis, "
+                          f"ou demandez au mainteneur).")
+    # Aucune autre entrée de .gitmodules ne doit avoir changé.
+
+    for name, fields in new_mods.items():
+        if fields.get("path") not in links and old_mods.get(name) != fields:
+            errors.append(f".gitmodules : l'entrée « {name} » a été modifiée sans rapport avec cette PR.")
+    return errors
+
+
+def _read_version(folder: Path, commit: str) -> str:
+    """Version déclarée dans plugin.json au commit donné (chaîne vide si inaccessible)."""
+    try:
+        data = json.loads(_git("show", f"{commit}:{manifest.MANIFEST_NAME}", cwd=folder))
+        return str(data.get("version", ""))
+    except (RuntimeError, json.JSONDecodeError):
+        return ""
+
+
+def cmd_check_pr(args: argparse.Namespace) -> int:
+    try:
+        errors = check_pr(args.base)
+        links, _ = _changed_gitlinks(args.base)
+    except RuntimeError as exc:
+        print(f"check-pr : {exc}", file=sys.stderr)
+        return 2
+    for rel in links:
+        folder = ROOT / rel
+        old = pinned_commit(rel, args.base)
+        new = pinned_commit(rel)
+        if old and new and old != new and (folder / ".git").exists():
+            old_v, new_v = _read_version(folder, old), _read_version(folder, new)
+            if old_v and new_v and not manifest.is_newer(new_v, old_v):
+                errors.append(f"{rel} : le commit épinglé a changé ({old[:7]} → {new[:7]}) mais la version "
+                              f"n'augmente pas ({old_v} → {new_v}) : incrémentez « version » dans plugin.json.")
+    if errors:
+        print("Pull Request communautaire non conforme :")
+        for message in errors:
+            print(f"  ✗ {message}")
+        return 1
+    print("PR communautaire conforme." if links else "Aucun sous-module communautaire modifié.")
+    return 0
+
+
+def cmd_pr_summary(args: argparse.Namespace) -> int:
+    links, _ = _changed_gitlinks(args.base)
+    if not links:
+        print("Aucun plugin communautaire modifié.")
+        return 0
+    for rel in links:
+        folder = ROOT / rel
+        old, new = pinned_commit(rel, args.base), pinned_commit(rel)
+        url = gitmodules().get(rel, "?")
+        print(f"### {rel}\n- dépôt : {url}\n- ancien commit : {old or '(nouveau plugin)'}\n- nouveau commit : {new}")
+        if (folder / ".git").exists() and old and new:
+            try:
+                print("```\n" + _git("diff", "--stat", old, new, cwd=folder).strip() + "\n```")
+                print("```\n" + _git("log", "--oneline", f"{old}..{new}", cwd=folder).strip() + "\n```")
+            except RuntimeError as exc:
+                print(f"(différences indisponibles : {exc})")
+        print(f"Relire le code : {url}/compare/{old[:12]}...{new[:12]}" if old and new else f"Relire le code : {url}/tree/{new}")
+    return 0
+
+
+def cmd_drift(args: argparse.Namespace) -> int:
+    """Dépôts communautaires dont le code en amont a avancé depuis l'épinglage (information, pas une alerte)."""
+    moved = 0
+    for folder in _dirs(COMMUNITY):
+        url, pinned, _ = _community_source(folder)
+        if not REPO_RE.match(url):
+            continue
+        try:
+            head = _git("ls-remote", url, "HEAD").split()[0]
+        except (RuntimeError, IndexError):
+            print(f"? {folder.name} : dépôt injoignable ({url}) — supprimé ou privé ?")
+            moved += 1
+            continue
+        if head != pinned:
+            moved += 1
+            print(f"≠ {folder.name} : épinglé {pinned[:7]}, amont {head[:7]} — les utilisateurs restent sur {pinned[:7]} "
+                  f"tant qu'une nouvelle PR n'est pas fusionnée.")
+        else:
+            print(f"= {folder.name} : à jour ({pinned[:7]})")
+    return 1 if (moved and args.fail) else 0
+
+
+def cmd_submit(args: argparse.Namespace) -> int:
+    match = REPO_RE.match(args.url)
+    if not match or match.group(2).endswith(".git"):
+        print("Adresse attendue : https://github.com/<vous>/<votre-plugin> (votre fork/dépôt public).", file=sys.stderr)
+        return 2
+    plugin_id = args.id or re.sub(r"[^a-z0-9-]+", "-", match.group(2).lower().removeprefix("voktora-")).strip("-")
+    if not manifest.ID_RE.match(plugin_id):
+        print(f"Identifiant « {plugin_id} » invalide : précisez --id.", file=sys.stderr)
+        return 2
+    target = COMMUNITY / plugin_id
+    if target.exists() or (PLUGINS / plugin_id).exists():
+        print(f"{plugin_id} existe déjà.", file=sys.stderr)
+        return 2
+    try:
+        _git("submodule", "add", args.url, f"marketplace/community/{plugin_id}")
+    except RuntimeError as exc:
+        print(f"git submodule add a échoué : {exc}", file=sys.stderr)
+        return 1
+    errors, warnings = validate_plugin(target)
+    for message in warnings:
+        print(f"  ! {message}")
+    for message in errors:
+        print(f"  ✗ {message}")
+    print(f"Sous-module ajouté : marketplace/community/{plugin_id}. Vérifiez, committez .gitmodules + le "
+          f"sous-module, puis ouvrez la Pull Request." if not errors else "Corrigez les erreurs dans VOTRE dépôt, "
+          "poussez, puis « git submodule update --remote » avant de committer.")
+    return 1 if errors else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Outil des plugins Voktora")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -296,6 +551,19 @@ def main(argv: list[str] | None = None) -> int:
     p_zip.add_argument("id")
     p_zip.add_argument("--out", default="")
     p_zip.set_defaults(func=cmd_zip)
+    p_check = sub.add_parser("check-pr", help="règles d'une PR communautaire (CI)")
+    p_check.add_argument("--base", required=True, help="révision de référence, ex. origin/main")
+    p_check.set_defaults(func=cmd_check_pr)
+    p_sum = sub.add_parser("pr-summary", help="résumé des changements d'un sous-module (relecture)")
+    p_sum.add_argument("--base", required=True)
+    p_sum.set_defaults(func=cmd_pr_summary)
+    p_drift = sub.add_parser("drift", help="dépôts communautaires modifiés en amont depuis l'épinglage")
+    p_drift.add_argument("--fail", action="store_true")
+    p_drift.set_defaults(func=cmd_drift)
+    p_submit = sub.add_parser("submit", help="ajoute VOTRE dépôt de plugin comme sous-module")
+    p_submit.add_argument("url")
+    p_submit.add_argument("--id", default="")
+    p_submit.set_defaults(func=cmd_submit)
     args = parser.parse_args(argv)
     return args.func(args)
 

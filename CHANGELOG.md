@@ -5,6 +5,55 @@ Format : [Semantic Versioning](https://semver.org/) — `MAJEUR.MINEUR.CORRECTIF
 
 ---
 
+## [1.0.7] — 2026-11-07
+
+### 🔄 Synchronisation entre PC (priorité de cette version)
+
+Intégrée à Voktora (menu **Outils → Synchronisation entre PC**) — voir `doc/SYNC.md`.
+
+- **PC principal / secondaire** : le PC désigné « principal » a la priorité en cas de conflit.
+- **Uniquement sur le même réseau** (LAN privé ou Tailscale, adresses stables) ; rien ne sort vers Internet.
+- Synchronise les **réglages, actions rapides, catégories/statuts, métadonnées et fichiers des projets** (+ `.git`
+  en bloc), les réglages des plugins ; jamais les jetons, le coffre, le compte GitHub ni les chemins locaux.
+- **Fusion intelligente à la GitHub** : fichier A modifié d'un côté et B de l'autre → les deux changements sont
+  appliqués ; même fichier modifié aux deux endroits sans chevauchement → fusion 3 voies des lignes ; sinon le
+  principal gagne et la version perdante est gardée (`….sync-conflict-…`).
+- **Premier échange différent → Voktora demande la source** (ce PC, l'autre, ou « le principal gagne »).
+- **Pourcentage de progression des deux PC** dans la barre d'état et dans la fenêtre de synchronisation.
+- **Coupure tolérée** : si un PC s'éteint ou quitte le réseau, tout s'arrête proprement et reprend tout seul.
+- **Sécurité** : appairage par code à usage unique (10 min), requêtes signées HMAC anti-rejeu, contenu chiffré
+  AES-256-GCM, chemins validés (pas de traversée ni de lien symbolique), suppressions mises en corbeille 30 jours.
+- Beaucoup de réglages : catégories, projets concernés, motifs ignorés, taille max, git, suppressions, intervalle,
+  politique du premier échange, port.
+- **Nouveau format de paquet Arch / Omarchy** (`.pkg.tar.zst`, `pacman -U`) en plus du `.deb` et du `.rpm`
+  → le portable peut tourner sous n'importe quelle distribution. `PKGBUILD` de référence fourni.
+
+### Plugins communautaires (forks + sous-modules)
+
+- Un auteur fork Voktora, ajoute son plugin en **sous-module git épinglé sur un commit** ; si le code du
+  sous-module change, **une nouvelle PR est obligatoire**, même après acceptation.
+- Verrou SHA-256 vérifié à chaque chargement, audit statique partagé (CI + application), imports/builtins gardés,
+  liste de révocation, CI exécutant l'outil de la branche de base sur le code de la PR.
+
+### Correctifs et nouveautés
+
+- **Erreur SSL `CERTIFICATE_VERIFY_FAILED`** dans le marketplace de la version compilée corrigée (certificats
+  système/certifi chargés au démarrage).
+- **Vault** : fenêtre de déverrouillage (au démarrage si besoin, depuis le vault, ou à la demande).
+- **Actions rapides** : celles ajoutées s'affichent, sont modifiables, avec sélecteur d'icônes.
+- **Snapshots v2** : vraies sauvegardes complètes (avec `.git`), versions, vérification d'intégrité, restauration,
+  comparaison intelligente, barre de progression.
+- **Espace disque par projet** : détection des caches/compilations/dépendances, nettoyage par projet et
+  « tout réinitialiser » avec double confirmation au-delà d'un seuil réglable.
+
+### Prévu en 1.0.8
+
+- Intégration des forges **GitLab** et **Fedora (Forgejo)**, distinction des forks.
+- GitHub centralisé en un seul endroit (hub des forges).
+- API interne étendue (y compris côté sécurité) pour tout piloter depuis un plugin.
+
+---
+
 ## [1.0.6] — 2026-11-06
 
 ### Performances et fluidité
@@ -40,6 +89,16 @@ Format : [Semantic Versioning](https://semver.org/) — `MAJEUR.MINEUR.CORRECTIF
 - 8 plugins fournis : UI Tweaks, Quick Notes, Focus Timer, TODO Scanner, Git Insights, Zen Mode, Neon Themes,
   Project Counter.
 - Correction : les plugins n'étaient jamais chargés au démarrage ni accessibles depuis un menu.
+- **Plugins communautaires par sous-module Git** : chaque auteur garde son dépôt/fork ; la PR l'ajoute en
+  sous-module épinglé sur un commit (`marketplace/community/<id>`). Les plugins par défaut restent « officiels ».
+  Modifier le dépôt de l'auteur ne change rien chez les utilisateurs : **nouvelle PR obligatoire**, même après
+  acceptation. Commandes `submit`, `check-pr`, `pr-summary`, `drift`, workflow de dérive hebdomadaire.
+- **Sécurité des plugins** : empreintes SHA-256 revérifiées à chaque démarrage (`.source.json`), analyse statique
+  partagée CI/application (`audit.py`), builtins filtrés + garde d'imports par permission, liste de retraits
+  (`revoked.json`), contrôles de PR exécutés avec l'outil de la branche principale, mise en évidence des nouvelles
+  permissions lors d'une mise à jour, badges Officiel/Communauté avec dépôt et commit affichés.
+- Correction : `CERTIFICATE_VERIFY_FAILED` dans la version compilée (installation depuis le marketplace, IA, GitHub) :
+  les certificats système sont désormais chargés (`core/tls.py`), la vérification n'est jamais désactivée.
 
 ---
 

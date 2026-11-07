@@ -9,7 +9,6 @@ from pathlib import Path
 
 import ai_providers
 import core
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -102,6 +101,25 @@ class ConfigDialog(QDialog):
         grp_cache.setLayout(form_cache)
         layout.addWidget(grp_cache)
 
+        # ── 2bis. Disque et sauvegardes ───────────────────
+        grp_disk = QGroupBox("💽 Espace disque et snapshots")
+        form_disk = QFormLayout()
+        self.disk_threshold_spin = QSpinBox()
+        self.disk_threshold_spin.setRange(0, 1_000_000)
+        self.disk_threshold_spin.setSuffix(" Mo")
+        self.disk_threshold_spin.setToolTip(
+            "« Tout réinitialiser » (Outils → Espace disque) demande une SECONDE confirmation "
+            "(taper un mot) quand la quantité à supprimer dépasse ce seuil. 0 = toujours.")
+        form_disk.addRow("Double confirmation au-delà de :", self.disk_threshold_spin)
+        self.snapshot_keep_spin = QSpinBox()
+        self.snapshot_keep_spin.setRange(0, 999)
+        self.snapshot_keep_spin.setSpecialValueText("illimité")
+        self.snapshot_keep_spin.setToolTip("Nombre de snapshots conservés par projet ; les plus anciens sont "
+                                           "supprimés à la création d'un nouveau. 0 = illimité.")
+        form_disk.addRow("Snapshots conservés par projet :", self.snapshot_keep_spin)
+        grp_disk.setLayout(form_disk)
+        layout.addWidget(grp_disk)
+
         # ── 3. Interface ──────────────────────────────────
         grp_ui = QGroupBox("🖥️ Interface")
         form_ui = QFormLayout()
@@ -142,31 +160,9 @@ class ConfigDialog(QDialog):
         self.apps_list.setMaximumHeight(130)
         apps_layout.addWidget(self.apps_list)
 
-        app_row = QFormLayout()
-        self.app_name_edit = QLineEdit()
-        self.app_name_edit.setPlaceholderText("VS Code")
-        app_row.addRow("Nom :", self.app_name_edit)
-
-        self.app_cmd_edit = QLineEdit()
-        self.app_cmd_edit.setPlaceholderText("code {path}")
-        app_row.addRow("Commande :", self.app_cmd_edit)
-
-        self.app_icon_edit = QLineEdit()
-        self.app_icon_edit.setPlaceholderText("💙")
-        self.app_icon_edit.setMaximumWidth(60)
-        app_row.addRow("Icône :", self.app_icon_edit)
-
-        apps_layout.addLayout(app_row)
-
-        btn_app_row = QHBoxLayout()
-        btn_add_app = QPushButton("➕ Ajouter")
-        btn_add_app.clicked.connect(self._add_quick_app)
-        btn_remove_app = QPushButton("🗑️ Supprimer")
-        btn_remove_app.clicked.connect(self._remove_quick_app)
-        btn_app_row.addWidget(btn_add_app)
-        btn_app_row.addWidget(btn_remove_app)
-        btn_app_row.addStretch()
-        apps_layout.addLayout(btn_app_row)
+        btn_manage_apps = QPushButton("Gérer les actions rapides (ajouter, modifier, icônes)…")
+        btn_manage_apps.clicked.connect(self._manage_quick_apps)
+        apps_layout.addWidget(btn_manage_apps)
 
         grp_apps.setLayout(apps_layout)
         layout.addWidget(grp_apps)
@@ -309,6 +305,8 @@ class ConfigDialog(QDialog):
         )
         self.chk_auto_save_notes.setChecked(app_cfg.get("auto_save_notes", False))
         self.note_interval_spin.setValue(app_cfg.get("note_auto_save_interval", 30))
+        self.disk_threshold_spin.setValue(int(app_cfg.get("disk_reset_confirm_mb", 500)))
+        self.snapshot_keep_spin.setValue(int(app_cfg.get("snapshot_keep", 0)))
 
         # Barre rapide
         self._refresh_apps_list()
@@ -435,47 +433,15 @@ class ConfigDialog(QDialog):
 
     def _refresh_apps_list(self) -> None:
         self.apps_list.clear()
-        for app in core.get_quick_apps():
-            item = QListWidgetItem(
-                f"{app.get('icon','⚡')}  {app['name']}  —  {app['cmd']}"
-            )
-            item.setData(Qt.UserRole, app)
+        import icons as _icons
+        import quick_actions as qa
+        for action in qa.load():
+            item = QListWidgetItem(_icons.icon(action.icon), f"{action.name}  —  {action.cmd}")
             self.apps_list.addItem(item)
 
-    def _add_quick_app(self) -> None:
-        name = self.app_name_edit.text().strip()
-        cmd  = self.app_cmd_edit.text().strip()
-        icon = self.app_icon_edit.text().strip() or "⚡"
-
-        if not name or not cmd:
-            QMessageBox.warning(self, "Attention",
-                                "Renseignez au moins le nom et la commande.")
-            return
-
-        apps = core.get_quick_apps()
-        if any(a["name"].lower() == name.lower() for a in apps):
-            QMessageBox.warning(self, "Doublon",
-                                f"Une application nommée '{name}' existe déjà.")
-            return
-
-        apps.append({"name": name, "cmd": cmd, "icon": icon})
-        core.set_quick_apps(apps)
-
-        self.app_name_edit.clear()
-        self.app_cmd_edit.clear()
-        self.app_icon_edit.clear()
-        self._refresh_apps_list()
-
-    def _remove_quick_app(self) -> None:
-        item = self.apps_list.currentItem()
-        if not item:
-            QMessageBox.warning(self, "Attention",
-                                "Sélectionnez une application à supprimer.")
-            return
-        app_data = item.data(Qt.UserRole)
-        apps     = [a for a in core.get_quick_apps()
-                    if a["name"] != app_data["name"]]
-        core.set_quick_apps(apps)
+    def _manage_quick_apps(self) -> None:
+        from ui_dialogs.quick_actions_dialog import QuickActionsDialog
+        QuickActionsDialog(self).exec()
         self._refresh_apps_list()
 
     def _browse_dir(self, line_edit: QLineEdit) -> None:
@@ -528,6 +494,8 @@ class ConfigDialog(QDialog):
         )
         app_cfg["auto_save_notes"]           = self.chk_auto_save_notes.isChecked()
         app_cfg["note_auto_save_interval"]   = self.note_interval_spin.value()
+        app_cfg["disk_reset_confirm_mb"]     = self.disk_threshold_spin.value()
+        app_cfg["snapshot_keep"]             = self.snapshot_keep_spin.value()
         core.set_app_config(app_cfg)
 
         # Fournisseurs d'IA

@@ -1,0 +1,24 @@
+# Maintainer: yolezz <https://github.com/yo-le-zz>
+# PKGBUILD de référence (AUR / makepkg) : récupère le paquet Arch publié dans la release GitHub.
+# Le paquet officiel est produit par build_arch.sh (même contenu) ; ce fichier sert à `makepkg -si`.
+pkgname=voktora-bin
+pkgver=1.0.7
+pkgrel=1
+pkgdesc="Voktora — gestionnaire de projets de développement (Git, coffre chiffré, snapshots, synchronisation entre PC)"
+arch=('x86_64')
+url="https://github.com/yo-le-zz/Voktora"
+license=('MIT')
+provides=('voktora')
+conflicts=('voktora')
+depends=('glibc' 'libglvnd' 'glib2' 'fontconfig' 'libxkbcommon-x11' 'xcb-util-cursor' 'xcb-util-image'
+         'xcb-util-keysyms' 'xcb-util-renderutil' 'xcb-util-wm')
+optdepends=('git: clonage et gestion des dépôts' 'tailscale: synchronisation entre PC hors du réseau local')
+options=('!strip' '!debug')
+source=("voktora-${pkgver}-1-x86_64.pkg.tar.zst::${url}/releases/download/v${pkgver}/voktora-${pkgver}-1-x86_64.pkg.tar.zst")
+sha256sums=('SKIP')   # remplacer par l'empreinte publiée dans SHA256SUMS de la release
+noextract=("voktora-${pkgver}-1-x86_64.pkg.tar.zst")
+
+package() {
+    bsdtar -xf "$srcdir/voktora-${pkgver}-1-x86_64.pkg.tar.zst" -C "$pkgdir" --exclude='.PKGINFO' --exclude='.INSTALL' \
+        --exclude='.MTREE' --exclude='.BUILDINFO'
+}

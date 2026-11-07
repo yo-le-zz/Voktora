@@ -27,11 +27,11 @@ def _evil_snap(path, member):
 
 
 class TestCreateRestore:
-    def test_round_trip_excludes_git_objects_and_strips_credentials(self, project, tmp_path):
+    def test_round_trip_is_complete_and_strips_credentials(self, project, tmp_path):
         snap = snapshots.create(project, "v1")
         with zipfile.ZipFile(snap) as zf:
             names = zf.namelist()
-            assert "files/src/a.py" in names and "files/.git/objects/big" not in names
+            assert "files/src/a.py" in names and "files/.git/objects/big" in names     # sauvegarde COMPLÈTE
             assert b"tok@" not in zf.read("files/.git/config")
         dest = snapshots.restore(snap, tmp_path / "restored")
         assert (dest / "src" / "a.py").read_text() == "print('a')"

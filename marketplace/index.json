@@ -21,6 +21,7 @@
         "productivité",
         "pomodoro"
       ],
+      "tier": "official",
       "version": "1.0.0"
     },
     {
@@ -45,6 +46,7 @@
         "git",
         "statistiques"
       ],
+      "tier": "official",
       "version": "1.0.0"
     },
     {
@@ -68,6 +70,7 @@
         "thème",
         "style"
       ],
+      "tier": "official",
       "version": "1.0.0"
     },
     {
@@ -92,6 +95,7 @@
         "interface",
         "projets"
       ],
+      "tier": "official",
       "version": "1.0.0"
     },
     {
@@ -116,6 +120,7 @@
         "notes",
         "productivité"
       ],
+      "tier": "official",
       "version": "1.0.0"
     },
     {
@@ -140,6 +145,7 @@
         "code",
         "qualité"
       ],
+      "tier": "official",
       "version": "1.0.0"
     },
     {
@@ -163,6 +169,7 @@
         "interface",
         "style"
       ],
+      "tier": "official",
       "version": "1.0.0"
     },
     {
@@ -186,8 +193,10 @@
         "interface",
         "concentration"
       ],
+      "tier": "official",
       "version": "1.0.0"
     }
   ],
+  "revoked": [],
   "schema": 1
 }
