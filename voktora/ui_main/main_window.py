@@ -12,6 +12,7 @@ import contextlib
 import html
 import json
 import threading
+import time
 from pathlib import Path
 
 import core
@@ -514,6 +515,8 @@ class MainWindow(QMainWindow):
         act_forges.triggered.connect(self.act_forges)
         act_gh_login  = QAction("🔑 GitHub : se connecter...", self)
         act_gh_login.triggered.connect(self.act_github_login)
+        act_gh_rename = QAction("✏️ GitHub : renommer le compte...", self)
+        act_gh_rename.triggered.connect(self.act_github_rename)
         act_gh_logout = QAction("🚪 GitHub : se déconnecter", self)
         act_gh_logout.triggered.connect(self.act_github_logout)
         act_gh_hub = QAction("🐙 GitHub : compte & organisations...", self)
@@ -524,6 +527,7 @@ class MainWindow(QMainWindow):
         menu_gh.addAction(act_sync_account)
         menu_gh.addSeparator()
         menu_gh.addAction(act_gh_login)
+        menu_gh.addAction(act_gh_rename)
         menu_gh.addAction(act_gh_logout)
         menu_gh.addAction(act_gh_hub)
 
@@ -844,7 +848,15 @@ class MainWindow(QMainWindow):
         self._btn_gh_disconnect.clicked.connect(self.act_github_logout)
         self._btn_gh_disconnect.setVisible(False)
 
+        self._btn_gh_rename = QPushButton("✏️")
+        self._btn_gh_rename.setObjectName("subtle")
+        self._btn_gh_rename.setFixedSize(34, 28)
+        self._btn_gh_rename.setToolTip("Renommer le compte (nom affiché)")
+        self._btn_gh_rename.clicked.connect(self.act_github_rename)
+        self._btn_gh_rename.setVisible(False)
+
         btn_row.addWidget(self._btn_gh_connect)
+        btn_row.addWidget(self._btn_gh_rename)
         btn_row.addWidget(self._btn_gh_disconnect)
         v.addLayout(btn_row)
 
@@ -870,6 +882,7 @@ class MainWindow(QMainWindow):
 
             self._btn_gh_connect.setVisible(False)
             self._btn_gh_disconnect.setVisible(True)
+            self._btn_gh_rename.setVisible(True)
         else:
             self._github_card.setObjectName("githubCard")
             self._github_card.style().unpolish(self._github_card)
@@ -891,6 +904,27 @@ class MainWindow(QMainWindow):
 
             self._btn_gh_connect.setVisible(True)
             self._btn_gh_disconnect.setVisible(False)
+            self._btn_gh_rename.setVisible(False)
+
+    def act_github_rename(self) -> None:
+        """Renomme le compte GitHub affiché (si le nom récupéré n'est pas le bon)."""
+        from PySide6.QtWidgets import QInputDialog
+        session = core.get_github_session() or {}
+        info = core.get_github_account_info()
+        current = session.get("name") or info.get("name") or info.get("login", "")
+        text, ok = QInputDialog.getText(
+            self, "Renommer le compte GitHub",
+            f"Nom affiché pour @{info.get('login', '')} (laisser vide = nom de GitHub) :", text=current)
+        if not ok:
+            return
+        try:
+            name = core.rename_github_account(text)
+        except core.GitHubAPIError as exc:
+            self._log(f"⚠️  {exc}")
+            return
+        self._log(f"✏️  Compte GitHub affiché sous le nom « {name} ».")
+        self._update_github_account_card()
+        self._refresh_project_panel()
 
     # ── CONTENT ──────────────────────────────────
 
@@ -1115,6 +1149,8 @@ class MainWindow(QMainWindow):
         self._sync_lbl.setStyleSheet("font-size: 11px; padding-right: 8px;")
         self._sync_lbl.hide()
         self.statusBar().insertPermanentWidget(0, self._sync_lbl)
+        self._sync_changed: dict[str, float] = {}
+        self._sync_refresh_at = 0.0
         self._sync_bridge = SyncBridge(get_service())
         self._sync_bridge.changed.connect(self._on_sync_changed)
         QTimer.singleShot(1500, get_service().start)
@@ -1147,6 +1183,13 @@ class MainWindow(QMainWindow):
                 QTimer.singleShot(0, lambda p=pid, n=name, m=summary: self._prompt_sync_source(p, n, m))
             elif state != "decision":
                 self._sync_prompted.discard(pid)
+            changed = float(st.get("changed_at", 0) or 0)
+            if state == "syncing" and changed > self._sync_changed.get(pid, 0) \
+                    and time.monotonic() - self._sync_refresh_at > 5:
+                # Projets / réglages déjà reçus : ils apparaissent au fil de l'eau (au plus un rafraîchissement / 5 s)
+                self._sync_changed[pid], self._sync_refresh_at = changed, time.monotonic()
+                core.invalidate_cache()
+                QTimer.singleShot(0, self._refresh_all)
             if state == "done" and st.get("last_sync", 0) > self._sync_seen.get(pid, 0):
                 self._sync_seen[pid] = st["last_sync"]
                 if st.get("summary") and st["summary"] != "Tout est à jour.":
@@ -1909,8 +1952,8 @@ class MainWindow(QMainWindow):
     def act_forges(self, *_args) -> None:
         """Hub unique des forges : comptes GitHub / GitLab / Fedora Forge, dépôts et forks."""
         from ui_dialogs import ForgesDialog
-        ForgesDialog(self, {"github_login": self.act_github_login, "github_hub": self.act_github_hub,
-                            "clone": self.act_clone_repo, "sync_account": self.act_sync_account}).exec()
+        ForgesDialog(self, {"github_login": self.act_github_login, "github_rename": self.act_github_rename,
+                            "github_hub": self.act_github_hub, "clone": self.act_clone_repo, "sync_account": self.act_sync_account}).exec()
 
     def act_github_hub(self, *_args) -> None:
         """Compte GitHub, organisations et classement automatique des projets."""

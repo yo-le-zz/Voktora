@@ -75,6 +75,7 @@ class SyncDialog(QDialog):
         self.s = self.svc.settings
         self.setWindowTitle("Synchronisation entre PC")
         self.setMinimumSize(640, 520)
+        self._rows: dict[str, dict] = {}
         self._bridge = bridge or SyncBridge(self.svc)
         self._bridge.changed.connect(self._refresh)
         tabs = QTabWidget()
@@ -185,8 +186,15 @@ class SyncDialog(QDialog):
         self.port.setValue(int(self.s["port"] or DEFAULT_PORT))
         self.port_auto = QCheckBox("Choisir automatiquement un autre port s'il est occupé (les PC le retrouvent seuls)")
         self.port_auto.setChecked(bool(self.s["port_auto"]))
+        self.perf = QComboBox()
+        self.perf.addItem("Automatique (selon la puissance de ce PC)", "auto")
+        self.perf.addItem("Économe — PC peu puissant : lent mais discret", "eco")
+        self.perf.addItem("Normal", "normal")
+        self.perf.addItem("Rapide — PC puissant", "fast")
+        self.perf.setCurrentIndex(max(0, self.perf.findData(self.s["performance"])))
         form.addRow(self.enabled)
         form.addRow(self.auto)
+        form.addRow("Charge sur ce PC", self.perf)
         form.addRow("Recherche de l'autre PC toutes les", self.interval)
         form.addRow("Premier échange si les contenus diffèrent", self.policy)
         form.addRow("Port d'écoute (TCP)", self.port)
@@ -203,16 +211,45 @@ class SyncDialog(QDialog):
     def _build_log(self) -> QWidget:
         page = QWidget()
         lay = QVBoxLayout(page)
+        bar = QHBoxLayout()
+        self.log_enabled = QCheckBox("Activer le journal")
+        self.log_enabled.setChecked(bool(self.s["log_enabled"]))
+        self.log_level = QComboBox()
+        self.log_level.addItem("Essentiel", "quiet")
+        self.log_level.addItem("Par projet", "normal")
+        self.log_level.addItem("Détaillé (chaque fichier)", "detailed")
+        self.log_level.setCurrentIndex(max(0, self.log_level.findData(self.s["log_level"])))
+        clear = QPushButton("Vider le journal")
+        clear.clicked.connect(self._clear_log)
+        for box in (self.log_enabled, self.log_level):
+            (box.toggled if isinstance(box, QCheckBox) else box.currentIndexChanged).connect(self._log_options)
+        bar.addWidget(self.log_enabled)
+        bar.addWidget(QLabel("Niveau :"))
+        bar.addWidget(self.log_level)
+        bar.addStretch()
+        bar.addWidget(clear)
+        lay.addLayout(bar)
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
         self.log_view.setMaximumBlockCount(500)
         lay.addWidget(self.log_view)
-        hint = QLabel("Chaque étape est détaillée ici (connexion, analyse, comparaison, transferts, erreurs). "
+        hint = QLabel("Désactivé ou au niveau « Essentiel », le journal ne coûte presque rien au PC. "
                       "Le fichier complet est dans le dossier de données : sync/sync.log")
         hint.setWordWrap(True)
         hint.setStyleSheet("color:#7f849c;")
         lay.addWidget(hint)
+        self._log_seen = -1
         return page
+
+    def _log_options(self) -> None:
+        self.s["log_enabled"] = self.log_enabled.isChecked()
+        self.s["log_level"] = self.log_level.currentData()
+        self.s.save()
+
+    def _clear_log(self) -> None:
+        self.svc.clear_log()
+        self.log_view.clear()
+        self._log_seen = self.svc.log_total
 
     # ── actions ──────────────────────────────────────────────────────────────
 
@@ -231,6 +268,9 @@ class SyncDialog(QDialog):
         s["enabled"], s["auto"] = self.enabled.isChecked(), self.auto.isChecked()
         s["interval"], s["policy"], s["port"] = self.interval.value(), self.policy.currentData(), self.port.value()
         s["port_auto"] = self.port_auto.isChecked()
+        s["performance"] = self.perf.currentData()
+        s["log_enabled"] = self.log_enabled.isChecked()
+        s["log_level"] = self.log_level.currentData()
         s.save()
 
     def _save(self) -> None:
@@ -292,65 +332,94 @@ class SyncDialog(QDialog):
         self.s["enabled"] = True
         threading.Thread(target=self.svc.sync_peer, args=(peer_id,), daemon=True, name="voktora-sync-now").start()
 
+    def _make_row(self, peer: dict) -> dict:
+        frame = QWidget()
+        col = QVBoxLayout(frame)
+        col.setContentsMargins(0, 4, 0, 4)
+        title = QLabel()
+        bar = QProgressBar()
+        bar.setRange(0, 100)
+        info = QLabel()
+        info.setWordWrap(True)
+        info.setStyleSheet("color:#7f849c;")
+        col.addWidget(title)
+        col.addWidget(bar)
+        col.addWidget(info)
+        buttons = QHBoxLayout()
+        now = QPushButton("Synchroniser maintenant")
+        now.clicked.connect(lambda _=False, pid=peer["id"]: self._sync_now(pid))
+        test = QPushButton("Tester la connexion")
+        test.clicked.connect(lambda _=False, pid=peer["id"]: self._diagnose(pid))
+        forget = QPushButton("Oublier")
+        forget.clicked.connect(lambda _=False, pid=peer["id"]: self._forget(pid))
+        for button in (now, test, forget):
+            buttons.addWidget(button)
+        buttons.addStretch()
+        col.addLayout(buttons)
+        self.peers_box.addWidget(frame)
+        row = {"frame": frame, "title": title, "bar": bar, "info": info}
+        self._rows[peer["id"]] = row
+        return row
+
+    def _refresh_log(self, snap: dict) -> None:
+        """Ajoute seulement les nouvelles lignes (jamais de réécriture complète : pas de gel de l'interface)."""
+        total, lines = int(snap.get("log_total", 0)), snap.get("log", [])
+        if total == self._log_seen:
+            return
+        new = total - self._log_seen if 0 <= self._log_seen <= total else len(lines)
+        fresh = lines[-new:] if new and lines else []
+        bar = self.log_view.verticalScrollBar()
+        follow = bar.value() >= bar.maximum() - 4
+        if self._log_seen < 0 or total < self._log_seen:
+            self.log_view.setPlainText("\n".join(lines))
+        elif fresh:
+            self.log_view.appendPlainText("\n".join(fresh))
+        self._log_seen = total
+        if follow:
+            bar.setValue(bar.maximum())
+
     # ── rafraîchissement ─────────────────────────────────────────────────────
 
     def _refresh(self, snap: dict) -> None:
         s = self.s
-        self.primary.blockSignals(True)
-        self.primary.clear()
-        self.primary.addItem(f"{s['device_name']} (ce PC)", s.device_id)
-        for peer in s["peers"]:
-            self.primary.addItem(peer["name"], peer["id"])
-        self.primary.setCurrentIndex(max(0, self.primary.findData(s["primary_id"])))
-        self.primary.blockSignals(False)
-        while self.peers_box.count():
-            item = self.peers_box.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+        key = (s["device_name"], s["primary_id"], tuple((p["id"], p["name"]) for p in s["peers"]))
+        if key != getattr(self, "_primary_key", None):               # liste recréée seulement si elle a changé
+            self._primary_key = key
+            self.primary.blockSignals(True)
+            self.primary.clear()
+            self.primary.addItem(f"{s['device_name']} (ce PC)", s.device_id)
+            for peer in s["peers"]:
+                self.primary.addItem(peer["name"], peer["id"])
+            self.primary.setCurrentIndex(max(0, self.primary.findData(s["primary_id"])))
+            self.primary.blockSignals(False)
         self.empty.setVisible(not s["peers"])
+        ids = [peer["id"] for peer in s["peers"]]
+        for gone in [pid for pid in self._rows if pid not in ids]:
+            self._rows.pop(gone)["frame"].deleteLater()
         for peer in s["peers"]:
             st = snap["peers"].get(peer["id"], {})
-            frame = QWidget()
-            row = QVBoxLayout(frame)
-            row.setContentsMargins(0, 4, 0, 4)
-            title = QLabel(f"<b>{peer['name']}</b>"
-                           f"{' — PC principal' if s['primary_id'] == peer['id'] else ''}   "
-                           f"{STATE_LABEL.get(st.get('state', 'offline'), '')}   <span style='color:#7f849c'>"
-                           f"{peer['host']}:{peer['port']}</span>")
-            row.addWidget(title)
-            bar = QProgressBar()
-            bar.setRange(0, 100)
-            bar.setValue(int(st.get("percent", 0)))
-            row.addWidget(bar)
+            row = self._rows.get(peer["id"]) or self._make_row(peer)
+            row["title"].setText(f"<b>{peer['name']}</b>"
+                                 f"{' — PC principal' if s['primary_id'] == peer['id'] else ''}   "
+                                 f"{STATE_LABEL.get(st.get('state', 'offline'), '')}   <span style='color:#7f849c'>"
+                                 f"{peer['host']}:{peer['port']}</span>")
+            row["bar"].setValue(int(st.get("percent", 0)))
             remote = st.get("remote") or {}
             detail = st.get("detail", "")
             if remote.get("state") == "syncing":
                 detail += f"   (l'autre PC : {remote.get('percent', 0)} %)"
             if st.get("last_sync"):
                 detail += "   dernière synchro : " + time.strftime("%d/%m %H:%M", time.localtime(st["last_sync"]))
-            info = QLabel(f"{detail}\n{st.get('summary', '')}".strip())
-            info.setWordWrap(True)
-            info.setStyleSheet("color:#7f849c;")
-            row.addWidget(info)
-            buttons = QHBoxLayout()
-            now = QPushButton("Synchroniser maintenant")
-            now.clicked.connect(lambda _=False, pid=peer["id"]: self._sync_now(pid))
-            test = QPushButton("Tester la connexion")
-            test.clicked.connect(lambda _=False, pid=peer["id"]: self._diagnose(pid))
-            forget = QPushButton("Oublier")
-            forget.clicked.connect(lambda _=False, pid=peer["id"]: self._forget(pid))
-            buttons.addWidget(now)
-            buttons.addWidget(test)
-            buttons.addWidget(forget)
-            buttons.addStretch()
-            row.addLayout(buttons)
-            self.peers_box.addWidget(frame)
-        lines = snap.get("log", [])
-        if lines and self.log_view.toPlainText().splitlines()[-1:] != lines[-1:]:
-            self.log_view.setPlainText("\n".join(lines))
-            self.log_view.verticalScrollBar().setValue(self.log_view.verticalScrollBar().maximum())
+            resume = self.svc.resume_info(peer["id"]) if st.get("state") in ("paused", "error", "idle", None) else {}
+            if resume.get("status") in ("interrupted", "running") and resume.get("total_weight"):
+                detail += (f"\nInterrompue à {int(100 * resume.get('done_weight', 0) / resume['total_weight'])} % "
+                           f"({resume.get('done', 0)} action(s) faites) : elle reprendra exactement à cet endroit.")
+            row["info"].setText(f"{detail}\n{st.get('summary', '')}".strip())
+        self._refresh_log(snap)
         from sync import net
-        addrs = net.local_addresses()
+        if time.monotonic() - getattr(self, "_addr_at", 0) > 30:     # lecture des interfaces réseau : pas à chaque tick
+            self._addr_at, self._addrs = time.monotonic(), net.local_addresses()
+        addrs = self._addrs
         self.addr.setText("Adresses de ce PC — Tailscale : " + (", ".join(addrs["tailscale"]) or "aucune")
                           + "  |  LAN : " + (", ".join(addrs["lan"]) or "aucune"))
 

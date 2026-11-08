@@ -24,7 +24,7 @@ Windows + Linux compatible
 # ──────────────────────────────────────────────
 
 APP_NAME              = "Voktora"
-APP_VERSION           = "1.0.8"
+APP_VERSION           = "1.0.9"
 CONTAINER_NAME        = "Voktora"
 PROJECTS_DIR          = "Projects"
 PROJECT_BUILDER       = r"D:\my programme\Project_builder\ProjectsBuilder.exe"
@@ -97,7 +97,7 @@ GITHUB_CLIENT_ID       = ""
 GITHUB_DEVICE_AUTH_URL = "https://github.com/login/device/code"
 GITHUB_TOKEN_URL       = "https://github.com/login/oauth/access_token"
 GITHUB_API_USER_URL    = "https://api.github.com/user"
-GITHUB_SCOPES          = "repo"
+GITHUB_SCOPES          = "repo read:org"      # read:org : liste complète des organisations (privées comprises)
 
 # GitHub App — endpoints
 GITHUB_APP_TOKEN_URL   = "https://api.github.com/app/installations/{installation_id}/access_tokens"

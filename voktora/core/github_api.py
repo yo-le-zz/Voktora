@@ -138,17 +138,48 @@ def list_user_repos(token: str, *, installation: bool = False, max_pages: int = 
     return repos
 
 
-def list_user_orgs(token: str) -> list[str]:
-    """Organisations dont l'utilisateur est membre (complément, jamais bloquant).
+def _paged(path: str, token: str, key: str = "login", max_pages: int = 10) -> list[str]:
+    """Parcourt toutes les pages d'une liste GitHub et renvoie les valeurs `key` (organisations, etc.)."""
+    names: list[str] = []
+    sep = "&" if "?" in path else "?"
+    for page in range(1, max_pages + 1):
+        data = _get_json(f"{path}{sep}per_page={_PER_PAGE}&page={page}", token)
+        if not isinstance(data, list):
+            break
+        for item in data:
+            value = item.get(key) if isinstance(item, dict) else None
+            if not value and isinstance(item, dict) and isinstance(item.get("organization"), dict):
+                value = item["organization"].get(key)          # /user/memberships/orgs : {organization: {login}}
+            if value and value not in names:
+                names.append(value)
+        if len(data) < _PER_PAGE:
+            break
+    return names
 
-    Renvoie [] si le token n'a pas le scope requis (403) ou en cas d'erreur :
-    l'appelant s'appuie sur `owners_from_repos` pour le résultat de référence.
+
+def list_user_orgs_report(token: str) -> tuple[list[str], list[str]]:
+    """Toutes les organisations de l'utilisateur (pagination complète, deux sources) + messages d'aide.
+
+    `/user/orgs` (organisations visibles) complété par `/user/memberships/orgs` (adhésions actives, y compris
+    privées). Sans le droit `read:org` GitHub n'en renvoie que quelques-unes : on le signale au lieu d'échouer.
     """
-    try:
-        data = _get_json(f"/user/orgs?per_page={_PER_PAGE}", token)
-    except constants.GitHubAPIError:
-        return []
-    return [o["login"] for o in data if isinstance(o, dict) and o.get("login")] if isinstance(data, list) else []
+    orgs: list[str] = []
+    notes: list[str] = []
+    for path in ("/user/orgs", "/user/memberships/orgs?state=active"):
+        try:
+            for name in _paged(path, token):
+                if name not in orgs:
+                    orgs.append(name)
+        except constants.GitHubAPIError as exc:
+            notes.append(f"{path.split('?')[0]} : {exc}")
+    if notes and not orgs:
+        notes.append("Reconnectez le compte GitHub pour accorder le droit « read:org » (lecture des organisations).")
+    return orgs, notes
+
+
+def list_user_orgs(token: str) -> list[str]:
+    """Organisations dont l'utilisateur est membre (complément, jamais bloquant) : [] en cas d'erreur."""
+    return list_user_orgs_report(token)[0]
 
 
 def owners_from_repos(repos: list[RepoInfo], extra_orgs: list[str] | tuple[str, ...] = ()) -> list[OwnerInfo]:

@@ -498,7 +498,10 @@ def save_github_account(token: str, user_info: dict, password: str = "") -> None
     cfg     = config_store._load_config()
     account = cfg.setdefault("github_account", {})
     account["login"]      = user_info.get("login", "")
-    account["name"]       = user_info.get("name", "") or user_info.get("login", "")
+    if not (account.get("name_custom") and account.get("name") and account.get("login_seen") == account["login"]):
+        account["name"]   = user_info.get("name", "") or user_info.get("login", "")
+        account["name_custom"] = False
+    account["login_seen"] = account["login"]               # un nom choisi à la main survit à une reconnexion
     account["avatar_url"] = user_info.get("avatar_url", "")
 
     if crypto.vault_is_unlocked():
@@ -566,6 +569,23 @@ def get_github_account_info() -> dict:
         "avatar_url":      info.get("avatar_url", ""),
         "token_protected": bool(info.get("token_protected", False)),
     }
+
+
+def rename_github_account(display_name: str) -> str:
+    """Change le nom AFFICHÉ du compte GitHub (le login, lui, ne change pas). Vide = revenir au nom de GitHub."""
+    global _GITHUB_SESSION
+    cfg = config_store._load_config()
+    account = cfg.setdefault("github_account", {})
+    if not account.get("login"):
+        raise constants.GitHubAPIError("Aucun compte GitHub connecté.")
+    name = " ".join((display_name or "").split())[:80]
+    account["name"] = name or account["login"]
+    account["name_custom"] = bool(name)
+    account["login_seen"] = account["login"]
+    config_store._save_config(cfg)
+    if _GITHUB_SESSION:
+        _GITHUB_SESSION["name"] = account["name"]
+    return account["name"]
 
 
 def clear_github_account() -> None:

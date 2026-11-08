@@ -19,7 +19,7 @@ from pathlib import Path
 
 import core
 from PySide6.QtCore import QPoint, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QButtonGroup,
@@ -797,6 +797,30 @@ class ProjectListView(QWidget):
 # ProjectBrowser — conteneur switchable + barre de contrôle
 # ─────────────────────────────────────────────────────────────────────────────
 
+
+def _view_icon(kind: str, color) -> QIcon:
+    """Icône dessinée (lignes ou grille) : ne dépend d'aucune police, donc jamais « vide » (☰ manquait sur
+    certaines polices/systèmes)."""
+    from PySide6.QtCore import QRectF
+    from PySide6.QtGui import QBrush
+    pix = QPixmap(36, 36)
+    pix.fill(Qt.transparent)
+    painter = QPainter(pix)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setPen(Qt.NoPen)
+    painter.setBrush(QBrush(color))
+    if kind == "list":
+        for i in range(3):
+            painter.drawRoundedRect(QRectF(5, 7 + i * 9, 26, 5), 2, 2)
+    else:
+        for r in range(2):
+            for c in range(2):
+                painter.drawRoundedRect(QRectF(5 + c * 14, 5 + r * 14, 12, 12), 2, 2)
+    painter.end()
+    pix.setDevicePixelRatio(2.0)
+    return QIcon(pix)
+
+
 class ProjectBrowser(QWidget):
     """
     Panneau latéral complet :
@@ -844,7 +868,7 @@ class ProjectBrowser(QWidget):
         bar.addWidget(self._btn_categories)
 
         self._btn_list = QToolButton()
-        self._btn_list.setText("☰")
+        self._btn_list.setIcon(_view_icon("list", QColor("#9399b2")))
         self._btn_list.setToolTip("Vue liste  (glisser un projet sur un groupe pour le classer)")
         self._btn_list.setCheckable(True)
         self._btn_list.setChecked(True)
@@ -852,7 +876,7 @@ class ProjectBrowser(QWidget):
         self._btn_list.clicked.connect(lambda: self._switch(self._MODE_LIST))
 
         self._btn_grid = QToolButton()
-        self._btn_grid.setText("⊞")
+        self._btn_grid.setIcon(_view_icon("grid", QColor("#9399b2")))
         self._btn_grid.setToolTip("Vue grille  (colonnes dynamiques)")
         self._btn_grid.setCheckable(True)
         self._btn_grid.setFixedSize(26, 26)

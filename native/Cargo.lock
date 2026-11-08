@@ -234,7 +234,7 @@ checksum = "7264e107f553ccae879d21fbea1d6724ac785e8c3bfc762137959b5802826ef3"
 
 [[package]]
 name = "voktora_native"
-version = "1.0.8"
+version = "1.0.9"
 dependencies = [
  "crc32fast",
  "pyo3",

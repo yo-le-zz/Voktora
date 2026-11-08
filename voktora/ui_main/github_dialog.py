@@ -94,9 +94,13 @@ class GitHubDialog(QDialog):
         row = QHBoxLayout()
         self.btn_load = QPushButton("⟳  Charger depuis GitHub")
         self.btn_load.clicked.connect(self._load_remote)
+        self.btn_orgs = QPushButton("🏢  Recharger les organisations")
+        self.btn_orgs.setToolTip("Relit toutes les organisations du compte (pagination complète, adhésions privées)")
+        self.btn_orgs.clicked.connect(self._reload_orgs)
         self.btn_open = QPushButton("🌐  Ouvrir sur GitHub")
         self.btn_open.clicked.connect(self._open_selected)
         row.addWidget(self.btn_load)
+        row.addWidget(self.btn_orgs)
         row.addWidget(self.btn_open)
         row.addStretch()
         layout.addLayout(row)
@@ -161,6 +165,31 @@ class GitHubDialog(QDialog):
         self._worker.cancelled.connect(lambda: self.btn_load.setEnabled(True))
         self._worker.start()
 
+    def _reload_orgs(self) -> None:
+        from .repo_picker import load_orgs_job
+        if self._worker is not None and self._worker.isRunning():
+            return
+        self.btn_orgs.setEnabled(False)
+        self.status.setText("Chargement des organisations…")
+        self._worker = TaskWorker(load_orgs_job)
+        self._worker.succeeded.connect(self._on_orgs)
+        self._worker.failed.connect(self._on_failed)
+        self._worker.cancelled.connect(lambda: self.btn_orgs.setEnabled(True))
+        self._worker.start()
+
+    def _on_orgs(self, result) -> None:
+        orgs, notes = result
+        self.btn_orgs.setEnabled(True)
+        known = {o.login.lower(): o for o in self._remote_owners}
+        for name in orgs:
+            known.setdefault(name.lower(), core.OwnerInfo(name, "Organization", 0))
+        self._remote_owners = sorted(known.values(), key=lambda o: o.login.lower())
+        text = f"{len(orgs)} organisation(s) trouvée(s)."
+        if notes:
+            text += "  ⚠ " + " ".join(notes)
+        self.status.setText(text)
+        self._render()
+
     def _on_loaded(self, result) -> None:
         repos, owners = result
         self._remote_owners = owners
@@ -170,6 +199,7 @@ class GitHubDialog(QDialog):
 
     def _on_failed(self, message: str) -> None:
         self.btn_load.setEnabled(True)
+        self.btn_orgs.setEnabled(True)
         self.status.setText(f"⚠  {message}")
 
     def _open_selected(self) -> None:

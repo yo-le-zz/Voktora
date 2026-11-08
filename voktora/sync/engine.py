@@ -21,6 +21,7 @@ import hashlib
 import json
 import os
 import re
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -167,6 +168,13 @@ class BaseState:
             return None
 
 
+def _lower_priority(nice: int) -> None:
+    """Fil d'analyse moins prioritaire (Linux) : l'interface et vos autres programmes restent fluides."""
+    if nice > 0 and hasattr(os, "setpriority"):
+        with contextlib.suppress(OSError, AttributeError):
+            os.setpriority(os.PRIO_PROCESS, threading.get_native_id(), nice)
+
+
 def _label(space: str) -> str:
     if space == CFG:
         return "les réglages"
@@ -187,15 +195,21 @@ class SyncEngine:
         self.on_step, self.peer_name = on_step, peer_name
         self.errors: list[str] = []
         self._last_beat = time.monotonic()
+        self.parallel = PARALLEL_SCANS                 # analyses simultanées (voir SyncSettings.performance_profile)
+        self.scan_nice = 0                             # priorité système des fils d'analyse (0 = normale)
+        self.on_space_done: Callable[[str, int, int], None] | None = None     # (espace, terminés, total)
+        self.on_checkpoint: Callable[[int, int, int], None] | None = None     # (poids fait, poids total, actions faites)
+        self.resume_weight = (0, 0)                    # (déjà fait, total) d'une synchronisation interrompue
         self._pct = 0
         self._absent_local: set[str] = set()
 
     # ── messages ─────────────────────────────────────────────────────────────
 
-    def _say(self, text: str, percent: int | None = None, log: bool = True) -> None:
-        """Annonce une étape : texte lisible (journal + interface) et pourcentage global."""
+    def _say(self, text: str, percent: int | None = None, log: bool = True, detail: bool = False) -> None:
+        """Annonce une étape : texte lisible (journal + interface) et pourcentage global. `detail` = ligne par
+        fichier (journalisée seulement au niveau « détaillé »)."""
         if log and self.on_step:
-            self.on_step(text)
+            self.on_step(text, detail)
         if self.on_progress and percent is not None:
             self._pct = max(self._pct, percent)          # jamais de recul (analyses parallèles)
             self.on_progress(self._pct, text)
@@ -222,7 +236,8 @@ class SyncEngine:
                         and self.settings.category("project_files"):
                     spaces.append(s)
         projects = sorted(s for s in spaces if s.startswith("p:"))
-        return projects + [s for s in spaces if s == "x:plugin_settings"] + ([CFG] if CFG in spaces else [])
+        # Réglages d'abord : la liste des projets apparaît tout de suite ; les fichiers arrivent ensuite projet par projet.
+        return ([CFG] if CFG in spaces else []) + [s for s in spaces if s == "x:plugin_settings"] + projects
 
     def _remote(self, fn, *args):
         try:
@@ -259,10 +274,12 @@ class SyncEngine:
         # Avec beaucoup de projets (100+), on analyse plusieurs espaces à la fois — ce PC et l'autre en parallèle —
         # pendant que la comparaison avance dans l'ordre. Les résultats sont gardés au fil de l'eau (mémoire bornée).
         from concurrent.futures import ThreadPoolExecutor
-        self._pool = ThreadPoolExecutor(max_workers=PARALLEL_SCANS, thread_name_prefix="voktora-scan")
+        self._pool = ThreadPoolExecutor(max_workers=max(1, self.parallel), thread_name_prefix="voktora-scan",
+                                        initializer=_lower_priority, initargs=(self.scan_nice,))
+        self._remote_pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="voktora-remote")
         self._futures: dict[str, tuple] = {}
         try:
-            window = PARALLEL_SCANS * 2
+            window = max(1, self.parallel) * 2
             for index, space in enumerate(spaces):
                 self._check()
                 for ahead in spaces[index:index + window]:
@@ -272,6 +289,7 @@ class SyncEngine:
                 self._plan_space(plan, space, first_sync)
         finally:
             self._pool.shutdown(wait=False, cancel_futures=True)
+            self._remote_pool.shutdown(wait=False, cancel_futures=True)
             with contextlib.suppress(Exception):
                 self.local.flush_cache()
         self._say(f"Analyse terminée : {plan.summary()}", 20)
@@ -280,8 +298,10 @@ class SyncEngine:
     def _prefetch(self, space: str) -> None:
         if space in self._futures:
             return
+        # Analyse locale = CPU/disque de CE PC (limitée par le profil de performance) ; analyse distante = simple
+        # attente de l'autre PC (légère) : deux files séparées, pour ne pas ralentir inutilement un PC économe.
         self._futures[space] = (self._pool.submit(self._local_manifest, space),
-                                self._pool.submit(self._remote_manifest, space))
+                                self._remote_pool.submit(self._remote_manifest, space))
 
     def _winner_is_local(self, first_sync: str) -> bool:
         if first_sync == "local":
@@ -294,9 +314,9 @@ class SyncEngine:
         self._prefetch(space)
         fut_local, fut_remote = self._futures.pop(space)
         L = fut_local.result()
-        self._say(f"{_label(space)} : {len(L)} élément(s) sur ce PC", log=True)
+        self._say(f"{_label(space)} : {len(L)} élément(s) sur ce PC", detail=True)
         R = fut_remote.result()
-        self._say(f"{_label(space)} : {len(R)} élément(s) chez {self.peer_name}")
+        self._say(f"{_label(space)} : {len(R)} élément(s) chez {self.peer_name}", detail=True)
         self._compare(plan, space, first_sync, L, R)
 
     def _remote_manifest(self, space: str) -> dict[str, Entry]:
@@ -434,10 +454,20 @@ class SyncEngine:
 
     def apply(self, plan: Plan) -> dict:
         """Exécute le plan. Retourne {"done", "errors"}. Lève Cancelled / PeerGone après avoir enregistré l'état."""
-        total = max(1, sum(a.weight for a in plan.actions))
-        done_weight, done = 0, 0
-        self._say(f"Application : {len(plan.actions)} action(s) à faire" if plan.actions else "Rien à transférer.", 20)
+        before, before_total = self.resume_weight
+        total = max(1, sum(a.weight for a in plan.actions) + before)
+        if before_total:
+            total = max(total, before_total)
+        done_weight, done = before, 0
+        if before:
+            self._say(f"Reprise : {int(before * 100 / total)} % déjà fait, il reste {len(plan.actions)} action(s)", 20 + int(before * 80 / total))
+        else:
+            self._say(f"Application : {len(plan.actions)} action(s) à faire" if plan.actions else "Rien à transférer.", 20)
         touched: set[str] = set()
+        order = list(dict.fromkeys(a.space for a in plan.actions))
+        remaining = {sp: sum(1 for a in plan.actions if a.space == sp) for sp in order}
+        finished = 0
+        last_flush = time.monotonic()
         for space, updates in plan.base_updates.items():
             for rel, sha in updates.items():
                 self.base.set(space, rel, sha)
@@ -452,7 +482,7 @@ class SyncEngine:
                         DEL_REMOTE: "Suppression là-bas"}.get(action.kind, action.kind)
                 where = f"réglage {action.rel}" if action.space == CFG else f"{action.space[2:] or action.space}/{action.rel}"
                 self._say(f"{verb} {where} ({index + 1}/{len(plan.actions)})",
-                          20 + int(done_weight * 80 / total), log=index < 200 or index % 20 == 0)
+                          20 + int(done_weight * 80 / total), detail=True)
                 try:
                     self._do_retry(action)
                     touched.add(action.space)
@@ -462,20 +492,34 @@ class SyncEngine:
                         raise
                     self.errors.append(f"{action.space}:{action.rel} — {exc}")
                 done_weight += action.weight
-                if index % 25 == 24:
-                    self.base.flush()
-            for space in touched:
-                self.local.commit(space)
-                self._remote(self.remote.commit, space)
+                remaining[action.space] -= 1
+                if remaining[action.space] == 0 and action.space in touched:
+                    # espace terminé : validé tout de suite (le projet apparaît au fur et à mesure)
+                    self.local.commit(action.space)
+                    self._remote(self.remote.commit, action.space)
+                    touched.discard(action.space)
+                    finished += 1
+                    if self.on_space_done:
+                        self.on_space_done(action.space, finished, len(order))
+                if index % 10 == 9 or time.monotonic() - last_flush > 3:
+                    last_flush = time.monotonic()
+                    self.base.flush()                       # état écrit souvent : une coupure ne perd presque rien
+                    if self.on_checkpoint:
+                        self.on_checkpoint(done_weight, total, done)
             if self.on_progress:
                 self.on_progress(100, "terminé")
         except (ConnectionError, TimeoutError) as exc:
             raise PeerGone(f"Le pair ne répond plus ({exc}).") from exc
         finally:
             self.base.flush()
+            if self.on_checkpoint:
+                with contextlib.suppress(Exception):
+                    self.on_checkpoint(done_weight, total, done)
             for space in touched:
                 with contextlib.suppress(Exception):
                     self.local.commit(space)
+            with contextlib.suppress(Exception):
+                self.local.flush_cache()
         return {"done": done, "errors": list(self.errors)}
 
     def _do_retry(self, action: Action) -> None:

@@ -83,6 +83,17 @@ def remove_account(account_id: str) -> None:
         pass
 
 
+def rename_account(account_id: str, label: str) -> str:
+    """Change le nom affiché d'un compte de forge (le login ne change pas)."""
+    cfg = _store()._load_config()
+    acc = next((a for a in cfg.get(KEY, []) if a.get("id") == account_id), None)
+    if not acc:
+        raise ForgeError("Compte de forge introuvable.")
+    acc["label"] = " ".join((label or "").split())[:80] or acc.get("login", "") or acc.get("label", "")
+    _store()._save_config(cfg)
+    return acc["label"]
+
+
 def client_for(account_id: str):
     acc = next((a for a in list_accounts() if a["id"] == account_id), None)
     if not acc:
