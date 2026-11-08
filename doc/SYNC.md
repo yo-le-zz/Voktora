@@ -55,3 +55,17 @@ Les réglages des plugins peuvent contenir des secrets propres à ces plugins : 
 - **Réseau instable** : 3 nouvelles tentatives automatiques, verrou renouvelé, reprise au prochain passage.
 - **Beaucoup de projets** : analyses en parallèle, cache d'empreintes différé ; 105 projets ≈ 4 s puis < 1 s.
 - **Garde-fous** : suppression massive jamais propagée automatiquement (avertissement dans le journal).
+
+## Journal, charge et reprise (1.0.9)
+
+- **Journal** (onglet *Journal*) : activer/désactiver, niveau *Essentiel* / *Par projet* / *Détaillé* (chaque fichier),
+  bouton **Vider** (efface aussi `sync/sync.log`). Au niveau « Détaillé » sur un gros dépôt, le journal peut compter des
+  milliers de lignes : l'interface n'ajoute que les nouvelles, mais préférez « Par projet ».
+- **Charge sur ce PC** (onglet *Automatisme*) : *Économe* (1 analyse à la fois, pauses pendant le calcul des
+  empreintes, priorité basse), *Normal*, *Rapide*, ou *Automatique* (≤ 2 cœurs → économe, ≤ 6 → normal, sinon rapide).
+- **Progression visible** : les réglages et la liste des projets arrivent d'abord ; chaque projet est validé dès qu'il
+  est terminé et la liste de l'application se rafraîchit pendant la synchro (au plus toutes les 5 s).
+- **Reprise exacte** : l'état d'avancement (`sync/resume-<pc>.json`) est enregistré toutes les 10 actions ou 3 s. Après une
+  coupure, la synchro reprend là où elle s'était arrêtée : seules les actions restantes sont refaites, le pourcentage
+  repart de sa valeur, le choix de source du premier échange est conservé, les `.part` de plus d'une heure sont purgés.
+  Une reprise datant de plus de 24 h est ignorée (une analyse complète est refaite, sans rien perdre).

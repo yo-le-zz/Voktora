@@ -48,7 +48,11 @@ class SyncService:
         self._cancel_flag = threading.Event()
         self._tick = 0
         self.logs: collections.deque[str] = collections.deque(maxlen=400)
+        self.log_total = 0                       # nombre total de lignes émises (l'interface n'ajoute que les nouvelles)
         self._log_path = self.dir / "sync.log"
+        self._emit_lock = threading.Lock()
+        self._last_emit = 0.0
+        self._emit_timer: threading.Timer | None = None
 
     # ── statut ───────────────────────────────────────────────────────────────
 
@@ -58,23 +62,64 @@ class SyncService:
     def snapshot(self) -> dict:
         return {"enabled": self.settings["enabled"], "device_id": self.settings.device_id,
                 "primary_id": self.settings["primary_id"], "own": dict(self._own),
-                "port": self.server.port, "log": list(self.logs)[-120:],
+                "port": self.server.port, "log": list(self.logs)[-120:], "log_total": self.log_total,
+                "log_enabled": bool(self.settings["log_enabled"]),
                 "peers": {k: dict(v) for k, v in self.status.items()}}
 
-    def log(self, text: str, peer_id: str = "") -> None:
-        """Journal lisible (interface + fichier `sync/sync.log`, tourné à 1 Mo)."""
-        name = (self.settings.peer(peer_id) or {}).get("name", "") if peer_id else ""
+    QUIET_PREFIXES = ("Début", "Autre PC", "Analyse terminée", "Application", "Reprise", "Terminé", "Erreur", "Pause",
+                      "Attention", "Connexion instable", "Plus de contact", "Contact établi", "À l'écoute", "Le port",
+                      "Synchronisation arrêtée", "Refusé", "Nouveau port", "Impossible")
+
+    def log(self, text: str, peer_id: str = "", detail: bool = False, important: bool = False) -> None:
+        """Journal lisible (interface + fichier `sync/sync.log`, tourné à 1 Mo). Désactivable ; trois niveaux :
+        essentiel / par projet / par fichier. Les erreurs sont toujours gardées en mémoire."""
+        s = self.settings
+        level = s["log_level"]
+        if not s["log_enabled"] and not important:
+            return
+        if detail and level != "detailed" and not important:
+            return
+        if level == "quiet" and not important and not text.startswith(self.QUIET_PREFIXES):
+            return
+        name = (s.peer(peer_id) or {}).get("name", "") if peer_id else ""
         line = f"{time.strftime('%H:%M:%S')}  {('[' + name + '] ') if name else ''}{text}"
         self.logs.append(line)
+        self.log_total += 1
+        if s["log_enabled"]:
+            self._write_log_file(line)
+        self._emit()
+
+    def _write_log_file(self, line: str) -> None:
         with contextlib.suppress(OSError):
             self.dir.mkdir(parents=True, exist_ok=True)
             if self._log_path.exists() and self._log_path.stat().st_size > 1_000_000:
                 self._log_path.replace(self._log_path.with_suffix(".log.1"))
             with open(self._log_path, "a", encoding="utf-8") as handle:
                 handle.write(time.strftime("%Y-%m-%d ") + line + "\n")
-        self._emit()
 
-    def _emit(self) -> None:
+    def clear_log(self) -> None:
+        """Vide le journal (mémoire et fichiers)."""
+        self.logs.clear()
+        self.log_total += 1
+        for path in (self._log_path, self._log_path.with_suffix(".log.1")):
+            with contextlib.suppress(OSError):
+                path.unlink()
+        self._emit(force=True)
+
+    def _emit(self, force: bool = False) -> None:
+        """Prévient les écouteurs (interface). Regroupé : au plus un envoi par intervalle (selon le profil de
+        performance), pour ne jamais saturer l'interface — un dernier envoi est toujours programmé."""
+        interval = self.settings.performance_profile()["ui_ms"] / 1000
+        with self._emit_lock:
+            now = time.monotonic()
+            if not force and now - self._last_emit < interval:
+                if self._emit_timer is None:
+                    self._emit_timer = threading.Timer(interval, lambda: self._emit(force=True))
+                    self._emit_timer.daemon = True
+                    self._emit_timer.start()
+                return
+            self._last_emit = now
+            self._emit_timer = None
         snap = self.snapshot()
         for fn in list(self.listeners):
             with contextlib.suppress(Exception):
@@ -85,8 +130,9 @@ class SyncService:
         entry = self.status.setdefault(peer_id, {"name": peer.get("name", peer_id), "state": OFFLINE, "percent": 0,
                                                   "detail": "", "last_sync": 0.0, "summary": "", "remote": {}})
         entry["name"] = peer.get("name", entry["name"])
+        changed_state = "state" in fields and fields["state"] != entry.get("state")
         entry.update(fields)
-        self._emit()
+        self._emit(force=changed_state)
 
     def _own_status(self) -> dict:
         return dict(self._own)
@@ -317,10 +363,27 @@ class SyncService:
             remote.lock()
             locked = True
             self.log("Autre PC réservé : aucune autre synchronisation ne peut l'écrire en même temps", peer_id)
+            profile = self.settings.performance_profile()
+            self.store.throttle = profile["pause"]
+            with contextlib.suppress(Exception):
+                self.store.purge_partials()
+            resume = self.resume_info(peer_id)
+            fresh = bool(resume) and time.time() - resume.get("ts", 0) < 86400
+            if fresh and not first_sync and resume.get("choice"):
+                first_sync = resume["choice"]                       # choix déjà fait avant la coupure
             engine = SyncEngine(self.store, remote, peer_id, self.settings, self.dir / "state" / "base",
                                 self.settings.is_primary, lambda p, d: self._progress(peer_id, p, d),
                                 self._cancel_flag.is_set, self.settings["device_name"],
-                                lambda text: self.log(text, peer_id), peer["name"])
+                                lambda text, detail=False: self.log(text, peer_id, detail), peer["name"])
+            engine.parallel, engine.scan_nice = profile["scans"], profile["nice"]
+            if fresh and resume.get("status") in ("interrupted", "running") and resume.get("total_weight"):
+                engine.resume_weight = (int(resume.get("done_weight", 0)), int(resume.get("total_weight", 0)))
+                self.log(f"Reprise de la synchronisation interrompue ({resume.get('done', 0)} action(s) déjà faites, "
+                         f"{int(resume['done_weight'] * 100 / max(1, resume['total_weight']))} %) : seul le reste est refait", peer_id)
+            engine.on_checkpoint = lambda dw, tw, n: self._save_resume(peer_id, status="running", done_weight=dw,
+                                                                       total_weight=tw, done=n)
+            engine.on_space_done = lambda sp, k, n: self._space_done(peer_id, sp, k, n)
+            self.log(f"Mode {profile['mode']} : {profile['scans']} analyse(s) à la fois", peer_id, detail=True)
             plan = engine.plan(first_sync or self._first_sync())
             for warning in plan.warnings:
                 self.log(f"Attention : {warning}", peer_id)
@@ -337,14 +400,17 @@ class SyncService:
                 self.log(f"Erreur : {problem}", peer_id)
             elapsed = time.monotonic() - started
             self.log(f"Terminé en {elapsed:.1f} s : {plan.summary()}" + (f" — {len(problems)} erreur(s)" if problems else ""), peer_id)
+            self._clear_resume(peer_id)
             self._set(peer_id, state=DONE if not problems else ERROR, percent=100, last_sync=time.time(),
                       summary=plan.summary(), detail="à jour" if not problems else f"{len(problems)} erreur(s) : {problems[0]}")
         except Cancelled:
             self.log("Synchronisation arrêtée", peer_id)
-            self._set(peer_id, state=PAUSED, detail="arrêtée — reprendra au prochain passage")
+            self._save_resume(peer_id, status="interrupted", reason="arrêt demandé")
+            self._set(peer_id, state=PAUSED, detail=self._paused_detail(peer_id, "arrêtée"))
         except (PeerGone, ConnectionError) as exc:
             self.log(f"Pause : {exc} — reprise automatique dès que l'autre PC revient", peer_id)
-            self._set(peer_id, state=PAUSED, detail=f"pair indisponible, reprise automatique ({exc})")
+            self._save_resume(peer_id, status="interrupted", reason=str(exc)[:200])
+            self._set(peer_id, state=PAUSED, detail=self._paused_detail(peer_id, f"pair indisponible ({exc})"))
         except RemoteError as exc:
             hint = " (heure des deux PC différente ?)" if "horloge" in str(exc) else ""
             self.log(f"Refusé par l'autre PC : {exc}{hint}", peer_id)
@@ -362,8 +428,46 @@ class SyncService:
                 remote.unlock()
             self._own = {"state": IDLE, "percent": 0, "detail": ""}
             self._run.release()
-            self._emit()
+            self._emit(force=True)
         return plan
+
+    # ── reprise après interruption ───────────────────────────────────────────
+
+    def _resume_path(self, peer_id: str) -> Path:
+        return self.dir / "state" / f"resume-{peer_id[:16]}.json"
+
+    def resume_info(self, peer_id: str) -> dict:
+        """Ce qui était en cours quand la synchronisation s'est arrêtée ({} si rien)."""
+        import json
+        try:
+            return json.loads(self._resume_path(peer_id).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+
+    def _save_resume(self, peer_id: str, **fields) -> None:
+        import json
+        info = {**self.resume_info(peer_id), **fields, "ts": time.time()}
+        with contextlib.suppress(OSError):
+            path = self._resume_path(peer_id)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(info), encoding="utf-8")
+            tmp.replace(path)
+
+    def _clear_resume(self, peer_id: str) -> None:
+        with contextlib.suppress(OSError):
+            self._resume_path(peer_id).unlink()
+
+    def _paused_detail(self, peer_id: str, why: str) -> str:
+        info = self.resume_info(peer_id)
+        pct = int(info.get("done_weight", 0) * 100 / max(1, info.get("total_weight", 1))) if info.get("total_weight") else 0
+        where = f" à {pct} %" if pct else ""
+        return f"{why} — en pause{where}, reprendra exactement là où elle s'est arrêtée"
+
+    def _space_done(self, peer_id: str, space: str, k: int, n: int) -> None:
+        label = "réglages" if space == "cfg" else space[2:] if space.startswith("p:") else space
+        self.log(f"Terminé : {label} ({k}/{n})", peer_id)
+        self._set(peer_id, changed_at=time.time(), spaces_done=[k, n])
 
     def resolve(self, peer_id: str, choice: str) -> None:
         """Réponse à « de quelle source synchroniser ? » : 'local' (ce PC), 'remote' (l'autre), 'primary'."""
@@ -372,6 +476,7 @@ class SyncService:
             self._set(peer_id, state=ONLINE, detail="synchronisation annulée")
             return
         self._pending.pop(peer_id, None)
+        self._save_resume(peer_id, choice=choice)           # le choix survit à une coupure : on ne le redemande pas
         threading.Thread(target=self.sync_peer, args=(peer_id, choice), daemon=True, name="voktora-sync-run").start()
 
     def _progress(self, peer_id: str, percent: int, detail: str) -> None:

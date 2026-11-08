@@ -107,3 +107,37 @@ class TestOwners:
                  github_api._parse_repo(_repo("me", "c"))]
         owners = github_api.owners_from_repos(repos, extra_orgs=["silent-org"])
         assert [(o.login, o.repo_count) for o in owners] == [("Acme", 2), ("me", 1), ("silent-org", 0)]
+
+
+class TestOrgsReload:
+    def test_orgs_paginated_and_merged(self, monkeypatch):
+        calls = []
+
+        def fake(path, token):
+            calls.append(path)
+            if path.startswith("/user/orgs"):
+                return [{"login": f"o{i}"} for i in range(100)] if path.endswith("&page=1") else [{"login": "last"}]
+            return [{"organization": {"login": "private-org"}}, {"organization": {"login": "o1"}}]
+
+        monkeypatch.setattr(github_api, "_get_json", fake)
+        orgs, notes = github_api.list_user_orgs_report("tok")
+        assert len(orgs) == 102 and "last" in orgs and "private-org" in orgs and not notes
+        assert any("memberships" in c for c in calls)
+
+    def test_missing_scope_gives_a_hint(self, monkeypatch):
+        def boom(path, token):
+            raise core.GitHubAPIError("Accès refusé par GitHub (403)")
+
+        monkeypatch.setattr(github_api, "_get_json", boom)
+        orgs, notes = github_api.list_user_orgs_report("tok")
+        assert orgs == [] and any("read:org" in n for n in notes)
+
+
+def test_github_rename_survives_relogin(isolated_data_dir):
+    core.save_github_account("tok", {"login": "yo", "name": "Mauvais Nom"})
+    assert core.rename_github_account("Yolezz") == "Yolezz"
+    core.save_github_account("tok", {"login": "yo", "name": "Mauvais Nom"})
+    assert core.get_github_account_info()["name"] == "Yolezz"
+    assert core.rename_github_account("") == "yo"
+    core.save_github_account("tok", {"login": "yo", "name": "Vrai Nom"})
+    assert core.get_github_account_info()["name"] == "Vrai Nom"

@@ -5,6 +5,39 @@ Format : [Semantic Versioning](https://semver.org/) — `MAJEUR.MINEUR.CORRECTIF
 
 ---
 
+## [1.0.9] — 2026-11-08
+
+### 🔄 Synchronisation : journal maîtrisé, PC modestes, entrées au fil de l'eau, vraie reprise
+
+- **Journal** : peut être **vidé** (bouton) ou **désactivé**, et a trois niveaux — *Essentiel*, *Par projet* (défaut),
+  *Détaillé* (chaque fichier). Plus de gel de l'interface : le journal n'est plus réécrit en entier à chaque mise à
+  jour (seules les nouvelles lignes sont ajoutées), les rafraîchissements sont regroupés (250-800 ms selon le PC) et les
+  widgets des appareils sont mis à jour sur place au lieu d'être recréés.
+- **PC peu puissants** : réglage **Charge sur ce PC** (Automatique / Économe / Normal / Rapide). En économe : une seule
+  analyse à la fois, pauses proportionnelles pendant le calcul des empreintes, threads de synchro en priorité basse
+  (`nice`), peu de rafraîchissements d'interface. « Automatique » choisit selon le nombre de cœurs.
+- **Les entrées apparaissent pendant la synchro** : réglages et liste des projets d'abord, puis chaque projet est
+  validé dès qu'il est terminé ; la liste des projets se rafraîchit toutes les 5 s au plus pendant la synchro (avant :
+  seulement à la fin).
+- **Reprise exacte après interruption** : un fichier de reprise (`resume-<pc>.json`) est mis à jour toutes les 10
+  actions / 3 s. Au retour de l'autre PC, seul ce qui reste est refait, le pourcentage repart d'où il était, le choix de
+  source déjà fait au premier échange n'est pas redemandé, et les fichiers partiels (`.part`) périmés sont nettoyés.
+  La fenêtre indique « Interrompue à N % : elle reprendra exactement à cet endroit ».
+
+### 🐙 GitHub
+
+- **Renommer le compte** : le nom affiché peut être corrigé (carte GitHub ✏️, menu Forges, fenêtre Forges) ; il survit
+  aux reconnexions ; vide = retour au nom de GitHub. Les comptes GitLab / Forgejo ont aussi un bouton **Renommer**.
+- **Organisations manquantes** : la liste est maintenant paginée en entier et complétée par les adhésions actives
+  (`/user/memberships/orgs`) ; la connexion demande le droit `read:org` (sans lui GitHub cache les organisations
+  privées — reconnectez-vous une fois). Nouveau bouton **🏢 Recharger les organisations** (sélecteur de dépôts et
+  fenêtre « Compte & organisations »), avec message d'aide si le droit manque.
+
+### 🎨 Interface
+
+- L'icône du mode **lignes** (liste) des projets était vide sur certaines polices : les icônes liste/grille sont
+  désormais dessinées (indépendantes de la police).
+
 ## [1.0.8] — 2026-11-08
 
 ### 🔄 Synchronisation : fiabilité, transparence, rapidité

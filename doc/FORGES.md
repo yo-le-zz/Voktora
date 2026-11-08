@@ -11,3 +11,11 @@ Menu **🌐 Forges** : un seul endroit pour GitHub, GitLab, la forge de Fedora e
   tous vos comptes avec un filtre « Forks seulement » ; double-clic = copier l'adresse de clone.
 - **Sécurité** : HTTPS uniquement, certificats vérifiés, jetons dans le coffre (Vault) quand il est déverrouillé,
   jamais écrits dans un remote ni synchronisés entre PC.
+
+
+## Compte et organisations (1.0.9)
+
+- **Renommer** le compte GitHub (✏️ sur la carte, menu Forges) ou un compte GitLab / Forgejo : seul le nom affiché change ;
+  il survit aux reconnexions (nom vide = nom de GitHub).
+- **🏢 Recharger les organisations** : relit toutes les organisations (pagination complète + adhésions actives). Il faut
+  le droit OAuth `read:org` (demandé à la connexion) ; si des organisations privées manquent, reconnectez-vous une fois.

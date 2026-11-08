@@ -57,7 +57,8 @@ class ForgesDialog(QDialog):
         gh = QHBoxLayout()
         self.gh_label = QLabel("")
         gh.addWidget(self.gh_label, 1)
-        for text, key in (("Connexion GitHub…", "github_login"), ("Compte & organisations…", "github_hub"),
+        for text, key in (("Connexion GitHub…", "github_login"), ("Renommer GitHub…", "github_rename"),
+                          ("Compte & organisations…", "github_hub"),
                           ("Cloner un dépôt…", "clone"), ("Ajouter mes dépôts…", "sync_account")):
             btn = QPushButton(text)
             btn.clicked.connect(lambda _=False, k=key: self._action(k))
@@ -70,7 +71,10 @@ class ForgesDialog(QDialog):
         rm.clicked.connect(self._remove)
         test = QPushButton("Tester")
         test.clicked.connect(self._test)
+        ren = QPushButton("Renommer")
+        ren.clicked.connect(self._rename)
         row.addWidget(test)
+        row.addWidget(ren)
         row.addWidget(rm)
         row.addStretch()
         lay.addLayout(row)
@@ -167,6 +171,17 @@ class ForgesDialog(QDialog):
         if acc:
             QGuiApplication.setOverrideCursor(Qt.WaitCursor)
             self._run(lambda: forges.client_for(acc).user())
+
+    def _rename(self) -> None:
+        from PySide6.QtWidgets import QInputDialog
+        acc = self._selected()
+        if not acc:
+            return
+        current = next((a["label"] for a in forges.list_accounts() if a["id"] == acc), "")
+        text, ok = QInputDialog.getText(self, "Renommer le compte", "Nom affiché :", text=current)
+        if ok:
+            forges.rename_account(acc, text)
+            self._refresh_accounts()
 
     def _remove(self) -> None:
         acc = self._selected()

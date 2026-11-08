@@ -10,7 +10,7 @@ import pytest
 from sync import merge, net, secure
 from sync.client import RemoteError, RemoteStore
 from sync.service import DECISION, DONE, PAUSED, SyncService
-from sync.store import SyncPathError, clean_rel
+from sync.store import PART_SUFFIX, SyncPathError, clean_rel
 
 
 def free_port() -> int:
@@ -354,16 +354,60 @@ def test_sync_is_talkative(pcs):
     laptop.svc.sync_peer(main.id, "primary")
     text = "\n".join(laptop.svc.logs)
     for expected in ("Début de la synchronisation", "réservé", "à comparer", "Comparaison de projet « demo »",
-                     "Application : 2 action(s)", "Envoi" if False else "Réception", "Terminé en"):
+                     "Application : 2 action(s)", "Terminé : demo", "Terminé en"):
         assert expected in text, expected
+    assert "Réception" not in text                      # le détail par fichier n'est pas au niveau « normal »
     assert (laptop.svc.dir / "sync.log").exists()
+
+
+def test_detailed_level_logs_each_file(pcs):
+    main, laptop = pcs
+    laptop.svc.settings["log_level"] = "detailed"
+    setup_project(main, laptop, {"a.txt": "a\n"})
+    laptop.svc.sync_peer(main.id, "primary")
+    assert "Réception projet" not in "\n".join(laptop.svc.logs) and "Réception demo/a.txt" in "\n".join(laptop.svc.logs)
+
+
+def test_log_can_be_disabled_and_cleared(pcs):
+    main, laptop = pcs
+    setup_project(main, laptop, {"a.txt": "a\n"})
+    laptop.svc.sync_peer(main.id, "primary")
+    assert laptop.svc.logs and (laptop.svc.dir / "sync.log").exists()
+    laptop.svc.clear_log()
+    assert not laptop.svc.logs and not (laptop.svc.dir / "sync.log").exists()
+    laptop.svc.settings["log_enabled"] = False
+    laptop.svc.sync_peer(main.id)
+    assert not laptop.svc.logs and not (laptop.svc.dir / "sync.log").exists()
+
+
+def test_quiet_level_keeps_essentials_only(pcs):
+    main, laptop = pcs
+    laptop.svc.settings["log_level"] = "quiet"
+    setup_project(main, laptop, {"a.txt": "a\n"})
+    laptop.svc.clear_log()                               # le jumelage de la fixture a pu journaliser en « normal »
+    laptop.svc.sync_peer(main.id, "primary")
+    text = "\n".join(laptop.svc.logs)
+    assert "Début de la synchronisation" in text and "Terminé en" in text and "Comparaison de" not in text
+
+
+def test_ui_emissions_are_throttled(pcs):
+    main, laptop = pcs
+    laptop.svc.settings["performance"] = "eco"
+    seen = []
+    laptop.svc.add_listener(lambda snap: seen.append(time.monotonic()))
+    for i in range(200):
+        laptop.svc.log(f"ligne {i}", important=True)
+    assert len(seen) < 20                                # 200 lignes, très peu de rafraîchissements d'interface
+    time.sleep(1.0)
+    assert laptop.svc.log_total >= 200
 
 
 def test_phase_details_in_status(pcs):
     main, laptop = pcs
     setup_project(main, laptop, {"a.txt": "a\n"})
     details = []
-    laptop.svc.add_listener(lambda snap: details.append(snap["peers"].get(main.id, {}).get("detail", "")))
+    real_set = laptop.svc._set
+    laptop.svc._set = lambda pid, **f: (details.append(f.get("detail", "")), real_set(pid, **f))[1]
     laptop.svc.sync_peer(main.id, "primary")
     joined = " | ".join(details)
     assert "Connexion à" in joined and "Comparaison de" in joined and "Réception" in joined
@@ -490,3 +534,95 @@ def test_project_known_only_on_disk_is_not_wiped(pcs):
     laptop.svc.sync_peer(main.id, "primary")
     laptop.svc.sync_peer(main.id)
     assert (a / "k.txt").exists()
+
+
+# ── reprise là où la synchronisation s'était arrêtée ─────────────────────────
+
+def test_resume_continues_where_it_stopped(pcs):
+    main, laptop = pcs
+    a, b = setup_project(main, laptop, {f"f{i}.txt": "x" * 3000 + f"{i}\n" for i in range(30)})
+    from sync.engine import Cancelled, SyncEngine
+    peer = laptop.svc.settings.peer(main.id)
+    seen = []
+    engine = SyncEngine(laptop.svc.store, laptop.svc._remote(peer), main.id, laptop.svc.settings,
+                        laptop.svc.dir / "state" / "base", False, lambda p, d: seen.append(p),
+                        lambda: bool(seen) and max(seen) >= 60)
+    engine.on_checkpoint = lambda dw, tw, n: laptop.svc._save_resume(main.id, status="running", done_weight=dw,
+                                                                      total_weight=tw, done=n)
+    engine.remote.lock()
+    plan = engine.plan("primary")
+    with pytest.raises(Cancelled):
+        engine.apply(plan)
+    engine.remote.unlock()
+    done_before = len(list(b.glob("f*.txt")))
+    info = laptop.svc.resume_info(main.id)
+    assert 0 < done_before < 30 and info["status"] == "running" and info["done"] >= 1
+    # reprise : seul le reste est refait, le pourcentage repart d'où il était, le choix « primary » est retenu
+    laptop.svc._save_resume(main.id, status="interrupted", choice="primary")
+    percents = []
+    real_set = laptop.svc._set
+    laptop.svc._set = lambda pid, **f: (percents.append(f.get("percent")), real_set(pid, **f))[1]
+    plan2 = laptop.svc.sync_peer(main.id)            # aucun choix passé : celui d'avant est réutilisé
+    assert plan2 is not None and not plan2.needs_decision
+    assert len(list(b.glob("f*.txt"))) == 30
+    assert sum(1 for x in plan2.actions if x.kind == "pull") == 30 - done_before
+    assert any("Reprise de la synchronisation interrompue" in line for line in laptop.svc.logs)
+    first_apply_pct = min(p for p in percents if p and p > 20)
+    assert first_apply_pct >= 20 + int(80 * info["done_weight"] / info["total_weight"]) - 5
+    assert laptop.svc.resume_info(main.id) == {}      # terminé : plus rien à reprendre
+
+
+def test_pause_message_says_where_it_resumes(pcs):
+    main, laptop = pcs
+    setup_project(main, laptop, {"a.txt": "a\n"})
+    main.svc.server.stop()
+    laptop.svc.sync_peer(main.id, "primary")
+    st = laptop.svc.status[main.id]
+    assert st["state"] == PAUSED and "reprendra" in st["detail"]
+    assert laptop.svc.resume_info(main.id)["status"] == "interrupted"
+
+
+def test_decision_choice_survives_interruption(pcs):
+    main, laptop = pcs
+    setup_project(main, laptop, {"x.txt": "p\n"}, {"x.txt": "q\n"})
+    plan = laptop.svc.sync_peer(main.id)
+    assert plan.needs_decision
+    laptop.svc._save_resume(main.id, choice="local")            # l'utilisateur avait répondu « ce PC »…
+    laptop.svc.sync_peer(main.id)                               # …puis coupure ; au retour on ne redemande pas
+    assert laptop.svc.status[main.id]["state"] == DONE
+
+
+def test_stale_partial_files_are_purged(pcs):
+    main, laptop = pcs
+    a, b = setup_project(main, laptop, {"a.txt": "a\n"})
+    part = b / f"gros.bin{PART_SUFFIX}"
+    part.write_text("moitié de fichier")
+    import os
+    os.utime(part, (time.time() - 7200, time.time() - 7200))
+    laptop.svc.sync_peer(main.id, "primary")
+    assert not part.exists()
+
+
+def test_projects_appear_progressively_and_cfg_first(pcs):
+    main, laptop = pcs
+    for i in range(3):
+        write(main.cfg.add_project(f"p{i}"), "f.txt", "x\n")
+    order = []
+    real = laptop.svc._space_done
+    laptop.svc._space_done = lambda pid, sp, k, n: (order.append((sp, len(laptop.cfg.cfg["projects"]))), real(pid, sp, k, n))[1]
+    laptop.svc.sync_peer(main.id, "primary")
+    assert order[0][0] == "cfg" or order[0][1] == 3               # la liste des projets arrive avant leurs fichiers
+    assert laptop.svc.status[main.id].get("changed_at")
+
+
+def test_performance_profiles():
+    import tempfile
+
+    from sync.settings import SyncSettings
+    s = SyncSettings(tempfile.mkdtemp())
+    s["performance"] = "eco"
+    assert s.performance_profile()["scans"] == 1 and s.performance_profile()["nice"] > 0
+    s["performance"] = "fast"
+    assert s.performance_profile()["scans"] == 4
+    s["performance"] = "auto"
+    assert s.performance_profile()["mode"] in ("eco", "normal", "fast")

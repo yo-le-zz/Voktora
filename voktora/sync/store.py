@@ -86,6 +86,7 @@ class LocalStore:
         self.trash_dir = Path(trash_dir) if trash_dir else self.state_dir / "trash"
         self._cache: dict[str, list] | None = None
         self._cache_lock = threading.RLock()
+        self.throttle = 0.0           # pause (s) après chaque bloc lu : ménage les PC peu puissants
         self._cache_dirty = False
         self._cache_saved = 0.0
         self._cfg: dict | None = None            # configuration en cours de modification (voir commit)
@@ -98,6 +99,21 @@ class LocalStore:
             if isinstance(entry, dict) and entry.get("path"):
                 out[str(entry.get("name") or Path(entry["path"]).name)] = Path(entry["path"])
         return out
+
+    def purge_partials(self, max_age: float = 3600.0) -> int:
+        """Supprime les fichiers `.part` laissés par une coupure (plus vieux que `max_age` secondes)."""
+        removed, now = 0, time.time()
+        try:
+            roots = [self.config_io.projects_root(), *self.extras.values()]
+        except OSError:
+            return 0
+        for root in roots:
+            for path in Path(root).rglob(f"*{PART_SUFFIX}") if Path(root).is_dir() else []:
+                with contextlib.suppress(OSError):
+                    if now - path.stat().st_mtime > max_age:
+                        path.unlink()
+                        removed += 1
+        return removed
 
     def projects_root_has(self, name: str) -> bool:
         return (self.config_io.projects_root() / name).is_dir()
@@ -250,6 +266,8 @@ class LocalStore:
                 digest.update(chunk)
                 if beat:
                     beat()
+                if self.throttle:
+                    time.sleep(self.throttle * len(chunk) / secure.CHUNK)    # proportionnel aux octets lus
         with self._cache_lock:
             cache[key] = [st.st_size, st.st_mtime_ns, digest.hexdigest()]
             self._cache_dirty = True
@@ -414,12 +432,16 @@ class LocalStore:
             entry = next((e for e in cfg.setdefault("projects", [])
                           if isinstance(e, dict) and str(e.get("name") or Path(e.get("path", "")).name) == name), None)
             if entry is None:
+                if delete or name in (".", "..") or not name.strip():
+                    return
                 folder = self.config_io.projects_root() / name
-                if delete or not folder.is_dir():
-                    return                               # le dossier du projet n'est pas (encore) là
+                folder.mkdir(parents=True, exist_ok=True)   # les fichiers arrivent ensuite, projet par projet
                 entry = {"name": name, "path": str(folder)}
                 cfg["projects"].append(entry)
             if field == "name":
+                if not delete:
+                    with contextlib.suppress(OSError):
+                        (self.config_io.projects_root() / name).mkdir(parents=True, exist_ok=True)
                 if delete and entry in cfg.get("projects", []) and not (self.projects_root_has(name)):
                     cfg["projects"].remove(entry)           # projet retiré de la liste sur l'autre PC
             elif delete:

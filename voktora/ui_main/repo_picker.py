@@ -40,6 +40,14 @@ def load_repos_job(ctx):
     return repos, core.owners_from_repos(repos, extra_orgs=orgs)
 
 
+def load_orgs_job(ctx):
+    """À exécuter dans un thread : toutes les organisations du compte (pagination complète) + messages d'aide."""
+    token = core.get_effective_token()
+    if not token:
+        raise core.GitHubAPIError("Aucun compte GitHub connecté. Connectez-vous depuis le menu GitHub.")
+    return core.list_user_orgs_report(token)
+
+
 def filter_repos(repos: list, owner: str, needle: str) -> list:
     """Filtre pur (testable) : par propriétaire puis par texte (nom, description)."""
     needle = needle.strip().lower()
@@ -60,6 +68,7 @@ class RepoPicker(QWidget):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._repos: list = []
+        self._extra_orgs: list[str] = []
         self._worker: TaskWorker | None = None
 
         layout = QVBoxLayout(self)
@@ -76,8 +85,12 @@ class RepoPicker(QWidget):
         self.btn_refresh = QPushButton("⟳")
         self.btn_refresh.setToolTip("Recharger la liste depuis GitHub")
         self.btn_refresh.setFixedWidth(36)
+        self.btn_orgs = QPushButton("🏢")
+        self.btn_orgs.setToolTip("Recharger les organisations du compte (liste complète, y compris privées)")
+        self.btn_orgs.setFixedWidth(36)
         top.addWidget(self.owner_combo)
         top.addWidget(self.search_edit, 1)
+        top.addWidget(self.btn_orgs)
         top.addWidget(self.btn_refresh)
         layout.addLayout(top)
 
@@ -100,6 +113,7 @@ class RepoPicker(QWidget):
         self.owner_combo.currentIndexChanged.connect(self._render)
         self.search_edit.textChanged.connect(self._render)
         self.btn_refresh.clicked.connect(self.reload)
+        self.btn_orgs.clicked.connect(self.reload_orgs)
         self.list.currentItemChanged.connect(lambda cur, _prev: self.repo_selected.emit(
             cur.data(_ROLE_REPO) if cur else None))
         self.list.itemDoubleClicked.connect(lambda item: self.repo_activated.emit(item.data(_ROLE_REPO)))
@@ -117,6 +131,29 @@ class RepoPicker(QWidget):
         self._worker.failed.connect(self._on_failed)
         self._worker.cancelled.connect(lambda: (self.btn_refresh.setEnabled(True), self.busy.hide()))
         self._worker.start()
+
+    def reload_orgs(self) -> None:
+        """Recharge seulement les organisations (rapide) et les ajoute à la liste des propriétaires."""
+        if self._worker is not None and self._worker.isRunning():
+            return
+        self.btn_orgs.setEnabled(False)
+        self.busy.show()
+        self.status.setText("Chargement des organisations…")
+        self._worker = TaskWorker(load_orgs_job)
+        self._worker.succeeded.connect(self._on_orgs_loaded)
+        self._worker.failed.connect(self._on_failed)
+        self._worker.cancelled.connect(lambda: (self.btn_orgs.setEnabled(True), self.busy.hide()))
+        self._worker.start()
+
+    def _on_orgs_loaded(self, result) -> None:
+        orgs, notes = result
+        self.btn_orgs.setEnabled(True)
+        self._extra_orgs = list(orgs)
+        self._on_loaded((self._repos, core.owners_from_repos(self._repos, extra_orgs=orgs)))
+        text = f"{len(orgs)} organisation(s) trouvée(s)."
+        if notes:
+            text += "  ⚠ " + " ".join(notes)
+        self.status.setText(text)
 
     def stop(self) -> None:
         """À appeler avant de détruire le widget : arrête proprement le chargement."""
@@ -142,6 +179,7 @@ class RepoPicker(QWidget):
 
     def _on_failed(self, message: str) -> None:
         self.btn_refresh.setEnabled(True)
+        self.btn_orgs.setEnabled(True)
         self.busy.hide()
         self.status.setText(f"⚠  {message}")
 

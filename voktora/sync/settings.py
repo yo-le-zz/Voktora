@@ -46,6 +46,9 @@ DEFAULTS: dict = {
     "propagate_deletes": True,          # supprimer aussi chez l'autre (corbeille récupérable 30 jours)
     "peers": [],                        # [{"id","name","host","port","secret"(base64)}]
     "invites": [],                      # [{"secret","expires"}] codes d'appairage en attente
+    "log_enabled": True,                # journal de synchronisation (désactivable : plus léger)
+    "log_level": "normal",              # "quiet" (essentiel) | "normal" (par projet) | "detailed" (par fichier)
+    "performance": "auto",              # "auto" | "eco" (PC peu puissant) | "normal" | "fast"
 }
 SECRET_KEYS = {"peers", "invites"}
 
@@ -56,6 +59,19 @@ class SyncSettings:
         self.path = self.root / "settings.json"
         self.data: dict = copy.deepcopy(DEFAULTS)
         self.load()
+
+    # ── performances ─────────────────────────────────────────────────────────
+
+    def performance_profile(self) -> dict:
+        """Réglages de charge : analyses en parallèle, pause entre blocs lus, priorité système, rythme de l'interface.
+        « auto » s'adapte au nombre de cœurs (PC modeste → mode économe)."""
+        mode = self["performance"]
+        if mode not in ("eco", "normal", "fast"):
+            cores = os.cpu_count() or 2
+            mode = "eco" if cores <= 2 else "normal" if cores <= 6 else "fast"
+        return {"eco": {"mode": "eco", "scans": 1, "pause": 0.004, "nice": 12, "ui_ms": 800},
+                "normal": {"mode": "normal", "scans": 2, "pause": 0.0008, "nice": 6, "ui_ms": 400},
+                "fast": {"mode": "fast", "scans": 4, "pause": 0.0, "nice": 0, "ui_ms": 250}}[mode]
 
     # ── persistance ──────────────────────────────────────────────────────────
 
