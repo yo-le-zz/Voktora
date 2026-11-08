@@ -93,9 +93,11 @@ class ProjectPanel(QWidget):
     back_requested   = Signal()
     switch_requested = Signal()
     project_modified = Signal()
+    _forge_ready     = Signal(str, str)      # (chemin, libellé) : résultat de l'API, venu d'un thread
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._forge_ready.connect(self._on_forge_ready)
         self._path: Path | None = None
         self._push_worker: TaskWorker | None = None
 
@@ -326,6 +328,9 @@ class ProjectPanel(QWidget):
         self._lbl_branch = QLabel("—")
         self._lbl_token  = QLabel("—")
         self._lbl_token.setStyleSheet("color:#6c7086; font-size:11px;")
+        self._lbl_forge = QLabel("—")
+        self._lbl_forge.setWordWrap(True)
+        gi.addRow("Forge :",  self._lbl_forge)
         gi.addRow("Repo :",   self._lbl_repo)
         gi.addRow("Branche :", self._lbl_branch)
         gi.addRow("Token :",  self._lbl_token)
@@ -676,6 +681,7 @@ class ProjectPanel(QWidget):
         else:
             token_src = "Aucun token"
         self._lbl_token.setText(token_src)
+        self._refresh_forge()
 
         # Détails
         lang  = (entry.get("language") or core.guess_project_language(self._path)) if entry else ""
@@ -696,6 +702,33 @@ class ProjectPanel(QWidget):
         self._det_token_s.setText(self._lbl_token.text())
         self._det_created.setText(crd)
         self._det_path.setText(str(self._path))
+
+    def _refresh_forge(self) -> None:
+        """Forge du projet et distinction des forks : instantané (remotes), puis confirmé par l'API en arrière-plan."""
+        import threading
+
+        import forges
+        path = self._path
+        try:
+            info = forges.project_info(path)
+        except Exception:  # noqa: BLE001 — l'affichage ne doit jamais casser le panneau
+            self._lbl_forge.setText("—")
+            return
+        self._lbl_forge.setText(info.badge() or "Aucun remote")
+        if not info.origin:
+            return
+
+        def confirm() -> None:
+            try:
+                forges.confirm_with_api(info)
+            except Exception:  # noqa: BLE001
+                return
+            self._forge_ready.emit(str(path), info.badge())
+        threading.Thread(target=confirm, daemon=True, name="voktora-forge").start()
+
+    def _on_forge_ready(self, path: str, badge: str) -> None:
+        if str(self._path) == path and badge:
+            self._lbl_forge.setText(badge)
 
     def _refresh_plugin_buttons(self) -> None:
         import plugins

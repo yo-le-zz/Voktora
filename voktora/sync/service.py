@@ -10,9 +10,11 @@ Qui démarre ? Un PC secondaire se synchronise vers le principal dès qu'il le v
 
 from __future__ import annotations
 
+import collections
 import contextlib
 import threading
 import time
+import traceback
 from collections.abc import Callable
 from pathlib import Path
 
@@ -20,7 +22,7 @@ from . import net, secure
 from .client import RemoteError, RemoteStore, pair
 from .engine import Cancelled, PeerGone, Plan, SyncEngine, SyncError
 from .server import SyncServer
-from .settings import SyncSettings
+from .settings import DEFAULT_PORT, SyncSettings
 from .store import ConfigIO, LocalStore
 
 OFFLINE, ONLINE, SYNCING, DONE, DECISION, PAUSED, ERROR, IDLE = (
@@ -45,6 +47,8 @@ class SyncService:
         self._requested: set[str] = set()
         self._cancel_flag = threading.Event()
         self._tick = 0
+        self.logs: collections.deque[str] = collections.deque(maxlen=400)
+        self._log_path = self.dir / "sync.log"
 
     # ── statut ───────────────────────────────────────────────────────────────
 
@@ -54,7 +58,21 @@ class SyncService:
     def snapshot(self) -> dict:
         return {"enabled": self.settings["enabled"], "device_id": self.settings.device_id,
                 "primary_id": self.settings["primary_id"], "own": dict(self._own),
+                "port": self.server.port, "log": list(self.logs)[-120:],
                 "peers": {k: dict(v) for k, v in self.status.items()}}
+
+    def log(self, text: str, peer_id: str = "") -> None:
+        """Journal lisible (interface + fichier `sync/sync.log`, tourné à 1 Mo)."""
+        name = (self.settings.peer(peer_id) or {}).get("name", "") if peer_id else ""
+        line = f"{time.strftime('%H:%M:%S')}  {('[' + name + '] ') if name else ''}{text}"
+        self.logs.append(line)
+        with contextlib.suppress(OSError):
+            self.dir.mkdir(parents=True, exist_ok=True)
+            if self._log_path.exists() and self._log_path.stat().st_size > 1_000_000:
+                self._log_path.replace(self._log_path.with_suffix(".log.1"))
+            with open(self._log_path, "a", encoding="utf-8") as handle:
+                handle.write(time.strftime("%Y-%m-%d ") + line + "\n")
+        self._emit()
 
     def _emit(self) -> None:
         snap = self.snapshot()
@@ -86,15 +104,36 @@ class SyncService:
             return
         with contextlib.suppress(OSError):
             self.store.purge_trash()
-        try:
-            self.server.start()
-        except OSError as exc:
-            self._own = {"state": ERROR, "percent": 0, "detail": f"port {self.settings['port']} indisponible ({exc})"}
-            self._emit()
+        if not self._start_server():
             return
         self._stop.clear()
         self._thread = threading.Thread(target=self._loop, name="voktora-sync", daemon=True)
         self._thread.start()
+
+    def _start_server(self) -> bool:
+        """Ouvre le port d'écoute ; s'il est pris, en choisit un libre tout seul (les pairs le retrouvent)."""
+        wanted = int(self.settings["port"] or DEFAULT_PORT)
+        candidates = [wanted] + ([p for p in range(DEFAULT_PORT, DEFAULT_PORT + 20) if p != wanted] + [0]
+                                 if self.settings["port_auto"] else [])
+        last: OSError | None = None
+        for port in candidates:
+            try:
+                self.server = SyncServer(self.settings, self.store, self._own_status, self._request_from_peer,
+                                         self.is_busy)
+                actual = self.server.start(port=port)
+            except OSError as exc:
+                last = exc
+                continue
+            if actual != wanted:
+                self.log(f"Le port {wanted} était occupé : écoute sur le port {actual} (les autres PC le retrouvent seuls).")
+                self.settings["port"] = actual
+                self.settings.save()
+            else:
+                self.log(f"À l'écoute sur le port {actual} (réseaux autorisés : LAN privé et Tailscale).")
+            return True
+        self._own = {"state": ERROR, "percent": 0, "detail": f"aucun port disponible ({last})"}
+        self.log(f"Impossible d'ouvrir un port d'écoute : {last}")
+        return False
 
     def stop(self) -> None:
         self._stop.set()
@@ -136,8 +175,10 @@ class SyncService:
                 continue
             remote = self._remote(peer)
             try:
-                info = remote.hello()
+                info = self._hello(peer, remote)
             except (ConnectionError, RemoteError) as exc:
+                if self.status.get(pid, {}).get("state") not in (OFFLINE,):
+                    self.log(f"Plus de contact : {exc}", pid)
                 self._set(pid, state=OFFLINE, detail=f"éteint ou injoignable ({exc})", remote={})
                 continue
             current = self.status.get(pid, {})
@@ -153,6 +194,89 @@ class SyncService:
                 elif not info.get("busy"):
                     with contextlib.suppress(ConnectionError, RemoteError):
                         remote.request_sync()
+
+    def _hello(self, peer: dict, remote: RemoteStore) -> dict:
+        """Prend des nouvelles du pair ; si son port a changé, le retrouve et mémorise le nouveau."""
+        try:
+            info = remote.hello()
+        except ConnectionError:
+            found = self._discover_port(peer)
+            if not found:
+                raise
+            remote = self._remote(peer)
+            info = remote.hello()
+        if info.get("port") and int(info["port"]) != int(peer["port"]):
+            self._remember_port(peer, int(info["port"]))
+        was = self.status.get(peer["id"], {}).get("state")
+        if was in (None, OFFLINE):
+            self.log(f"Contact établi ({info.get('rtt_ms', '?')} ms)", peer["id"])
+        return info
+
+    def _remember_port(self, peer: dict, port: int) -> None:
+        if port != peer["port"]:
+            self.log(f"Nouveau port de l'autre PC : {port}", peer["id"])
+            peer["port"] = port
+            self.settings.save()
+
+    def _discover_port(self, peer: dict) -> bool:
+        """Le pair a peut-être changé de port (le sien était occupé) : on essaie la plage habituelle."""
+        for port in range(DEFAULT_PORT, DEFAULT_PORT + 20):
+            if port == peer["port"] or self._stop.is_set():
+                continue
+            probe = RemoteStore(peer["host"], port, self.settings.device_id, self.settings.peer_secret(peer), timeout=1.2)
+            try:
+                if probe.hello().get("id") == peer["id"]:
+                    self._remember_port(peer, port)
+                    return True
+            except (ConnectionError, RemoteError):
+                continue
+        return False
+
+    def diagnose(self, peer_id: str) -> list[tuple[bool, str]]:
+        """Test de connexion pas à pas, avec la cause probable à chaque échec (bouton « Tester la connexion »)."""
+        import socket
+        peer = self.settings.peer(peer_id)
+        out: list[tuple[bool, str]] = []
+        if not peer:
+            return [(False, "PC inconnu : refaites l'appairage.")]
+        host, port = peer["host"], int(peer["port"])
+        ok = net.same_network(peer["host"])
+        out.append((ok, f"Réseau : {host} " + ("est sur le même réseau (LAN / Tailscale)." if ok else
+                    "n'est pas sur votre réseau : connectez les deux PC au même Wi-Fi ou à Tailscale (`tailscale up`).")))
+        if not ok:
+            return out
+        started = time.monotonic()
+        try:
+            socket.create_connection((host, port), timeout=4).close()
+            out.append((True, f"Port {port} ouvert ({int((time.monotonic() - started) * 1000)} ms)."))
+        except OSError as exc:
+            found = self._discover_port(peer)
+            if found:
+                out.append((True, f"Le port avait changé : retrouvé sur {peer['port']}."))
+            else:
+                out.append((False, f"Port {port} injoignable ({exc}). L'autre PC est-il allumé avec Voktora ouvert ? "
+                                   "Pare-feu : autorisez le port TCP (ex. `sudo firewall-cmd --add-port=47821/tcp` sous Fedora, "
+                                   "`sudo ufw allow 47821/tcp` sous Ubuntu/Arch)."))
+                return out
+        remote = self._remote(peer)
+        try:
+            info = remote.hello()
+        except RemoteError as exc:
+            hint = ""
+            if "horloge" in str(exc):
+                hint = " → l'heure des deux PC diffère de plus de 2 minutes : activez la synchronisation automatique de l'heure."
+            elif exc.status == 401:
+                hint = " → appairage périmé ou secret différent : supprimez le PC des deux côtés et refaites le code."
+            out.append((False, f"Authentification refusée : {exc}{hint}"))
+            return out
+        except ConnectionError as exc:
+            out.append((False, f"Connexion coupée pendant l'échange : {exc}"))
+            return out
+        skew = abs(float(info.get("time", time.time())) - time.time())
+        out.append((True, f"Authentification OK, échange chiffré fonctionnel ({info.get('rtt_ms', '?')} ms)."))
+        out.append((skew < 60, f"Horloge : écart de {skew:.0f} s" + ("." if skew < 60 else " (trop grand : réglez l'heure).")))
+        out.append((not info.get("busy"), "L'autre PC est libre." if not info.get("busy") else "L'autre PC est occupé (réessayez dans un instant)."))
+        return out
 
     def _remote(self, peer: dict) -> RemoteStore:
         return RemoteStore(peer["host"], peer["port"], self.settings.device_id, self.settings.peer_secret(peer))
@@ -180,31 +304,59 @@ class SyncService:
         remote = self._remote(peer)
         locked = False
         plan = None
+        started = time.monotonic()
         try:
-            self._set(peer_id, state=SYNCING, percent=0, detail="préparation…")
-            self._own = {"state": SYNCING, "percent": 0, "detail": f"avec {peer['name']}"}
+            self._progress(peer_id, 0, f"Connexion à {peer['name']} ({peer['host']}:{peer['port']})…")
+            self.log(f"Début de la synchronisation avec {peer['name']} ({'principal' if self.peer_is_primary(peer_id) else 'secondaire'})", peer_id)
+            try:
+                info = self._hello(peer, remote)
+            except (ConnectionError, RemoteError) as exc:
+                raise PeerGone(f"{peer['name']} est injoignable ({exc}). Utilisez « Tester la connexion » pour le détail.") from exc
+            remote = self._remote(peer)              # le port a pu changer pendant la recherche
+            self._progress(peer_id, 0, f"Connecté ({info.get('rtt_ms', '?')} ms) — réservation de {peer['name']}…")
             remote.lock()
             locked = True
+            self.log("Autre PC réservé : aucune autre synchronisation ne peut l'écrire en même temps", peer_id)
             engine = SyncEngine(self.store, remote, peer_id, self.settings, self.dir / "state" / "base",
                                 self.settings.is_primary, lambda p, d: self._progress(peer_id, p, d),
-                                self._cancel_flag.is_set, self.settings["device_name"])
+                                self._cancel_flag.is_set, self.settings["device_name"],
+                                lambda text: self.log(text, peer_id), peer["name"])
             plan = engine.plan(first_sync or self._first_sync())
+            for warning in plan.warnings:
+                self.log(f"Attention : {warning}", peer_id)
             if plan.needs_decision:
                 self._pending[peer_id] = plan
+                self.log(f"{sum(d.count for d in plan.decisions)} divergence(s) au premier échange : choix de la source demandé", peer_id)
                 self._set(peer_id, state=DECISION, percent=0, summary=plan.summary(),
                           detail="les deux PC ont des contenus différents : choisissez la source")
                 return plan
             self._pending.pop(peer_id, None)
             result = engine.apply(plan)
             problems = result["errors"]
+            for problem in problems[:20]:
+                self.log(f"Erreur : {problem}", peer_id)
+            elapsed = time.monotonic() - started
+            self.log(f"Terminé en {elapsed:.1f} s : {plan.summary()}" + (f" — {len(problems)} erreur(s)" if problems else ""), peer_id)
             self._set(peer_id, state=DONE if not problems else ERROR, percent=100, last_sync=time.time(),
                       summary=plan.summary(), detail="à jour" if not problems else f"{len(problems)} erreur(s) : {problems[0]}")
         except Cancelled:
+            self.log("Synchronisation arrêtée", peer_id)
             self._set(peer_id, state=PAUSED, detail="arrêtée — reprendra au prochain passage")
         except (PeerGone, ConnectionError) as exc:
+            self.log(f"Pause : {exc} — reprise automatique dès que l'autre PC revient", peer_id)
             self._set(peer_id, state=PAUSED, detail=f"pair indisponible, reprise automatique ({exc})")
-        except (SyncError, RemoteError) as exc:
+        except RemoteError as exc:
+            hint = " (heure des deux PC différente ?)" if "horloge" in str(exc) else ""
+            self.log(f"Refusé par l'autre PC : {exc}{hint}", peer_id)
+            self._set(peer_id, state=ERROR, detail=f"{exc}{hint}")
+        except SyncError as exc:
+            self.log(f"Erreur : {exc}", peer_id)
             self._set(peer_id, state=ERROR, detail=str(exc))
+        except Exception as exc:  # noqa: BLE001 — jamais de fil mort silencieux : tout est expliqué dans le journal
+            self.log(f"Erreur interne {type(exc).__name__}: {exc}", peer_id)
+            for line in traceback.format_exc().splitlines()[-12:]:
+                self.log("   " + line, peer_id)
+            self._set(peer_id, state=ERROR, detail=f"erreur interne ({type(exc).__name__}: {exc}) — voir le journal")
         finally:
             if locked:
                 remote.unlock()

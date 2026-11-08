@@ -38,6 +38,7 @@ from .dashboard_dialog import DashboardDialog
 from .disk_dialog import DiskUsageDialog
 from .emoji_picker_dialog import EmojiPickerDialog, IconPickerDialog
 from .encrypt_dialog import CopyWorker, EncryptProjectDialog, EncryptWorker
+from .forges_dialog import ForgesDialog
 from .hooks_dialog import HooksDialog
 from .json_config_editor_dialog import JsonConfigEditorDialog
 from .master_password_dialog import MasterPasswordSetupDialog
@@ -58,6 +59,7 @@ __all__ = [
     "CustomizeProjectDialog",
     "DashboardDialog",
     "DiskUsageDialog",
+    "ForgesDialog",
     "SyncBridge",
     "SyncDialog",
     "ask_source",

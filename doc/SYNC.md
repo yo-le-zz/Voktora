@@ -45,3 +45,13 @@ chiffré AES-256-GCM lié à chaque requête ; chemins validés (pas de `..`, ni
 et `.git/hooks` jamais synchronisés ; un seul pair écrit à la fois. Les secrets d'appairage sont dans
 `sync/settings.json` (0600), jamais dans `config.json`.
 Les réglages des plugins peuvent contenir des secrets propres à ces plugins : désactivez la catégorie si besoin.
+
+## Suivi, diagnostic et fiabilité (1.0.8)
+
+- **Étapes détaillées** : barre d'état (« portable : Comparaison de projet « api » (12/105) · 9 % »), fenêtre
+  (barre de progression par PC) et onglet **Journal** (aussi dans `sync/sync.log`).
+- **Tester la connexion** (par PC) : réseau, port, authentification, écart d'horloge (> 2 min = refusé), occupation.
+- **Port automatique** : s'il est pris, un port libre (47821-47840) est choisi et retrouvé par l'autre PC.
+- **Réseau instable** : 3 nouvelles tentatives automatiques, verrou renouvelé, reprise au prochain passage.
+- **Beaucoup de projets** : analyses en parallèle, cache d'empreintes différé ; 105 projets ≈ 4 s puis < 1 s.
+- **Garde-fous** : suppression massive jamais propagée automatiquement (avertissement dans le journal).

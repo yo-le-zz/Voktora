@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QPlainTextEdit,
     QProgressBar,
     QPushButton,
     QSpinBox,
@@ -80,6 +81,7 @@ class SyncDialog(QDialog):
         tabs.addTab(self._build_devices(), "💻 Appareils")
         tabs.addTab(self._build_content(), "📦 Contenu")
         tabs.addTab(self._build_auto(), "⚙️ Automatisme")
+        tabs.addTab(self._build_log(), "📜 Journal")
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Close)
         buttons.button(QDialogButtonBox.Save).setText("Enregistrer")
         buttons.button(QDialogButtonBox.Close).setText("Fermer")
@@ -181,11 +183,14 @@ class SyncDialog(QDialog):
         self.port = QSpinBox()
         self.port.setRange(1024, 65535)
         self.port.setValue(int(self.s["port"] or DEFAULT_PORT))
+        self.port_auto = QCheckBox("Choisir automatiquement un autre port s'il est occupé (les PC le retrouvent seuls)")
+        self.port_auto.setChecked(bool(self.s["port_auto"]))
         form.addRow(self.enabled)
         form.addRow(self.auto)
         form.addRow("Recherche de l'autre PC toutes les", self.interval)
         form.addRow("Premier échange si les contenus diffèrent", self.policy)
         form.addRow("Port d'écoute (TCP)", self.port)
+        form.addRow(self.port_auto)
         info = QLabel("La synchronisation ne tourne que si l'autre PC est sur le même réseau (LAN privé ou Tailscale). "
                       "Si un PC s'éteint ou perd le réseau, elle s'arrête et reprend toute seule au retour.\n"
                       "Tout est chiffré (AES-256-GCM) et authentifié ; ouvrez le port ci-dessus dans le pare-feu "
@@ -193,6 +198,20 @@ class SyncDialog(QDialog):
         info.setWordWrap(True)
         info.setStyleSheet("color:#7f849c;")
         form.addRow(info)
+        return page
+
+    def _build_log(self) -> QWidget:
+        page = QWidget()
+        lay = QVBoxLayout(page)
+        self.log_view = QPlainTextEdit()
+        self.log_view.setReadOnly(True)
+        self.log_view.setMaximumBlockCount(500)
+        lay.addWidget(self.log_view)
+        hint = QLabel("Chaque étape est détaillée ici (connexion, analyse, comparaison, transferts, erreurs). "
+                      "Le fichier complet est dans le dossier de données : sync/sync.log")
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color:#7f849c;")
+        lay.addWidget(hint)
         return page
 
     # ── actions ──────────────────────────────────────────────────────────────
@@ -211,6 +230,7 @@ class SyncDialog(QDialog):
         s["only_projects"] = [p.strip() for p in self.only.text().split(",") if p.strip()]
         s["enabled"], s["auto"] = self.enabled.isChecked(), self.auto.isChecked()
         s["interval"], s["policy"], s["port"] = self.interval.value(), self.policy.currentData(), self.port.value()
+        s["port_auto"] = self.port_auto.isChecked()
         s.save()
 
     def _save(self) -> None:
@@ -255,6 +275,17 @@ class SyncDialog(QDialog):
         if QMessageBox.question(self, "Oublier ce PC", "Retirer cet appairage ? Les fichiers ne sont pas supprimés.") \
                 == QMessageBox.Yes:
             self.svc.forget(peer_id)
+
+    def _diagnose(self, peer_id: str) -> None:
+        from PySide6.QtWidgets import QApplication
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            steps = self.svc.diagnose(peer_id)
+        finally:
+            QApplication.restoreOverrideCursor()
+        text = "\n\n".join(("✅ " if ok else "❌ ") + line for ok, line in steps)
+        (QMessageBox.information if all(ok for ok, _ in steps) else QMessageBox.warning)(
+            self, "Test de connexion", text)
 
     def _sync_now(self, peer_id: str) -> None:
         import threading
@@ -304,13 +335,20 @@ class SyncDialog(QDialog):
             buttons = QHBoxLayout()
             now = QPushButton("Synchroniser maintenant")
             now.clicked.connect(lambda _=False, pid=peer["id"]: self._sync_now(pid))
+            test = QPushButton("Tester la connexion")
+            test.clicked.connect(lambda _=False, pid=peer["id"]: self._diagnose(pid))
             forget = QPushButton("Oublier")
             forget.clicked.connect(lambda _=False, pid=peer["id"]: self._forget(pid))
             buttons.addWidget(now)
+            buttons.addWidget(test)
             buttons.addWidget(forget)
             buttons.addStretch()
             row.addLayout(buttons)
             self.peers_box.addWidget(frame)
+        lines = snap.get("log", [])
+        if lines and self.log_view.toPlainText().splitlines()[-1:] != lines[-1:]:
+            self.log_view.setPlainText("\n".join(lines))
+            self.log_view.verticalScrollBar().setValue(self.log_view.verticalScrollBar().maximum())
         from sync import net
         addrs = net.local_addresses()
         self.addr.setText("Adresses de ce PC — Tailscale : " + (", ".join(addrs["tailscale"]) or "aucune")

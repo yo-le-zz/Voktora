@@ -1,4 +1,4 @@
-# Plugins Voktora (API 2 — Voktora 1.0.6)
+# Plugins Voktora (API 3 — Voktora 1.0.8)
 
 Les plugins ajoutent des fonctions à Voktora **sans toucher à son code** : onglets de projet, menus,
 boutons, panneaux latéraux, widgets de barre d'état, styles, thèmes, réactions aux événements.
@@ -114,6 +114,26 @@ Tout ce qu'ajoute un plugin est **retiré proprement** quand on le désactive ou
 
 Les tâches longues (analyse de fichiers, réseau, git) vont dans `run_async` : **ne bloquez jamais l'interface**.
 Un gestionnaire d'événement qui dépasse 0,25 s est signalé comme « lent » dans le gestionnaire de plugins.
+
+## API 3 (Voktora 1.0.8) — réglages, snapshots, forges, synchro, plugins, sécurité
+
+Chaque famille exige sa permission dans `plugin.json` (affichée à l'installation). Les plugins `api: 2` marchent toujours.
+
+| Permission | Méthodes |
+|---|---|
+| `config.read` | `config_get(clé)`, `config_all()` — les clés sensibles (token, secret, password, key…) sont refusées |
+| `config.write` | `config_set(clé, valeur)` — **confirmé par l'utilisateur à chaque changement** |
+| `quick_actions` | `quick_actions()`, `quick_action_add(nom, cmd, icon, terminal)` (confirmé), `quick_action_remove(nom)` |
+| `snapshots` | `snapshots(projet)`, `snapshot_create(projet, label, note)` (long : `run_async`) |
+| `diskusage` | `disk_usage(projet)` — taille par catégorie (cache, compilation, dépendances) |
+| `forges` | `forge_info(projet)` (forge, dépôt, fork, parent), `forge_accounts()` (sans jeton) |
+| `sync` | `sync_status()`, `sync_now()` |
+| `plugins.manage` | `plugins()`, `set_plugin_enabled(id, bool)` (confirmé ; jamais sur soi-même) |
+| `security` | `security_report()` (coffre, plugins, révocations, synchro, TLS), `audit_plugin_source(code)` |
+| `vault` | `lock_vault()`, `vault_secret_get/set/delete(nom)` — secrets **propres au plugin** (`plugin:<id>:<nom>`) |
+
+Sans interface (Voktora sans fenêtre), toute demande de confirmation est refusée. Les jetons, mots de passe et
+secrets de Voktora ne sont jamais accessibles à un plugin, quelles que soient ses permissions.
 
 ### Événements (`api.on(nom, handler)`)
 

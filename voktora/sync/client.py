@@ -7,15 +7,23 @@ comme « pair éteint » et reprendra plus tard).
 
 from __future__ import annotations
 
+import contextlib
 import http.client
 import json
+import socket
+import time
 import urllib.parse
 from collections.abc import Iterator
 
 from . import secure
 from .store import Entry, SyncPathError
 
-TIMEOUT = 20.0
+TIMEOUT = 30.0
+RETRY_DELAYS = (0.5, 1.5, 4.0)
+
+
+class LockLost(ConnectionError):
+    """Le verrou posé sur l'autre PC a expiré (réseau coupé trop longtemps) : il faut le reprendre."""
 
 
 class RemoteError(Exception):
@@ -41,7 +49,7 @@ class RemoteStore:
         if body is not None:
             headers["Content-Length"] = str(content_length if content_length is not None else len(body))
             data = body
-        conn = http.client.HTTPConnection(self.host, self.port, timeout=self.timeout)
+        conn = self._connect()
         try:
             conn.request(method, path, body=data, headers=headers)
             resp = conn.getresponse()
@@ -49,6 +57,18 @@ class RemoteStore:
             conn.close()
             raise ConnectionError(f"{self.host}:{self.port} injoignable ({exc})") from exc
         return conn, resp, ctx
+
+    def _connect(self) -> http.client.HTTPConnection:
+        conn = http.client.HTTPConnection(self.host, self.port, timeout=self.timeout)
+        try:
+            conn.connect()
+        except OSError as exc:
+            conn.close()
+            raise ConnectionError(f"{self.host}:{self.port} injoignable ({exc})") from exc
+        with contextlib.suppress(OSError):
+            conn.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            conn.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        return conn
 
     def _call(self, method: str, route: str, params: dict | None = None, payload: dict | None = None) -> dict:
         path = route + ("?" + urllib.parse.urlencode(params) if params else "")
@@ -64,7 +84,7 @@ class RemoteStore:
         ctx = (headers["X-Voktora-Nonce"] + path).encode()
         blob = secure.encrypt_bytes(self._enc, ctx, json.dumps(payload).encode())
         headers["Content-Length"] = str(len(blob))
-        conn = http.client.HTTPConnection(self.host, self.port, timeout=self.timeout)
+        conn = self._connect()
         try:
             conn.request(method, path, body=blob, headers=headers)
             resp = conn.getresponse()
@@ -85,6 +105,8 @@ class RemoteStore:
                 message = json.loads(raw).get("error", "")
             except (ValueError, AttributeError):
                 message = raw[:200].decode("utf-8", "replace")
+            if resp.status == 423 and not path.startswith("/lock"):
+                raise LockLost(message or "verrou perdu")
             raise RemoteError(resp.status, message or f"HTTP {resp.status}")
         try:
             return json.loads(secure.decrypt_bytes(self._enc, ctx + b"R", raw))
@@ -93,8 +115,35 @@ class RemoteStore:
 
     # ── appairage / état ─────────────────────────────────────────────────────
 
+    def _retry(self, fn, on_retry=None):
+        """Rejoue une lecture idempotente après une coupure brève (réseau instable)."""
+        last: Exception | None = None
+        for attempt, delay in enumerate((0.0, *RETRY_DELAYS)):
+            if attempt:
+                if on_retry:
+                    on_retry(attempt, len(RETRY_DELAYS), last)
+                time.sleep(delay)
+            try:
+                return fn()
+            except LockLost:
+                self.relock()
+                last = ConnectionError("verrou renouvelé")
+            except ConnectionError as exc:
+                last = exc
+        raise last or ConnectionError("injoignable")
+
     def hello(self) -> dict:
-        return self._call("GET", "/hello")
+        started = time.monotonic()
+        info = self._call("GET", "/hello")
+        info["rtt_ms"] = int((time.monotonic() - started) * 1000)
+        return info
+
+    def keepalive(self) -> bool:
+        return bool(self._call("GET", "/keepalive").get("ok"))
+
+    def relock(self) -> None:
+        self._locked = False
+        self.lock()
 
     def request_sync(self) -> bool:
         return bool(self._call("POST", "/request-sync", payload={}).get("accepted"))
@@ -119,11 +168,44 @@ class RemoteStore:
     # ── interface « magasin » ────────────────────────────────────────────────
 
     def spaces(self) -> list[str]:
-        return list(self._call("GET", "/spaces")["spaces"])
+        return list(self._retry(lambda: self._call("GET", "/spaces"))["spaces"])
 
-    def manifest(self, space: str) -> dict[str, Entry]:
-        files = self._call("GET", "/manifest", {"space": space})["files"]
-        return {rel: Entry(v[0], int(v[1]), int(v[2])) for rel, v in files.items()}
+    def manifest(self, space: str, progress=None, on_retry=None) -> dict[str, Entry]:
+        """Liste des fichiers d'un espace. Pendant que l'autre PC analyse, `progress(n, étiquette)` est appelé."""
+        return self._retry(lambda: self._manifest_once(space, progress), on_retry)
+
+    def _manifest_once(self, space: str, progress) -> dict[str, Entry]:
+        conn, resp, ctx = self._request("GET", "/manifest", {"space": space})
+        try:
+            if resp.status != 200:
+                raw = resp.read()
+                try:
+                    message = json.loads(raw).get("error", "")
+                except ValueError:
+                    message = raw[:200].decode("utf-8", "replace")
+                if resp.status == 423:
+                    raise LockLost(message)
+                raise RemoteError(resp.status, message or f"HTTP {resp.status}")
+            buffer, result = b"", None
+            try:
+                for block in secure.decrypt_stream(self._enc, ctx, resp.read):
+                    buffer += block
+                    while b"\n" in buffer:
+                        line, buffer = buffer.split(b"\n", 1)
+                        msg = json.loads(line)
+                        if "p" in msg and progress:
+                            progress(int(msg["p"][0]), str(msg["p"][1]))
+                        elif "error" in msg:
+                            raise RemoteError(500, msg["error"])
+                        elif "files" in msg:
+                            result = msg["files"]
+            except (OSError, http.client.HTTPException, secure.AuthError) as exc:
+                raise ConnectionError(f"analyse interrompue ({exc})") from exc
+        finally:
+            conn.close()
+        if result is None:
+            raise ConnectionError("analyse interrompue (réponse incomplète)")
+        return {rel: Entry(v[0], int(v[1]), int(v[2])) for rel, v in result.items()}
 
     def open_reader(self, space: str, rel: str) -> tuple[int, Iterator[bytes]]:
         path = "/file?" + urllib.parse.urlencode({"space": space, "rel": rel})
@@ -155,7 +237,7 @@ class RemoteStore:
         headers = secure.sign_headers(self.secret, self.device_id, "PUT", path)
         ctx = (headers["X-Voktora-Nonce"] + path).encode()
         headers["Content-Length"] = str(secure.encrypted_length(size))
-        conn = http.client.HTTPConnection(self.host, self.port, timeout=self.timeout)
+        conn = self._connect()
         try:
             conn.putrequest("PUT", path, skip_accept_encoding=True)
             for key, value in headers.items():
@@ -175,8 +257,10 @@ class RemoteStore:
             conn.close()
         if resp.status != 200:
             message = json.loads(raw).get("error", "") if raw else ""
-            if resp.status in (400, 423):
-                raise SyncPathError(message or f"refusé ({resp.status})")
+            if resp.status == 423:
+                raise LockLost(message or "verrou perdu")
+            if resp.status == 400:
+                raise SyncPathError(message or "refusé (400)")
             raise RemoteError(resp.status, message)
 
     def delete(self, space: str, rel: str) -> None:

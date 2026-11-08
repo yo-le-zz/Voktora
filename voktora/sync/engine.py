@@ -32,6 +32,7 @@ from .store import CFG, Entry, LocalStore, SyncPathError
 
 BLOB_MAX = 256 * 1024
 MIN_WEIGHT = 4096
+PARALLEL_SCANS = 4
 SYNC_CONFLICT = ".sync-conflict-"
 
 PULL, PUSH, DEL_LOCAL, DEL_REMOTE, MERGE = "pull", "push", "delete_local", "delete_remote", "merge"
@@ -166,15 +167,45 @@ class BaseState:
             return None
 
 
+def _label(space: str) -> str:
+    if space == CFG:
+        return "les réglages"
+    if space.startswith("p:"):
+        return f"projet « {space[2:]} »"
+    return "réglages des plugins" if space == "x:plugin_settings" else space
+
+
 class SyncEngine:
     def __init__(self, local: LocalStore, remote, peer_id: str, settings: SyncSettings, state_root: Path,
                  primary_is_local: bool, on_progress: Callable[[int, str], None] | None = None,
-                 cancel: Callable[[], bool] | None = None, local_name: str = "ce PC"):
+                 cancel: Callable[[], bool] | None = None, local_name: str = "ce PC",
+                 on_step: Callable[[str], None] | None = None, peer_name: str = "l'autre PC"):
         self.local, self.remote, self.peer_id, self.settings = local, remote, peer_id, settings
         self.primary_is_local = primary_is_local
         self.base = BaseState(state_root, peer_id)
         self.on_progress, self.cancel, self.local_name = on_progress, cancel, local_name
+        self.on_step, self.peer_name = on_step, peer_name
         self.errors: list[str] = []
+        self._last_beat = time.monotonic()
+        self._pct = 0
+        self._absent_local: set[str] = set()
+
+    # ── messages ─────────────────────────────────────────────────────────────
+
+    def _say(self, text: str, percent: int | None = None, log: bool = True) -> None:
+        """Annonce une étape : texte lisible (journal + interface) et pourcentage global."""
+        if log and self.on_step:
+            self.on_step(text)
+        if self.on_progress and percent is not None:
+            self._pct = max(self._pct, percent)          # jamais de recul (analyses parallèles)
+            self.on_progress(self._pct, text)
+
+    def _beat(self) -> None:
+        """Garde le verrou de l'autre PC vivant pendant les longues analyses locales."""
+        if time.monotonic() - self._last_beat > 20 and hasattr(self.remote, "keepalive"):
+            self._last_beat = time.monotonic()
+            with contextlib.suppress(ConnectionError, OSError):
+                self.remote.keepalive()
 
     # ── helpers ──────────────────────────────────────────────────────────────
 
@@ -202,10 +233,15 @@ class SyncEngine:
             raise PeerGone(f"Le pair ne répond plus ({exc}).") from exc
 
     def _local_manifest(self, space: str) -> dict[str, Entry]:
+        def progress(count: int, where: str) -> None:
+            self._beat()
+            self._say(f"Analyse de {_label(space)} sur ce PC : {count} fichiers lus ({where})",
+                      int(20 * (self._index + 0.2) / self._count), log=False)
         try:
-            return self.local.manifest(space, self.cancel)
+            return self.local.manifest(space, self.cancel, progress)
         except SyncPathError:
-            return {}                                  # projet absent d'ici : sera créé à la réception
+            self._absent_local.add(space)              # projet absent d'ici : sera créé à la réception
+            return {}
         except InterruptedError as exc:
             raise Cancelled("Synchronisation arrêtée.") from exc
 
@@ -215,10 +251,37 @@ class SyncEngine:
         if first_sync not in FIRST_SYNC_CHOICES:
             raise ValueError(first_sync)
         plan = Plan(self.peer_id)
-        for space in self._spaces():
-            self._check()
-            self._plan_space(plan, space, first_sync)
+        self._say("Recherche des projets à comparer…", 1)
+        spaces = self._spaces()
+        names = [_label(sp) for sp in spaces]
+        self._say(f"{len(spaces)} élément(s) à comparer : {', '.join(names[:6])}{'…' if len(names) > 6 else ''}", 2)
+        self._index, self._count = 0, max(1, len(spaces))
+        # Avec beaucoup de projets (100+), on analyse plusieurs espaces à la fois — ce PC et l'autre en parallèle —
+        # pendant que la comparaison avance dans l'ordre. Les résultats sont gardés au fil de l'eau (mémoire bornée).
+        from concurrent.futures import ThreadPoolExecutor
+        self._pool = ThreadPoolExecutor(max_workers=PARALLEL_SCANS, thread_name_prefix="voktora-scan")
+        self._futures: dict[str, tuple] = {}
+        try:
+            window = PARALLEL_SCANS * 2
+            for index, space in enumerate(spaces):
+                self._check()
+                for ahead in spaces[index:index + window]:
+                    self._prefetch(ahead)
+                self._index = index
+                self._say(f"Comparaison de {_label(space)} ({index + 1}/{len(spaces)})", int(20 * index / self._count))
+                self._plan_space(plan, space, first_sync)
+        finally:
+            self._pool.shutdown(wait=False, cancel_futures=True)
+            with contextlib.suppress(Exception):
+                self.local.flush_cache()
+        self._say(f"Analyse terminée : {plan.summary()}", 20)
         return plan
+
+    def _prefetch(self, space: str) -> None:
+        if space in self._futures:
+            return
+        self._futures[space] = (self._pool.submit(self._local_manifest, space),
+                                self._pool.submit(self._remote_manifest, space))
 
     def _winner_is_local(self, first_sync: str) -> bool:
         if first_sync == "local":
@@ -228,10 +291,27 @@ class SyncEngine:
         return self.primary_is_local
 
     def _plan_space(self, plan: Plan, space: str, first_sync: str) -> None:
-        L = self._local_manifest(space)
-        R = self._remote(self.remote.manifest, space)
-        B = self.base.get(space)
+        self._prefetch(space)
+        fut_local, fut_remote = self._futures.pop(space)
+        L = fut_local.result()
+        self._say(f"{_label(space)} : {len(L)} élément(s) sur ce PC", log=True)
+        R = fut_remote.result()
+        self._say(f"{_label(space)} : {len(R)} élément(s) chez {self.peer_name}")
+        self._compare(plan, space, first_sync, L, R)
+
+    def _remote_manifest(self, space: str) -> dict[str, Entry]:
+        def remote_progress(count: int, where: str) -> None:
+            self._say(f"{self.peer_name} analyse {_label(space)} : {count} fichiers lus ({where})",
+                      int(20 * (self._index + 0.6) / self._count), log=False)
+
+        def retry(attempt: int, total: int, error) -> None:
+            self._say(f"Connexion instable ({error}) — nouvelle tentative {attempt}/{total}…")
+        return self._remote(self.remote.manifest, space, remote_progress, retry)
+
+    def _compare(self, plan: Plan, space: str, first_sync: str, L: dict[str, Entry], R: dict[str, Entry]) -> None:
+        B = {} if space in self._absent_local else self.base.get(space)   # absent ici ≠ « supprimé par l'utilisateur »
         is_cfg, is_project = space == CFG, space.startswith("p:")
+        first_action = len(plan.actions)
         pending = Decision(space, 0)
         git_conflict = False
         undecided: list[Action] = []
@@ -282,6 +362,17 @@ class SyncEngine:
             self._unify_git(plan, space, L, R, undecided)
         else:
             plan.actions.extend(undecided)
+        self._guard_mass_delete(plan, space, first_action, len(B))
+
+    def _guard_mass_delete(self, plan: Plan, space: str, first: int, base_size: int) -> None:
+        """Garde-fou : une suppression massive (dossier vidé / disque démonté / projet pas encore présent) n'est
+        JAMAIS propagée automatiquement. Elle est ignorée avec un avertissement."""
+        mine = plan.actions[first:]
+        dels = [a for a in mine if a.kind in (DEL_LOCAL, DEL_REMOTE) and not a.note]
+        if len(dels) > 20 and len(dels) > base_size * 0.5:
+            plan.actions[first:] = [a for a in mine if a not in dels]
+            plan.warnings.append(f"{_label(space)} : {len(dels)} suppressions ignorées (trop massif pour être sûr). "
+                                 "Supprimez les fichiers voulus à la main si c'est voulu.")
 
     def _try_merge(self, plan: Plan, space: str, rel: str, le: Entry, r: Entry, b: str | None) -> bool:
         if not b or le.size > 256 * 1024 or r.size > 256 * 1024:
@@ -345,6 +436,7 @@ class SyncEngine:
         """Exécute le plan. Retourne {"done", "errors"}. Lève Cancelled / PeerGone après avoir enregistré l'état."""
         total = max(1, sum(a.weight for a in plan.actions))
         done_weight, done = 0, 0
+        self._say(f"Application : {len(plan.actions)} action(s) à faire" if plan.actions else "Rien à transférer.", 20)
         touched: set[str] = set()
         for space, updates in plan.base_updates.items():
             for rel, sha in updates.items():
@@ -356,11 +448,13 @@ class SyncEngine:
         try:
             for index, action in enumerate(plan.actions):
                 self._check()
-                if self.on_progress:
-                    self.on_progress(int(done_weight * 100 / total), f"{action.space.split(':')[-1]}/{action.rel}"
-                                     if action.space != CFG else f"réglage {action.rel}")
+                verb = {PULL: "Réception", PUSH: "Envoi", MERGE: "Fusion", DEL_LOCAL: "Suppression ici",
+                        DEL_REMOTE: "Suppression là-bas"}.get(action.kind, action.kind)
+                where = f"réglage {action.rel}" if action.space == CFG else f"{action.space[2:] or action.space}/{action.rel}"
+                self._say(f"{verb} {where} ({index + 1}/{len(plan.actions)})",
+                          20 + int(done_weight * 80 / total), log=index < 200 or index % 20 == 0)
                 try:
-                    self._do(action)
+                    self._do_retry(action)
                     touched.add(action.space)
                     done += 1
                 except (SyncPathError, FileNotFoundError, OSError) as exc:
@@ -383,6 +477,25 @@ class SyncEngine:
                 with contextlib.suppress(Exception):
                     self.local.commit(space)
         return {"done": done, "errors": list(self.errors)}
+
+    def _do_retry(self, action: Action) -> None:
+        """Rejoue une action après une coupure réseau brève ; au-delà, le pair est considéré absent (reprise plus tard)."""
+        from .client import RETRY_DELAYS, LockLost
+        last: Exception | None = None
+        for attempt, delay in enumerate((0.0, *RETRY_DELAYS)):
+            if delay:
+                self._say(f"Connexion instable, nouvelle tentative {attempt}/{len(RETRY_DELAYS)} "
+                          f"({action.rel})…")
+                time.sleep(delay)
+                self._check()
+            try:
+                if last is not None and hasattr(self.remote, "relock"):
+                    with contextlib.suppress(ConnectionError):
+                        self.remote.relock()
+                return self._do(action)
+            except (ConnectionError, TimeoutError, LockLost) as exc:
+                last = exc
+        raise PeerGone(f"Le pair ne répond plus ({last}).") from last
 
     def _do(self, a: Action) -> None:
         local, remote = self.local, self.remote

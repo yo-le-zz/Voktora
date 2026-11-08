@@ -107,10 +107,10 @@ Copy-Item voktora\version.txt     dist\windows\main.dist\version.txt
 
 ```bash
 # Script automatique (compile + package en .deb)
-bash "Installers/DEB installer/build_deb.sh" 1.0.7
+bash "Installers/DEB installer/build_deb.sh" 1.0.8
 
 # Résultat
-ls dist/linux/voktora_1.0.7_amd64.deb
+ls dist/linux/voktora_1.0.8_amd64.deb
 ```
 
 Le script :
@@ -127,10 +127,10 @@ Le script :
 
 ```bash
 # Prérequis : paquet « rpm » (Debian/Ubuntu) ou « rpm-build » (Fedora/RHEL)
-bash "Installers/RPM installer/build_rpm.sh" 1.0.7
+bash "Installers/RPM installer/build_rpm.sh" 1.0.8
 
 # Résultat
-ls dist/linux/voktora-1.0.7-1.x86_64.rpm
+ls dist/linux/voktora-1.0.8-1.x86_64.rpm
 ```
 ## Paquet Arch / Omarchy (`.pkg.tar.zst`)
 
@@ -138,11 +138,11 @@ Assemblé à la main (`.PKGINFO` + `.INSTALL` + arbre de fichiers, zstd) : se co
 distribution, sans `makepkg`. Réutilise la compilation Nuitka du `.deb`. Dépend de `zstd`.
 
 ```bash
-bash "Installers/Arch installer/build_arch.sh" 1.0.7
-ls dist/linux/voktora-1.0.7-1-x86_64.pkg.tar.zst
+bash "Installers/Arch installer/build_arch.sh" 1.0.8
+ls dist/linux/voktora-1.0.8-1-x86_64.pkg.tar.zst
 ```
 
-`1.0.7-rc1` devient `1.0.7rc1` (pacman interdit le tiret dans `pkgver`).
+`1.0.8-rc1` devient `1.0.8rc1` (pacman interdit le tiret dans `pkgver`).
 
 
 Le script réutilise la compilation Nuitka du `.deb` si elle existe (la CI compile **une seule fois**
@@ -151,7 +151,7 @@ avec `Installers/RPM installer/voktora.spec`. Particularités :
 
 - paquet binaire (`ExclusiveArch: x86_64`), compression xz, sans `debuginfo` ni strip (Nuitka embarque Qt) ;
 - dépendances déclarées **par bibliothèque** (`libGL.so.1()(64bit)`…) : valables sur Fedora, RHEL et openSUSE ;
-- une version de préversion `1.0.7-rc1` devient `1.0.7~rc1` (le tiret est interdit dans le champ `Version`) ;
+- une version de préversion `1.0.8-rc1` devient `1.0.8~rc1` (le tiret est interdit dans le champ `Version`) ;
 - contrôle rapide : `rpm -qpl`, `rpm -qpR` et `rpm -qpi` sur le fichier produit.
 
 ---
@@ -160,10 +160,10 @@ avec `Installers/RPM installer/voktora.spec`. Particularités :
 
 ```powershell
 # Script automatique (compile + package en .msi via WiX)
-uv run --group build python "Installers\MSI installer\build_msi.py" 1.0.7
+uv run --group build python "Installers\MSI installer\build_msi.py" 1.0.8
 
 # Résultat
-dir dist\windows\Voktora_1.0.7_x64.msi
+dir dist\windows\Voktora_1.0.8_x64.msi
 ```
 
 Le script :
