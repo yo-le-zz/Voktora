@@ -2,7 +2,7 @@
 # PKGBUILD de référence (AUR / makepkg) : récupère le paquet Arch publié dans la release GitHub.
 # Le paquet officiel est produit par build_arch.sh (même contenu) ; ce fichier sert à `makepkg -si`.
 pkgname=voktora-bin
-pkgver=1.0.7
+pkgver=1.0.8
 pkgrel=1
 pkgdesc="Voktora — gestionnaire de projets de développement (Git, coffre chiffré, snapshots, synchronisation entre PC)"
 arch=('x86_64')

@@ -5,6 +5,48 @@ Format : [Semantic Versioning](https://semver.org/) — `MAJEUR.MINEUR.CORRECTIF
 
 ---
 
+## [1.0.8] — 2026-11-08
+
+### 🔄 Synchronisation : fiabilité, transparence, rapidité
+
+- **La synchro parle** : fini le « préparation » muet. Chaque étape est annoncée (connexion, réservation de l'autre PC,
+  analyse de chaque projet **sur les deux PC avec le nombre de fichiers lus**, comparaison, transferts « Réception /
+  Envoi / Fusion », terminé en N s) dans la barre d'état, la fenêtre et un nouvel onglet **Journal**
+  (`sync/sync.log`, tourné à 1 Mo). Le pourcentage couvre toute la synchro (analyse 0-20 %, transferts 20-100 %).
+- **Connexions instables** : analyses envoyées en flux (plus de délai d'attente pendant une longue analyse),
+  nouvelles tentatives automatiques (0,5 / 1,5 / 4 s), verrou de l'autre PC renouvelé s'il expire, TCP keep-alive.
+- **Ports automatiques** : port occupé → un port libre est pris tout seul (47821-47840) et l'autre PC le retrouve
+  seul ; le port mémorisé est mis à jour.
+- **Tester la connexion** : diagnostic pas à pas (réseau, port, authentification, **écart d'horloge**, occupation)
+  avec la cause probable et la commande de pare-feu adaptée. Messages d'erreur explicites (plus de « 'clé' » brut) ;
+  toute erreur interne est écrite avec sa trace dans le journal au lieu de bloquer en silence.
+- **Certificats TLS (GitHub refusé sans `SSL_CERT_FILE`)** : le lot de certificats du système est désormais TOUJOURS
+  chargé (avant, seulement si le magasin d'OpenSSL paraissait vide — faux sur Fedora avec le Python/OpenSSL embarqué),
+  et exporté (`SSL_CERT_FILE`, `GIT_SSL_CAINFO`, `CURL_CA_BUNDLE`, `REQUESTS_CA_BUNDLE`) pour git et les sous-processus ;
+  une variable de l'utilisateur valide est respectée, une variable cassée est remplacée.
+- **105 projets et plus** : analyses locales/distantes en parallèle, cache d'empreintes écrit au plus toutes les 15 s
+  et élagué (avant : réécrit après chaque projet), 2ᵉ passe quasi instantanée (105 projets : 3,6 s puis 0,7 s).
+- **Garde-fous** : une suppression massive n'est jamais propagée automatiquement ; un projet absent d'un PC n'est plus
+  pris pour « supprimé » ; un projet reçu apparaît dans la liste même sans aucune métadonnée.
+- Correction : course sur le cache d'empreintes (« dictionary changed size during iteration »).
+
+### 🌐 Forges (GitHub, GitLab, Fedora…)
+
+- Nouveau menu **🌐 Forges** : tout ce qui touche GitHub est regroupé (clonage, dépôts du compte, connexion,
+  organisations) avec **GitLab**, la **forge de Fedora** (Forgejo, `forge.fedoraproject.org`), **Codeberg** et toute
+  instance GitLab / Forgejo / Gitea ou GitHub Enterprise.
+- **Distinction des forks** : badge « 🍴 fork de propriétaire/dépôt » dans l'onglet Git du projet (remote `upstream`
+  instantané, confirmé par l'API en arrière-plan) et dans la liste des dépôts (filtre « Forks seulement »).
+- Jetons dans le coffre quand il est déverrouillé ; jamais dans un remote, ni synchronisés, ni affichés.
+
+### 🧩 API de plugins v3
+
+Nouvelles permissions : `config.read`, `config.write`, `quick_actions`, `snapshots`, `diskusage`, `forges`, `sync`,
+`plugins.manage`, `security`, `vault` — voir `doc/PLUGINS.md`. Tout changement de sécurité est confirmé par
+l'utilisateur ; jetons et secrets ne sont jamais exposés ; les plugins de l'API 2 continuent de fonctionner.
+
+---
+
 ## [1.0.7] — 2026-11-07
 
 ### 🔄 Synchronisation entre PC (priorité de cette version)
@@ -45,12 +87,6 @@ Intégrée à Voktora (menu **Outils → Synchronisation entre PC**) — voir `d
   comparaison intelligente, barre de progression.
 - **Espace disque par projet** : détection des caches/compilations/dépendances, nettoyage par projet et
   « tout réinitialiser » avec double confirmation au-delà d'un seuil réglable.
-
-### Prévu en 1.0.8
-
-- Intégration des forges **GitLab** et **Fedora (Forgejo)**, distinction des forks.
-- GitHub centralisé en un seul endroit (hub des forges).
-- API interne étendue (y compris côté sécurité) pour tout piloter depuis un plugin.
 
 ---
 

@@ -136,7 +136,9 @@ class _Handler(BaseHTTPRequestHandler):
             self._dispatch(method, route, query)
         except SyncPathError as exc:
             self._fail(400, str(exc))
-        except (secure.AuthError, ValueError, KeyError) as exc:
+        except KeyError as exc:
+            self._fail(400, f"paramètre manquant ou inconnu : {exc}")
+        except (secure.AuthError, ValueError) as exc:
             self._fail(400, str(exc))
         except (BrokenPipeError, ConnectionError):
             pass
@@ -175,7 +177,10 @@ class _Handler(BaseHTTPRequestHandler):
         if route == "/hello":
             return self._json({"id": o.settings.device_id, "name": o.settings["device_name"],
                                "primary_id": o.settings["primary_id"], "status": o.status_fn(),
-                               "busy": o.busy_fn() or o.session.held_by_other(dev)})
+                               "busy": o.busy_fn() or o.session.held_by_other(dev),
+                               "port": o.port, "time": time.time(), "version": 2})
+        if route == "/keepalive":
+            return self._json({"ok": o.session.touch(dev)})
         if route == "/request-sync":
             return self._json({"accepted": bool(o.request_fn(dev))})
         if route == "/lock":
@@ -190,8 +195,7 @@ class _Handler(BaseHTTPRequestHandler):
         if route == "/spaces":
             return self._json({"spaces": store.spaces()})
         if route == "/manifest":
-            entries = store.manifest(query["space"])
-            return self._json({"files": {k: [e.sha, e.size, e.mode] for k, e in entries.items()}})
+            return self._manifest(query["space"])
         if route == "/file" and method == "GET":
             size, chunks = store.open_reader(query["space"], query["rel"])
             self.send_response(200)
@@ -223,6 +227,33 @@ class _Handler(BaseHTTPRequestHandler):
             store.commit(self._body_json()["space"])
             return self._json({"ok": True})
         return self._fail(404, "route inconnue")
+
+    def _manifest(self, space: str) -> None:
+        """Réponse en flux : lignes de progression (« p ») puis le résultat (« files »). Tant que l'analyse dure,
+        le client reçoit de quoi savoir que ce PC travaille (pas de délai d'attente, pas de « préparation » muette)."""
+        if space != "cfg":
+            self.owner.store._root(space)        # espace invalide → erreur 400 propre, avant d'envoyer l'en-tête
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        writer = secure.FrameWriter(self._enc, self._ctx)
+
+        def emit(line: dict) -> None:
+            for block in writer.frames((json.dumps(line, separators=(",", ":")) + "\n").encode()):
+                self.wfile.write(block)
+
+        def progress(count: int, label: str) -> None:
+            emit({"p": [count, label[-80:]]})
+            self.owner.session.touch(self._device)
+
+        try:
+            entries = self.owner.store.manifest(space, None, progress)
+        except Exception as exc:  # noqa: BLE001 — transmis au client, qui l'affiche
+            emit({"error": f"{type(exc).__name__}: {exc}"})
+            return
+        emit({"files": {k: [e.sha, e.size, e.mode] for k, e in entries.items()}})
+        self.close_connection = True
 
     # ── appairage ────────────────────────────────────────────────────────────
 

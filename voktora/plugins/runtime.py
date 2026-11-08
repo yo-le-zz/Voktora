@@ -38,6 +38,7 @@ import core
 
 from . import audit, lock
 from . import manifest as manifest_mod
+from .api_ext import ExtendedAPI
 
 # ── Événements ────────────────────────────────────────────────────────────────
 
@@ -281,7 +282,7 @@ class PluginSettings:
 
 # ── API exposée aux plugins ───────────────────────────────────────────────────
 
-class PluginAPI:
+class PluginAPI(ExtendedAPI):
     """Objet reçu par `on_load(api)`. Toutes les méthodes sont documentées dans doc/PLUGINS.md."""
 
     api_version = manifest_mod.API_VERSION
@@ -317,6 +318,16 @@ class PluginAPI:
                 f"Le plugin « {self._info.name} » n'a pas déclaré la permission « {permission} » "
                 f"dans plugin.json."
             )
+
+    @staticmethod
+    def _error(message: str) -> PluginError:
+        return PluginError(message)
+
+    def _confirm_security(self, title: str, text: str) -> bool:
+        """Confirmation utilisateur pour tout changement de sécurité ; refus automatique sans interface."""
+        if _ui_host is None:
+            return False
+        return bool(_ui_host.confirm(f"{title} — plugin « {self._info.name} »", text))
 
     def _host(self) -> Any:
         self._require("ui")
@@ -551,6 +562,11 @@ def _restyle() -> None:
 
 
 # ── Chargement ───────────────────────────────────────────────────────────────
+
+def load_all_cached() -> list[PluginInfo]:
+    """Plugins déjà chargés (sans recharger) ; liste vide si rien n'a encore été chargé."""
+    return list(_plugins)
+
 
 def load_all() -> list[PluginInfo]:
     """(Re)charge tous les plugins du dossier `plugins/`."""

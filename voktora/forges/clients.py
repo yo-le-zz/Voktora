@@ -1,0 +1,138 @@
+"""
+Voktora — forges.clients
+Un client par famille de forge, avec la même interface : `user()`, `list_repos()`, `repo(owner, name)`.
+"""
+
+from __future__ import annotations
+
+import urllib.parse
+
+from .base import ForgeError, Repo, http_json
+
+MAX_PAGES = 10
+
+
+class ForgeClient:
+    kind = ""
+
+    def __init__(self, host: str, token: str = ""):
+        self.host, self.token = host, token
+
+    # à surcharger
+    def _base(self) -> str: ...
+    def _headers(self) -> dict[str, str]:
+        return {}
+    def user(self) -> dict: ...
+    def list_repos(self) -> list[Repo]: ...
+    def repo(self, owner: str, name: str) -> Repo: ...
+
+    def _get(self, path: str):
+        return http_json(self._base() + path, self._headers())
+
+    def _paged(self, path: str, size: int) -> list:
+        out: list = []
+        for page in range(1, MAX_PAGES + 1):
+            chunk = self._get(f"{path}{'&' if '?' in path else '?'}page={page}")
+            if not isinstance(chunk, list):
+                raise ForgeError("Réponse inattendue de la forge.")
+            out.extend(chunk)
+            if len(chunk) < size:
+                break
+        return out
+
+
+class GitHubClient(ForgeClient):
+    kind = "github"
+
+    def _base(self) -> str:
+        return "https://api.github.com" if self.host in ("github.com", "api.github.com") \
+            else f"https://{self.host}/api/v3"            # GitHub Enterprise
+
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.token}", "X-GitHub-Api-Version": "2022-11-28"} if self.token else {}
+
+    def user(self) -> dict:
+        raw = self._get("/user")
+        return {"login": raw.get("login", ""), "name": raw.get("name") or raw.get("login", ""),
+                "avatar_url": raw.get("avatar_url", "")}
+
+    def _repo(self, raw: dict) -> Repo:
+        parent = raw.get("parent") or {}
+        return Repo("github", self.host, raw.get("full_name", ""), raw.get("html_url", ""), raw.get("clone_url", ""),
+                    raw.get("ssh_url", ""), raw.get("description") or "", bool(raw.get("private")),
+                    bool(raw.get("fork")), parent.get("full_name", ""), parent.get("html_url", ""),
+                    raw.get("default_branch", ""))
+
+    def list_repos(self) -> list[Repo]:
+        return [self._repo(r) for r in self._paged("/user/repos?per_page=100&sort=updated", 100)]
+
+    def repo(self, owner: str, name: str) -> Repo:
+        return self._repo(self._get(f"/repos/{owner}/{name}"))
+
+
+class GitLabClient(ForgeClient):
+    kind = "gitlab"
+
+    def _base(self) -> str:
+        return f"https://{self.host}/api/v4"
+
+    def _headers(self) -> dict[str, str]:
+        return {"PRIVATE-TOKEN": self.token} if self.token else {}
+
+    def user(self) -> dict:
+        raw = self._get("/user")
+        return {"login": raw.get("username", ""), "name": raw.get("name") or raw.get("username", ""),
+                "avatar_url": raw.get("avatar_url", "")}
+
+    def _repo(self, raw: dict) -> Repo:
+        parent = raw.get("forked_from_project") or {}
+        return Repo("gitlab", self.host, raw.get("path_with_namespace", ""), raw.get("web_url", ""),
+                    raw.get("http_url_to_repo", ""), raw.get("ssh_url_to_repo", ""), raw.get("description") or "",
+                    raw.get("visibility", "private") != "public", bool(parent),
+                    parent.get("path_with_namespace", ""), parent.get("web_url") or parent.get("http_web_url", ""),
+                    raw.get("default_branch") or "")
+
+    def list_repos(self) -> list[Repo]:
+        return [self._repo(r) for r in self._paged("/projects?membership=true&per_page=100&order_by=last_activity_at", 100)]
+
+    def repo(self, owner: str, name: str) -> Repo:
+        return self._repo(self._get("/projects/" + urllib.parse.quote(f"{owner}/{name}", safe="")))
+
+
+class ForgejoClient(ForgeClient):
+    """Forgejo et Gitea (API compatible) : forge de Fedora, Codeberg, instances auto-hébergées."""
+    kind = "forgejo"
+
+    def _base(self) -> str:
+        return f"https://{self.host}/api/v1"
+
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": f"token {self.token}"} if self.token else {}
+
+    def user(self) -> dict:
+        raw = self._get("/user")
+        return {"login": raw.get("login", ""), "name": raw.get("full_name") or raw.get("login", ""),
+                "avatar_url": raw.get("avatar_url", "")}
+
+    def _repo(self, raw: dict) -> Repo:
+        parent = raw.get("parent") or {}
+        return Repo("forgejo", self.host, raw.get("full_name", ""), raw.get("html_url", ""), raw.get("clone_url", ""),
+                    raw.get("ssh_url", ""), raw.get("description") or "", bool(raw.get("private")),
+                    bool(raw.get("fork")), parent.get("full_name", ""), parent.get("html_url", ""),
+                    raw.get("default_branch", ""))
+
+    def list_repos(self) -> list[Repo]:
+        return [self._repo(r) for r in self._paged("/user/repos?limit=50", 50)]
+
+    def repo(self, owner: str, name: str) -> Repo:
+        return self._repo(self._get(f"/repos/{owner}/{name}"))
+
+
+CLIENTS = {"github": GitHubClient, "gitlab": GitLabClient, "forgejo": ForgejoClient}
+
+
+def make_client(kind: str, host: str, token: str = "") -> ForgeClient:
+    try:
+        return CLIENTS[kind](host, token)
+    except KeyError as exc:
+        raise ForgeError(f"Type de forge inconnu : {kind or '?'}") from exc

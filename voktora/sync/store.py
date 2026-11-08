@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import shutil
+import threading
 import time
 from collections.abc import Iterable, Iterator
 from pathlib import Path, PurePosixPath
@@ -84,6 +85,9 @@ class LocalStore:
         self.extras = dict(extras or {})
         self.trash_dir = Path(trash_dir) if trash_dir else self.state_dir / "trash"
         self._cache: dict[str, list] | None = None
+        self._cache_lock = threading.RLock()
+        self._cache_dirty = False
+        self._cache_saved = 0.0
         self._cfg: dict | None = None            # configuration en cours de modification (voir commit)
 
     # ── espaces ──────────────────────────────────────────────────────────────
@@ -94,6 +98,9 @@ class LocalStore:
             if isinstance(entry, dict) and entry.get("path"):
                 out[str(entry.get("name") or Path(entry["path"]).name)] = Path(entry["path"])
         return out
+
+    def projects_root_has(self, name: str) -> bool:
+        return (self.config_io.projects_root() / name).is_dir()
 
     def spaces(self) -> list[str]:
         s = self.settings
@@ -120,32 +127,45 @@ class LocalStore:
         known = self.projects().get(name)
         if known is not None:
             return known
-        if not create:
-            raise SyncPathError(f"Projet inconnu : {name}")
         root = self.config_io.projects_root() / name
+        if not create:
+            if root.is_dir():            # dossier déjà reçu mais projet pas encore déclaré (synchro interrompue)
+                return root
+            raise SyncPathError(f"Projet inconnu : {name}")
         root.mkdir(parents=True, exist_ok=True)
         return root
 
     # ── manifestes ───────────────────────────────────────────────────────────
 
-    def manifest(self, space: str, cancel=None) -> dict[str, Entry]:
+    def manifest(self, space: str, cancel=None, progress=None) -> dict[str, Entry]:
+        """`progress(fichiers_lus, dossier_ou_fichier_courant)` est appelé régulièrement (≈ 2 fois par seconde)."""
         if space == CFG:
             return {rel: Entry(_sha(data), len(data)) for rel, data in self._leaves().items()}
         root = self._root(space)
         if not root.is_dir():
             return {}
-        return self._scan(root, space.startswith("p:"), cancel)
+        return self._scan(root, space.startswith("p:"), cancel, progress)
 
-    def _scan(self, root: Path, is_project: bool, cancel) -> dict[str, Entry]:
+    def _scan(self, root: Path, is_project: bool, cancel, progress=None) -> dict[str, Entry]:
         s = self.settings
+        last = [0.0]
+
+        def tick(label: str) -> None:
+            now = time.monotonic()
+            if progress and now - last[0] >= 0.4:
+                last[0] = now
+                progress(len(result), label)
+
         limit = int(s["max_file_mb"]) * 1024 * 1024
         cache = self._load_cache()
+        touched: set[str] = set()
         result: dict[str, Entry] = {}
         stack = [root]
         while stack:
             if cancel and cancel():
                 raise InterruptedError
             current = stack.pop()
+            tick(current.relative_to(root).as_posix() if current != root else ".")
             try:
                 with os.scandir(current) as it:
                     listing = list(it)
@@ -173,11 +193,24 @@ class LocalStore:
                     st = entry.stat(follow_symlinks=False)
                     if st.st_size > limit:
                         continue
-                    result[rel] = Entry(self._hash_file(Path(entry.path), st, cache), st.st_size, st.st_mode & 0o111)
+                    tick(rel)
+                    touched.add(entry.path)
+                    result[rel] = Entry(self._hash_file(Path(entry.path), st, cache, lambda r=rel: tick(r)),
+                                        st.st_size, st.st_mode & 0o111)
                 except (OSError, ValueError):
                     continue
+        self._prune_cache(str(root) + os.sep, touched)
         self._save_cache()
         return result
+
+    def _prune_cache(self, prefix: str, touched: set[str]) -> None:
+        """Oublie les fichiers disparus de ce dossier (le cache ne grossit pas indéfiniment : 100+ projets)."""
+        with self._cache_lock:
+            stale = [k for k in self._cache or {} if k.startswith(prefix) and k not in touched]
+            for key in stale:
+                del self._cache[key]
+            if stale:
+                self._cache_dirty = True
 
     def _load_cache(self) -> dict[str, list]:
         if self._cache is None:
@@ -187,17 +220,25 @@ class LocalStore:
                 self._cache = {}
         return self._cache
 
-    def _save_cache(self) -> None:
-        if self._cache is None:
+    def _save_cache(self, force: bool = False) -> None:
+        """Écriture différée (au plus toutes les 15 s, ou sur demande) : avec des centaines de milliers de fichiers,
+        réécrire le cache après chaque projet coûterait plus cher que l'analyse elle-même."""
+        if self._cache is None or not self._cache_dirty:
             return
-        with contextlib.suppress(OSError):
+        if not force and time.monotonic() - self._cache_saved < 15:
+            return
+        with self._cache_lock, contextlib.suppress(OSError):
             self.state_dir.mkdir(parents=True, exist_ok=True)
             tmp = self.state_dir / "hashcache.json.tmp"
             tmp.write_text(json.dumps(self._cache), encoding="utf-8")
             os.replace(tmp, self.state_dir / "hashcache.json")
+            self._cache_dirty = False
+            self._cache_saved = time.monotonic()
 
-    @staticmethod
-    def _hash_file(path: Path, st: os.stat_result, cache: dict[str, list]) -> str:
+    def flush_cache(self) -> None:
+        self._save_cache(force=True)
+
+    def _hash_file(self, path: Path, st: os.stat_result, cache: dict[str, list], beat=None) -> str:
         key = str(path)
         hit = cache.get(key)
         # mtime trop récent : le fichier peut encore changer dans la même fraction de seconde → pas de cache
@@ -207,7 +248,11 @@ class LocalStore:
         with open(path, "rb") as handle:
             while chunk := handle.read(secure.CHUNK):
                 digest.update(chunk)
-        cache[key] = [st.st_size, st.st_mtime_ns, digest.hexdigest()]
+                if beat:
+                    beat()
+        with self._cache_lock:
+            cache[key] = [st.st_size, st.st_mtime_ns, digest.hexdigest()]
+            self._cache_dirty = True
         return digest.hexdigest()
 
     # ── lecture / écriture ───────────────────────────────────────────────────
@@ -340,8 +385,9 @@ class LocalStore:
                 name = str(entry.get("name") or Path(entry["path"]).name)
                 if not s.project_selected(name):
                     continue
+                out[f"meta/{name}/name"] = _json_bytes(name)          # existence du projet, même sans autre champ
                 for field, value in entry.items():
-                    if field not in META_LOCAL_FIELDS and not is_secret_key(field):
+                    if field not in META_LOCAL_FIELDS and field != "name" and not is_secret_key(field):
                         out[f"meta/{name}/{field}"] = _json_bytes(value)
         return out
 
@@ -363,7 +409,7 @@ class LocalStore:
                 cfg[rel] = value
         elif parts[0] == "meta" and len(parts) == 3:
             _, name, field = parts
-            if field in META_LOCAL_FIELDS or is_secret_key(field):
+            if (field in META_LOCAL_FIELDS and field != "name") or is_secret_key(field):
                 raise SyncPathError(f"Champ refusé : {rel}")
             entry = next((e for e in cfg.setdefault("projects", [])
                           if isinstance(e, dict) and str(e.get("name") or Path(e.get("path", "")).name) == name), None)
@@ -373,7 +419,10 @@ class LocalStore:
                     return                               # le dossier du projet n'est pas (encore) là
                 entry = {"name": name, "path": str(folder)}
                 cfg["projects"].append(entry)
-            if delete:
+            if field == "name":
+                if delete and entry in cfg.get("projects", []) and not (self.projects_root_has(name)):
+                    cfg["projects"].remove(entry)           # projet retiré de la liste sur l'autre PC
+            elif delete:
                 entry.pop(field, None)
             else:
                 entry[field] = value

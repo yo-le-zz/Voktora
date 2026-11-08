@@ -192,7 +192,7 @@ def test_interruption_then_resume(pcs):
     seen = []
 
     def cancel():
-        return len(seen) >= 1
+        return bool(seen) and max(seen) >= 25               # on coupe en pleine application
 
     from sync.engine import Cancelled, SyncEngine
     peer = laptop.svc.settings.peer(main.id)
@@ -225,8 +225,8 @@ def test_percent_progress_reaches_100(pcs):
     seen = []
     laptop.svc.add_listener(lambda snap: seen.append(snap["own"]["percent"]))
     laptop.svc.sync_peer(main.id, "primary")
-    assert max(seen) == 100 or laptop.svc.status[main.id]["percent"] == 100
-    assert seen == sorted(seen) or True
+    assert laptop.svc.status[main.id]["percent"] == 100
+    assert max(seen) >= 20 and 0 < len({p for p in seen}) <= 101
 
 
 def test_busy_pc_refuses_lock(pcs):
@@ -312,7 +312,7 @@ def test_write_requires_lock(pcs):
     main, laptop = pcs
     setup_project(main, laptop)
     remote = laptop.svc._remote(laptop.svc.settings.peer(main.id))
-    with pytest.raises(SyncPathError):
+    with pytest.raises(ConnectionError):                       # LockLost : appelez /lock d'abord
         remote.write("p:demo", "a.txt", 1, iter([b"x"]), 0, "")
 
 
@@ -344,3 +344,149 @@ def test_merge_helpers():
 
 def test_time_sanity():
     assert time.time() > 0
+
+
+# ── bavardage, ports automatiques, réseau instable ───────────────────────────
+
+def test_sync_is_talkative(pcs):
+    main, laptop = pcs
+    setup_project(main, laptop, {"a.txt": "a\n", "b.txt": "b\n"})
+    laptop.svc.sync_peer(main.id, "primary")
+    text = "\n".join(laptop.svc.logs)
+    for expected in ("Début de la synchronisation", "réservé", "à comparer", "Comparaison de projet « demo »",
+                     "Application : 2 action(s)", "Envoi" if False else "Réception", "Terminé en"):
+        assert expected in text, expected
+    assert (laptop.svc.dir / "sync.log").exists()
+
+
+def test_phase_details_in_status(pcs):
+    main, laptop = pcs
+    setup_project(main, laptop, {"a.txt": "a\n"})
+    details = []
+    laptop.svc.add_listener(lambda snap: details.append(snap["peers"].get(main.id, {}).get("detail", "")))
+    laptop.svc.sync_peer(main.id, "primary")
+    joined = " | ".join(details)
+    assert "Connexion à" in joined and "Comparaison de" in joined and "Réception" in joined
+
+
+def test_port_busy_picks_another_and_peer_finds_it(tmp_path):
+    blocker = socket.socket()
+    blocker.bind(("0.0.0.0", 0))
+    busy = blocker.getsockname()[1]
+    a = Pc(tmp_path, "un")
+    a.svc.server.stop()
+    a.svc.settings["port"] = busy
+    a.svc.settings.save()
+    a.svc.start()
+    try:
+        assert a.svc.server.port != busy and a.svc.settings["port"] == a.svc.server.port
+    finally:
+        a.svc.stop()
+        blocker.close()
+
+
+def test_peer_changed_port_is_rediscovered(pcs):
+    main, laptop = pcs
+    from sync.settings import DEFAULT_PORT
+    main.svc.server.stop()
+    main.svc.server.start("127.0.0.1", DEFAULT_PORT + 3)
+    laptop.svc._stop.clear()                                   # (la surveillance est coupée dans ces tests)
+    peer = laptop.svc.settings.peer(main.id)
+    info = laptop.svc._hello(peer, laptop.svc._remote(peer))
+    assert info["id"] == main.id and peer["port"] == DEFAULT_PORT + 3
+
+
+def test_transient_failure_is_retried(pcs, monkeypatch):
+    main, laptop = pcs
+    setup_project(main, laptop, {"a.txt": "a\n"})
+    remote = laptop.svc._remote(laptop.svc.settings.peer(main.id))
+    calls = {"n": 0}
+    real = remote._manifest_once
+
+    def flaky(space, progress):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise ConnectionError("coupure")
+        return real(space, progress)
+    monkeypatch.setattr(remote, "_manifest_once", flaky)
+    monkeypatch.setattr("sync.client.RETRY_DELAYS", (0.0, 0.0))
+    remote.lock()
+    messages = []
+    got = remote.manifest("p:demo", on_retry=lambda a, t, e: messages.append(str(e)))
+    remote.unlock()
+    assert "a.txt" in got and calls["n"] == 2 and messages
+
+
+def test_lock_expiry_is_recovered(pcs):
+    main, laptop = pcs
+    setup_project(main, laptop, {"a.txt": "a\n"})
+    remote = laptop.svc._remote(laptop.svc.settings.peer(main.id))
+    remote.lock()
+    main.svc.server.session.release(laptop.id)             # le verrou a expiré côté principal
+    assert "a.txt" in remote.manifest("p:demo")              # relock automatique puis nouvel essai
+    remote.unlock()
+
+
+def test_diagnose_reports_each_step(pcs):
+    main, laptop = pcs
+    steps = laptop.svc.diagnose(main.id)
+    assert all(ok for ok, _ in steps), steps
+    assert any("Authentification OK" in t for _, t in steps)
+    main.svc.server.stop()
+    bad = laptop.svc.diagnose(main.id)
+    assert not bad[-1][0] and "Port" in bad[-1][1]
+
+
+def test_manifest_streams_progress(pcs):
+    main, laptop = pcs
+    a, _ = setup_project(main, laptop, {f"d{i}/f{i}.txt": "x" for i in range(30)})
+    remote = laptop.svc._remote(laptop.svc.settings.peer(main.id))
+    remote.lock()
+    seen = []
+    import sync.store as store_mod
+    real = main.svc.store._scan
+
+    def slow(root, is_project, cancel, progress=None):
+        import time as t
+        t0 = store_mod.time.monotonic
+        store_mod.time.monotonic = lambda: t0() + t.time() * 1000      # chaque tick passe le seuil de 0,4 s
+        try:
+            return real(root, is_project, cancel, progress)
+        finally:
+            store_mod.time.monotonic = t0
+    main.svc.store._scan = slow
+    got = remote.manifest("p:demo", progress=lambda n, w: seen.append((n, w)))
+    remote.unlock()
+    assert len(got) == 30 and seen
+
+
+def test_unknown_space_is_clean_error(pcs):
+    main, laptop = pcs
+    remote = laptop.svc._remote(laptop.svc.settings.peer(main.id))
+    remote.lock()
+    with pytest.raises((SyncPathError, RemoteError)):
+        remote.manifest("zzz")
+    remote.unlock()
+
+
+def test_mass_delete_is_never_propagated(pcs):
+    main, laptop = pcs
+    a, b = setup_project(main, laptop, {f"f{i}.txt": "x\n" for i in range(40)})
+    laptop.svc.sync_peer(main.id, "primary")
+    for f in b.glob("f*.txt"):                              # le portable « perd » tout (disque démonté, dossier vidé…)
+        f.unlink()
+    plan = laptop.svc.sync_peer(main.id)
+    assert plan.warnings and "suppressions ignorées" in plan.warnings[0]
+    assert len(list(a.glob("f*.txt"))) == 40                # le principal est intact
+    again = laptop.svc.sync_peer(main.id)                    # l'avertissement se répète tant que ce n'est pas tranché
+    assert again.warnings and len(list(a.glob("f*.txt"))) == 40
+
+
+def test_project_known_only_on_disk_is_not_wiped(pcs):
+    main, laptop = pcs
+    a, _ = setup_project(main, laptop, {"k.txt": "k\n"})
+    laptop.cfg.cfg["projects"].clear()                       # projet reçu mais pas encore déclaré ici
+    laptop.cfg.projects_root().joinpath("demo").mkdir(exist_ok=True)
+    laptop.svc.sync_peer(main.id, "primary")
+    laptop.svc.sync_peer(main.id)
+    assert (a / "k.txt").exists()

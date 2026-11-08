@@ -119,6 +119,20 @@ def encrypt_stream(key: bytes, context: bytes, chunks: Iterator[bytes]) -> Itera
         yield struct.pack(">I", len(body)) + nonce + body
 
 
+class FrameWriter:
+    """Chiffrement incrémental : chaque appel à `frames()` produit des blocs compatibles `decrypt_stream`."""
+
+    def __init__(self, key: bytes, context: bytes):
+        self._aes, self._context, self._index = AESGCM(key), context, 0
+
+    def frames(self, data: bytes) -> Iterator[bytes]:
+        for start in range(0, max(1, len(data)), CHUNK):
+            nonce = os.urandom(12)
+            body = self._aes.encrypt(nonce, data[start:start + CHUNK], _aad(self._context, self._index))
+            self._index += 1
+            yield struct.pack(">I", len(body)) + nonce + body
+
+
 def decrypt_stream(key: bytes, context: bytes, read) -> Iterator[bytes]:
     """`read(n)` → exactement n octets (ou moins en fin de flux). Lève AuthError si un bloc est altéré."""
     aes, index = AESGCM(key), 0

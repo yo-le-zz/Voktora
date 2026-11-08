@@ -390,9 +390,9 @@ class MainWindow(QMainWindow):
         act_new.triggered.connect(self.act_create)
         act_import   = QAction("📥 Importer un dossier ou un ZIP...", self)
         act_import.triggered.connect(self.act_import)
-        act_clone_repo = QAction("🐙 Cloner un dépôt GitHub...", self)
+        act_clone_repo = QAction("📥 Cloner un dépôt (GitHub, GitLab, Fedora…)...", self)
         act_clone_repo.triggered.connect(self.act_clone_repo)
-        act_sync_account = QAction("🐙 Ajouter les dépôts de mon compte...", self)
+        act_sync_account = QAction("📚 Ajouter les dépôts de mon compte...", self)
         act_sync_account.setToolTip("Clone automatiquement les dépôts de votre compte GitHub qui ne sont pas encore dans Voktora")
         act_sync_account.triggered.connect(self.act_sync_account)
         act_import_cfg = QAction("🔄 Importer config Meridian / Voktora...", self)
@@ -407,8 +407,6 @@ class MainWindow(QMainWindow):
         
         menu_file.addAction(act_new)
         menu_file.addAction(act_import)
-        menu_file.addAction(act_clone_repo)
-        menu_file.addAction(act_sync_account)
         menu_file.addSeparator()
         menu_file.addAction(act_import_cfg)
         menu_file.addAction(act_export)
@@ -510,18 +508,23 @@ class MainWindow(QMainWindow):
         menu_prefs.addSeparator()
         menu_prefs.addAction(act_diag)
 
-        # Menu GitHub
-        menu_gh = menubar.addMenu("🐙 GitHub")
-        act_gh_login  = QAction("🔑 Se connecter...", self)
+        # Menu Forges : TOUT ce qui touche GitHub / GitLab / Fedora au même endroit (1.0.8)
+        menu_gh = menubar.addMenu("🌐 Forges")
+        act_forges = QAction("🌐 Gérer les forges (GitHub, GitLab, Fedora…)...", self)
+        act_forges.triggered.connect(self.act_forges)
+        act_gh_login  = QAction("🔑 GitHub : se connecter...", self)
         act_gh_login.triggered.connect(self.act_github_login)
-        act_gh_logout = QAction("🚪 Se déconnecter", self)
+        act_gh_logout = QAction("🚪 GitHub : se déconnecter", self)
         act_gh_logout.triggered.connect(self.act_github_logout)
-        act_gh_hub = QAction("🐙 Compte & organisations...", self)
+        act_gh_hub = QAction("🐙 GitHub : compte & organisations...", self)
         act_gh_hub.triggered.connect(self.act_github_hub)
-        
+        menu_gh.addAction(act_forges)
+        menu_gh.addSeparator()
+        menu_gh.addAction(act_clone_repo)
+        menu_gh.addAction(act_sync_account)
+        menu_gh.addSeparator()
         menu_gh.addAction(act_gh_login)
         menu_gh.addAction(act_gh_logout)
-        menu_gh.addSeparator()
         menu_gh.addAction(act_gh_hub)
 
         # Menu Aide
@@ -1127,7 +1130,8 @@ class MainWindow(QMainWindow):
             remote = st.get("remote") or {}
             if state == "syncing":
                 busy = True
-                text = f"{st.get('name', '?')} : ce PC {st.get('percent', 0)} %"
+                step = str(st.get("detail", ""))[:60]
+                text = f"{st.get('name', '?')} : {step} · ce PC {st.get('percent', 0)} %"
                 if remote.get("state") == "syncing":
                     text += f" · lui {remote.get('percent', 0)} %"
                 parts.append(text)
@@ -1901,6 +1905,12 @@ class MainWindow(QMainWindow):
             self._invalidate_cache()
             self._refresh_all()
             self._refresh_project_panel()
+
+    def act_forges(self, *_args) -> None:
+        """Hub unique des forges : comptes GitHub / GitLab / Fedora Forge, dépôts et forks."""
+        from ui_dialogs import ForgesDialog
+        ForgesDialog(self, {"github_login": self.act_github_login, "github_hub": self.act_github_hub,
+                            "clone": self.act_clone_repo, "sync_account": self.act_sync_account}).exec()
 
     def act_github_hub(self, *_args) -> None:
         """Compte GitHub, organisations et classement automatique des projets."""

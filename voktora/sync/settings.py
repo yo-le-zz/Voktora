@@ -33,6 +33,7 @@ DEFAULTS: dict = {
     "role": "secondary",                # "primary" | "secondary"
     "primary_id": "",                   # identifiant du PC principal (priorité en cas de conflit)
     "port": DEFAULT_PORT,
+    "port_auto": True,                  # port occupé → on en prend un libre tout seul (les pairs le retrouvent)
     "auto": True,                       # synchroniser tout seul quand un pair est sur le même réseau
     "interval": 30,                     # secondes entre deux recherches de pair
     "policy": "ask",

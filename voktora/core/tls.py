@@ -22,35 +22,62 @@ SYSTEM_BUNDLES = (
     "/etc/ssl/ca-bundle.pem",                      # openSUSE
     "/etc/ssl/cert.pem",                           # Alpine / macOS / BSD
     "/usr/local/share/certs/ca-root-nss.crt",      # FreeBSD
+    "/etc/ca-certificates/extracted/tls-ca-bundle.pem",   # Arch / Omarchy / Manjaro (p11-kit)
+    "/etc/pki/tls/cacert.pem",                     # anciens RHEL / CentOS
+    "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",  # Fedora (emplacement réel du lien)
 )
 
 _installed = False
+_context: ssl.SSLContext | None = None
+_ENV_VARS = ("SSL_CERT_FILE", "GIT_SSL_CAINFO", "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE")
 
 
 def _bundle_candidates() -> list[str]:
-    found = [os.environ.get("SSL_CERT_FILE", "")]
+    """Lots de certificats existants, dans l'ordre : variable d'environnement, système, certifi."""
+    found = [os.environ.get("SSL_CERT_FILE", ""), *SYSTEM_BUNDLES]
     with contextlib.suppress(Exception):
         import certifi
         found.append(certifi.where())
-    found.extend(SYSTEM_BUNDLES)
     return [path for path in found if path and Path(path).is_file()]
 
 
 def make_context() -> ssl.SSLContext:
-    """Contexte par défaut (vérification activée) + certificats système/certifi si disponibles."""
+    """Contexte (vérification activée) qui charge TOUJOURS les certificats du système en plus des chemins par
+    défaut d'OpenSSL. Avant, on ne les chargeait que si le magasin par défaut paraissait vide : un chemin par
+    défaut périmé ou un dossier de certificats « paresseux » donnait un magasin non vide mais inutile, et GitHub
+    était refusé alors que `SSL_CERT_FILE=…` marchait. Charger deux fois le même certificat est sans effet."""
+    global _context
+    if _context is not None:
+        return _context
     context = ssl.create_default_context()
-    if context.cert_store_stats().get("x509_ca", 0) == 0:
-        for bundle in _bundle_candidates():
-            with contextlib.suppress(ssl.SSLError, OSError):
-                context.load_verify_locations(cafile=bundle)
-                break
+    for bundle in _bundle_candidates()[:2]:        # le 1er (env/système) + un secours (système ou certifi)
+        with contextlib.suppress(ssl.SSLError, OSError):
+            context.load_verify_locations(cafile=bundle)
+    _context = context
     return context
 
 
+def export_environment() -> str:
+    """Publie le lot de certificats dans l'environnement du processus : git, curl et toute bibliothèque lancée par
+    Voktora (qui peuvent embarquer leur propre OpenSSL, aux chemins périmés) le retrouvent. Ne remplace jamais
+    une variable valide de l'utilisateur (seulement celles absentes ou cassées). Retourne le lot utilisé ('' si aucun)."""
+    candidates = _bundle_candidates()
+    if not candidates:
+        return ""
+    chosen = candidates[0]
+    for name in _ENV_VARS:
+        current = os.environ.get(name, "")
+        if not current or not Path(current).is_file():       # absente ou pointant vers un fichier inexistant
+            os.environ[name] = chosen
+    return chosen
+
+
 def install() -> None:
-    """Fait de ce contexte celui de urllib/http.client pour tout le processus (idempotent)."""
+    """Fait de ce contexte celui de urllib/http.client pour tout le processus et exporte les variables
+    d'environnement pour les sous-processus (idempotent)."""
     global _installed
     if _installed:
         return
     _installed = True
+    export_environment()
     ssl._create_default_https_context = make_context      # noqa: SLF001 - point d'extension documenté
