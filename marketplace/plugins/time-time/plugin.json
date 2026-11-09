@@ -1,0 +1,14 @@
+{
+  "id": "time-time",
+  "name": "Time Time",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Show the current time inside the interface.",
+  "api": 4,
+  "entry": "main.py",
+  "permissions": [
+    "ui"
+  ],
+  "tags": ["interface","utility"],
+  "homepage": "https://github.com/yo-le-zz/Voktora"
+}
