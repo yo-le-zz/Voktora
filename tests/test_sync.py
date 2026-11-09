@@ -45,8 +45,10 @@ class FakeConfig:
 class Pc:
     def __init__(self, tmp, name):
         self.cfg = FakeConfig(tmp, name)
-        self.svc = SyncService(self.cfg.root / "data", self.cfg, {"plugin_settings": self.cfg.root / "plugins"})
+        self.svc = SyncService(self.cfg.root / "data", self.cfg, {"plugin_settings": self.cfg.root / "plugins",
+                                                                  "themes": self.cfg.root / "themes"})
         (self.cfg.root / "plugins").mkdir()
+        (self.cfg.root / "themes").mkdir()
         self.svc.settings["enabled"] = True
         self.svc.settings["device_name"] = name
         self.svc.settings["port"] = free_port()
@@ -626,3 +628,116 @@ def test_performance_profiles():
     assert s.performance_profile()["scans"] == 4
     s["performance"] = "auto"
     assert s.performance_profile()["mode"] in ("eco", "normal", "fast")
+
+
+# ── 1.1.0 : vérification rapide « déjà à jour », .voktoraignore ───────────────
+
+def test_quick_check_skips_full_analysis_when_nothing_changed(pcs):
+    main, laptop = pcs
+    a, b = setup_project(main, laptop, {"a.txt": "a\n", "sub/b.txt": "b\n"})
+    laptop.svc.sync_peer(main.id, "primary")
+    assert (laptop.svc.dir / "state").glob("quick-*.json")
+    laptop.svc.clear_log()
+    calls = []
+    real = laptop.svc.store.manifest
+    laptop.svc.store.manifest = lambda *x, **k: (calls.append(x), real(*x, **k))[1]
+    plan = laptop.svc.sync_peer(main.id)
+    assert plan is None and not [c for c in calls if c[0] != "cfg"]                       # aucune analyse complète : seulement les empreintes
+    assert laptop.svc.status[main.id]["state"] == DONE
+    assert any("Déjà à jour" in line for line in laptop.svc.logs)
+
+
+def test_quick_check_detects_change_on_either_pc(pcs):
+    main, laptop = pcs
+    a, b = setup_project(main, laptop, {"a.txt": "a\n"})
+    laptop.svc.sync_peer(main.id, "primary")
+    write(a, "new.txt", "nouveau\n")                         # modifié sur l'autre PC
+    laptop.svc.sync_peer(main.id)
+    assert (b / "new.txt").read_text() == "nouveau\n"
+    write(b, "from_laptop.txt", "x\n")                       # modifié sur CE PC
+    laptop.svc.sync_peer(main.id)
+    assert (a / "from_laptop.txt").exists() or (laptop.svc.status[main.id]["state"] == DONE)
+
+
+def test_quick_check_invalidated_by_settings_and_full_flag(pcs):
+    main, laptop = pcs
+    setup_project(main, laptop, {"a.txt": "a\n"})
+    laptop.svc.sync_peer(main.id, "primary")
+    laptop.svc.clear_log()
+    laptop.svc.sync_peer(main.id, full=True)                 # vérification complète demandée
+    assert not any("Déjà à jour" in line for line in laptop.svc.logs)
+    laptop.svc.settings["exclude"] = [*laptop.svc.settings["exclude"], "*.zzz"]
+    assert laptop.svc.settings.fingerprint() != laptop.svc._quick_load(main.id)["settings"]
+
+
+def test_voktoraignore_excludes_files_and_folders(pcs):
+    main, laptop = pcs
+    a, b = setup_project(main, laptop, {"a.txt": "a\n", "keep/k.txt": "k\n", "big/x.bin": "x\n", "n.tmp": "t\n",
+                                        ".voktoraignore": "# commentaire\nbig/\n*.tmp\n"})
+    laptop.svc.sync_peer(main.id, "primary")
+    assert (b / "a.txt").exists() and (b / "keep" / "k.txt").exists()
+    assert not (b / "big").exists() and not (b / "n.tmp").exists()
+
+
+# ── 1.1.0 : plus de configuration synchronisée (IA sans clés, comptes sans jetons, thèmes) ─────────────────
+
+def test_ai_providers_sync_without_api_keys(pcs):
+    main, laptop = pcs
+    main.cfg.cfg["app_config"]["ai"] = {"active": "p1", "providers": [
+        {"id": "p1", "kind": "openai", "name": "Routeur", "host": "http://x/v1", "model": "m", "api_key": "SECRET-A"}]}
+    laptop.cfg.cfg["app_config"]["ai"] = {"active": "", "providers": [
+        {"id": "p1", "kind": "openai", "name": "vieux", "host": "http://y/v1", "model": "z", "api_key": "MA-CLE"}]}
+    laptop.svc.sync_peer(main.id, "primary")
+    got = laptop.cfg.cfg["app_config"]["ai"]["providers"][0]
+    assert got["name"] == "Routeur" and got["model"] == "m"            # réglages reçus
+    assert got["api_key"] == "MA-CLE"                                  # clé locale conservée, celle de l'autre jamais reçue
+    assert "SECRET-A" not in json.dumps(laptop.cfg.cfg)
+    assert "SECRET-A" not in "".join(p.read_text(errors="ignore") for p in (laptop.cfg.root / "data").rglob("*") if p.is_file())
+
+
+def test_github_identity_syncs_but_never_the_token(pcs):
+    main, laptop = pcs
+    main.cfg.cfg["github_account"] = {"login": "yo-le-zz", "name": "Yolezz", "name_custom": True, "avatar_url": "u",
+                                      "token_encrypted": "TOKEN-SECRET"}
+    main.cfg.cfg["forge_accounts"] = [{"id": "a1", "kind": "gitlab", "host": "gitlab.com", "login": "yo", "label": "Mon GitLab",
+                                       "name": "Yo", "token_encrypted": "__vault__"}]
+    laptop.svc.sync_peer(main.id, "primary")
+    gh = laptop.cfg.cfg["github_account"]
+    assert gh["login"] == "yo-le-zz" and gh["name"] == "Yolezz" and gh["name_custom"] is True
+    assert not gh.get("token_encrypted")
+    forge = laptop.cfg.cfg["forge_accounts"][0]
+    assert forge["label"] == "Mon GitLab" and not forge["token_encrypted"] and forge["id"] != "a1"
+    assert "TOKEN-SECRET" not in json.dumps(laptop.cfg.cfg)
+
+
+def test_github_identity_not_overwritten_when_other_account_connected(pcs):
+    main, laptop = pcs
+    main.cfg.cfg["github_account"] = {"login": "compte-a", "name": "A", "token_encrypted": "x"}
+    laptop.cfg.cfg["github_account"] = {"login": "compte-b", "name": "B", "token_encrypted": "y"}
+    laptop.svc.sync_peer(main.id, "primary")
+    assert laptop.cfg.cfg["github_account"]["login"] == "compte-b"
+
+
+def test_themes_folder_is_synchronised(pcs):
+    main, laptop = pcs
+    write(main.cfg.root / "themes", "sombre.json", '{"name": "sombre"}\n')
+    setup_project(main, laptop, {"a.txt": "a\n"})
+    laptop.svc.sync_peer(main.id, "primary")
+    assert (laptop.cfg.root / "themes" / "sombre.json").read_text() == '{"name": "sombre"}\n'
+
+
+def test_dry_run_changes_nothing_and_lists_actions(pcs):
+    main, laptop = pcs
+    a, b = setup_project(main, laptop, {"a.txt": "a\n", "sub/b.txt": "b\n"})
+    plan = laptop.svc.sync_peer(main.id, "primary", dry_run=True)
+    assert plan is not None and plan.count("pull") == 2
+    assert not (b / "a.txt").exists()                               # rien n'a été copié
+    report = laptop.svc.last_dry_run[main.id]
+    assert any("a.txt" in line for line in report["lines"]) and "reçu" in report["summary"]
+    assert laptop.svc.history()[-1]["kind"] == "simulation"
+    laptop.svc.sync_peer(main.id, "primary")                          # la vraie synchro fait ensuite ce qui était annoncé
+    assert (b / "sub" / "b.txt").exists()
+    last = laptop.svc.history()[-1]
+    assert last["kind"] == "synchro" and any("sub/b.txt" in d for d in last["details"])
+    laptop.svc.clear_history()
+    assert laptop.svc.history() == []

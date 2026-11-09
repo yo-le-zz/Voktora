@@ -25,6 +25,10 @@ CATEGORIES = {
     "projects_meta": "Informations des projets (catégorie, statut, notes, icône…)",
     "project_files": "Fichiers des projets",
     "plugin_settings": "Réglages des plugins",
+    "ai_providers": "Fournisseurs IA et permissions de l'assistant (SANS les clés d'API)",
+    "accounts": "Comptes GitHub / forges : identité et nom affiché (jamais les jetons)",
+    "themes": "Thèmes personnalisés",
+    "profiles": "Profils de projets",
 }
 DEFAULTS: dict = {
     "enabled": False,
@@ -48,7 +52,9 @@ DEFAULTS: dict = {
     "invites": [],                      # [{"secret","expires"}] codes d'appairage en attente
     "log_enabled": True,                # journal de synchronisation (désactivable : plus léger)
     "log_level": "normal",              # "quiet" (essentiel) | "normal" (par projet) | "detailed" (par fichier)
-    "performance": "auto",              # "auto" | "eco" (PC peu puissant) | "normal" | "fast"
+    "performance": "auto",
+    "quick_check": True,
+    "full_check_hours": 12,              # "auto" | "eco" (PC peu puissant) | "normal" | "fast"
 }
 SECRET_KEYS = {"peers", "invites"}
 
@@ -127,6 +133,13 @@ class SyncSettings:
     def set_primary(self, device_id: str) -> None:
         self.data["primary_id"] = device_id
         self.data["role"] = "primary" if device_id == self.device_id else "secondary"
+
+    def fingerprint(self) -> str:
+        """Empreinte des réglages qui changent CE qui est synchronisé (vérification rapide invalidée s'ils changent)."""
+        import hashlib
+        import json
+        keys = ("categories", "exclude", "only_projects", "max_file_mb", "include_git", "include_regenerable", "primary_id")
+        return hashlib.sha1(json.dumps({k: self.data.get(k) for k in keys}, sort_keys=True).encode()).hexdigest()
 
     def category(self, name: str) -> bool:
         return bool(self.data["categories"].get(name, False))

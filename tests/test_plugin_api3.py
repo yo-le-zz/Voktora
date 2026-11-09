@@ -28,7 +28,7 @@ def _host(isolated_data_dir):
 
 
 def test_api_version_and_permissions_declared():
-    assert manifest.API_VERSION == 3
+    assert manifest.API_VERSION == 4
     for p in ("config.read", "config.write", "quick_actions", "snapshots", "diskusage", "forges", "sync",
               "plugins.manage", "security", "vault"):
         assert p in manifest.PERMISSIONS

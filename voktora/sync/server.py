@@ -194,6 +194,9 @@ class _Handler(BaseHTTPRequestHandler):
             return self._fail(423, "verrou absent : appelez /lock d'abord")
         if route == "/spaces":
             return self._json({"spaces": store.spaces()})
+        if route == "/signatures":
+            o.session.touch(dev)
+            return self._json({"sigs": store.signatures()})
         if route == "/manifest":
             return self._manifest(query["space"])
         if route == "/file" and method == "GET":

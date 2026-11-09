@@ -126,3 +126,56 @@ def test_forges_dialog_builds(isolated_data_dir):
     assert dlg.repos.count() == 1 and "fork de o/x" in dlg.repos.item(0).text()
     dlg.only_forks.setChecked(True)
     assert dlg.repos.count() == 1
+
+
+# ── 1.1.0 : tickets / demandes de fusion / CI en lecture seule ────────────────────────────
+
+def _client(cls, routes, host="h"):
+    client = cls(host, "tok")
+    client._get = lambda path: next(v for k, v in routes.items() if path.startswith(k))
+    return client
+
+
+def test_github_issues_pulls_ci():
+    c = _client(GitHubClient, {
+        "/repos/o/r/issues": [{"number": 1, "title": "bug", "user": {"login": "a"}, "html_url": "u1", "updated_at": "2026-11-01T10"},
+                              {"number": 2, "title": "une PR", "pull_request": {}, "user": {"login": "b"}}],
+        "/repos/o/r/pulls": [{"number": 2, "title": "une PR", "user": {"login": "b"}, "html_url": "u2", "draft": True}],
+        "/repos/o/r/actions/runs": {"workflow_runs": [{"status": "completed", "conclusion": "failure", "name": "CI", "html_url": "w"}]},
+    })
+    assert [i["number"] for i in c.issues("o", "r")] == [1]              # les PR ne sont pas des tickets
+    assert c.pulls("o", "r")[0]["draft"] is True
+    assert c.ci("o", "r") == {"state": "failure", "name": "CI", "url": "w"}
+
+
+def test_gitlab_and_forgejo_activity():
+    g = _client(GitLabClient, {
+        "/projects/o%2Fr/issues": [{"iid": 3, "title": "t", "author": {"username": "u"}, "web_url": "w"}],
+        "/projects/o%2Fr/merge_requests": [{"iid": 4, "title": "mr", "author": {"username": "u"}, "web_url": "m"}],
+        "/projects/o%2Fr/pipelines": [{"id": 9, "status": "success", "web_url": "p"}]})
+    assert g.issues("o", "r")[0]["number"] == 3 and g.pulls("o", "r")[0]["number"] == 4
+    assert g.ci("o", "r")["state"] == "success"
+    f = _client(ForgejoClient, {
+        "/repos/o/r/issues": [{"number": 5, "title": "t", "user": {"login": "x"}, "html_url": "w"}],
+        "/repos/o/r/pulls": [],
+        "/repos/o/r/commits/main/status": {"state": "pending"},
+        "/repos/o/r": {"full_name": "o/r", "default_branch": "main"}}, "forge.fedoraproject.org")
+    assert f.issues("o", "r")[0]["number"] == 5 and f.pulls("o", "r") == []
+    assert f.ci("o", "r")["state"] == "pending"
+
+
+def test_project_activity_collects_errors_without_failing(monkeypatch):
+    class Boom(GitHubClient):
+        def issues(self, *a, **k):
+            return [{"number": 1}]
+
+        def pulls(self, *a, **k):
+            raise ForgeError("403")
+
+        def ci(self, *a, **k):
+            return {"state": "success"}
+
+    monkeypatch.setattr(hub, "project_info", lambda p: hub.ProjectForgeInfo(origin=parse_remote("https://github.com/o/r")))
+    monkeypatch.setattr(hub, "_client_for_origin", lambda origin: Boom("github.com", ""))
+    out = hub.project_activity("x")
+    assert out["issues"] == [{"number": 1}] and out["ci"]["state"] == "success" and "pulls : 403" in out["errors"][0]

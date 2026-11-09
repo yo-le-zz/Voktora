@@ -52,6 +52,9 @@ EVENTS: dict[str, str] = {
     "on_rename":        "Un projet a été renommé (ctx.project_path, ctx.data['old_path']).",
     "on_refresh":       "La liste des projets a été rafraîchie.",
     "on_theme_changed": "Le thème a changé (ctx.data['theme']).",
+    # API 4 (Voktora 1.1.0)
+    "on_sync_start":    "Une synchronisation commence (ctx.data['peer']).",
+    "on_sync_done":     "Une synchronisation se termine (ctx.data : peer, summary, errors, seconds, quick).",
 }
 
 SLOW_HANDLER_SECONDS = 0.25      # au-delà, l'événement est noté comme « lent » dans le gestionnaire

@@ -100,7 +100,7 @@ def client_for(account_id: str):
         raise ForgeError("Compte de forge introuvable.")
     token = get_token(account_id)
     if not token:
-        raise ForgeError("Jeton indisponible : déverrouillez le coffre (Vault) puis réessayez.")
+        raise ForgeError("Jeton indisponible sur ce PC : reconnectez ce compte (les jetons ne sont jamais synchronisés) ou déverrouillez le coffre.")
     return make_client(acc["kind"], acc["host"], token)
 
 

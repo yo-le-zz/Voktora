@@ -83,6 +83,7 @@ class SyncDialog(QDialog):
         tabs.addTab(self._build_content(), "📦 Contenu")
         tabs.addTab(self._build_auto(), "⚙️ Automatisme")
         tabs.addTab(self._build_log(), "📜 Journal")
+        tabs.addTab(self._build_history(), "🕘 Historique")
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Close)
         buttons.button(QDialogButtonBox.Save).setText("Enregistrer")
         buttons.button(QDialogButtonBox.Close).setText("Fermer")
@@ -327,10 +328,56 @@ class SyncDialog(QDialog):
         (QMessageBox.information if all(ok for ok, _ in steps) else QMessageBox.warning)(
             self, "Test de connexion", text)
 
-    def _sync_now(self, peer_id: str) -> None:
+    def _sync_now(self, peer_id: str, full: bool = False) -> None:
         import threading
         self.s["enabled"] = True
-        threading.Thread(target=self.svc.sync_peer, args=(peer_id,), daemon=True, name="voktora-sync-now").start()
+        threading.Thread(target=self.svc.sync_peer, args=(peer_id,), kwargs={"full": full}, daemon=True,
+                         name="voktora-sync-now").start()
+
+    def _simulate(self, peer_id: str) -> None:
+        """Simulation : calcule le plan sans rien écrire, puis l'affiche quand il est prêt."""
+        import threading
+        self._sim_wait = peer_id
+        threading.Thread(target=self.svc.sync_peer, args=(peer_id,), kwargs={"dry_run": True}, daemon=True,
+                         name="voktora-sync-dry").start()
+
+    def _show_simulation(self, peer_id: str) -> None:
+        report = self.svc.last_dry_run.get(peer_id)
+        if not report:
+            return
+        box = QMessageBox(self)
+        box.setWindowTitle("Simulation de synchronisation")
+        box.setText(f"Résultat : {report['summary']}\n(rien n'a été modifié)")
+        box.setDetailedText("\n".join(report["lines"]) or "Rien à faire.")
+        box.exec()
+
+    def _build_history(self) -> QWidget:
+        page = QWidget()
+        lay = QVBoxLayout(page)
+        bar = QHBoxLayout()
+        bar.addStretch()
+        clear = QPushButton("Vider l'historique")
+        clear.clicked.connect(lambda: (self.svc.clear_history(), self._fill_history()))
+        bar.addWidget(clear)
+        lay.addLayout(bar)
+        self.history_view = QPlainTextEdit()
+        self.history_view.setReadOnly(True)
+        lay.addWidget(self.history_view)
+        hint = QLabel("Les fichiers supprimés par une synchronisation restent 30 jours dans la corbeille de synchro.")
+        hint.setStyleSheet("color:#7f849c;")
+        lay.addWidget(hint)
+        self._fill_history()
+        return page
+
+    def _fill_history(self) -> None:
+        blocks = []
+        for e in reversed(self.svc.history()):
+            head = (f"{time.strftime('%d/%m %H:%M', time.localtime(e['ts']))} — {e['kind']} avec {e['peer']} "
+                    f"({e['seconds']} s) : {e['summary']}")
+            body = "".join(f"\n    {d}" for d in e.get("details", [])[:40])
+            err = "".join(f"\n    ⚠ {x}" for x in e.get("errors", []))
+            blocks.append(head + body + err)
+        self.history_view.setPlainText("\n\n".join(blocks) or "Aucune synchronisation enregistrée.")
 
     def _make_row(self, peer: dict) -> dict:
         frame = QWidget()
@@ -352,7 +399,13 @@ class SyncDialog(QDialog):
         test.clicked.connect(lambda _=False, pid=peer["id"]: self._diagnose(pid))
         forget = QPushButton("Oublier")
         forget.clicked.connect(lambda _=False, pid=peer["id"]: self._forget(pid))
-        for button in (now, test, forget):
+        dry = QPushButton("Simuler")
+        dry.setToolTip("Montre ce qui serait copié ou supprimé, sans rien modifier")
+        dry.clicked.connect(lambda _=False, pid=peer["id"]: self._simulate(pid))
+        full = QPushButton("Vérification complète")
+        full.setToolTip("Ignore la vérification rapide : relit et compare tous les fichiers")
+        full.clicked.connect(lambda _=False, pid=peer["id"]: self._sync_now(pid, True))
+        for button in (now, dry, full, test, forget):
             buttons.addWidget(button)
         buttons.addStretch()
         col.addLayout(buttons)
@@ -416,6 +469,13 @@ class SyncDialog(QDialog):
                            f"({resume.get('done', 0)} action(s) faites) : elle reprendra exactement à cet endroit.")
             row["info"].setText(f"{detail}\n{st.get('summary', '')}".strip())
         self._refresh_log(snap)
+        waiting = getattr(self, "_sim_wait", None)
+        if waiting and snap["peers"].get(waiting, {}).get("detail", "").startswith("simulation terminée"):
+            self._sim_wait = None
+            self._show_simulation(waiting)
+        if time.monotonic() - getattr(self, "_hist_at", 0) > 5:
+            self._hist_at = time.monotonic()
+            self._fill_history()
         from sync import net
         if time.monotonic() - getattr(self, "_addr_at", 0) > 30:     # lecture des interfaces réseau : pas à chaque tick
             self._addr_at, self._addrs = time.monotonic(), net.local_addresses()

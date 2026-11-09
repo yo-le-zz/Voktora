@@ -5,6 +5,45 @@ Format : [Semantic Versioning](https://semver.org/) — `MAJEUR.MINEUR.CORRECTIF
 
 ---
 
+## [1.1.0] — 2026-11-09
+
+### ⚡ Synchronisation
+- **Vérification rapide « déjà à jour »** : à la fin de chaque synchro réussie, Voktora garde une empreinte (noms + tailles +
+  dates, **aucun contenu lu**) de chaque espace sur les deux PC. À la synchro suivante, si rien n'a bougé, c'est terminé en
+  une fraction de seconde au lieu d'une analyse complète. Analyse complète quand même si un réglage de contenu change, si
+  quelque chose a bougé, ou toutes les 12 h (réglable) ; bouton **Vérification complète** pour la forcer.
+- **Simuler** (dry-run) : montre ce qui serait reçu / envoyé / supprimé sans rien modifier.
+- **Historique** : onglet dédié (date, PC, résumé, détails des fichiers, erreurs) ; les suppressions restent 30 jours en corbeille.
+- **`.voktoraignore`** : fichier à la racine d'un projet, un motif par ligne (`big/`, `*.tmp`), exclut des fichiers/dossiers de la synchro.
+- **Beaucoup plus de configuration synchronisée** : fournisseurs IA et permissions de l'assistant (**sans les clés d'API**,
+  qui restent propres à chaque PC), identité du compte GitHub et nom affiché, comptes GitLab/Forgejo (libellés ; **jamais les
+  jetons**), thèmes personnalisés, profils de projets. Les nouvelles catégories se règlent dans l'onglet *Contenu*.
+
+### 💬 Assistant IA avec outils
+- Nouvelle fenêtre **Assistant IA** (Ctrl+Maj+A) : discussion avec le fournisseur actif (Ollama, OmniRoute, compatible OpenAI) qui
+  peut **utiliser les outils de Voktora** : lister projets, lire/modifier les infos d'un projet, rechercher, état Git global,
+  dépôts du compte, cloner, compte GitHub/forges, synchronisation (état/lancement), plugins (lister, installer, désinstaller,
+  activer/désactiver), réglages (lire/modifier), commandes dans un projet.
+- **Permissions** par outil : *désactivé* (l'outil n'est même pas présenté au modèle), *demander*, *automatique* (lecture
+  seule uniquement). Toute action qui modifie demande **toujours** confirmation. Jetons/clés/coffre jamais renvoyés au modèle ;
+  commandes sans shell, avec délai ; boucle limitée à 6 outils par message.
+
+### 📊 Gérer 100+ projets
+- **Vue d'ensemble** : état Git de tous les projets en un tableau (modifications, retard, à pousser, sans distant, sans Git,
+  dossier manquant) avec filtres, **actions groupées** `fetch` et `pull --ff-only` (jamais de push ni de commit).
+- **Recherche globale** dans les noms de projets, de fichiers et leur contenu (ripgrep si présent).
+- **Projets orphelins** (dossiers non enregistrés) et **Tickets / demandes de fusion / CI** d'un projet (GitHub, GitLab, Forgejo,
+  lecture seule).
+- **Palette de commandes** (Ctrl+K) : toutes les actions des menus et l'ouverture d'un projet.
+
+### 🔌 Plugins — API 4
+- Nouveaux événements `on_sync_start`, `on_sync_done` ; nouvelles méthodes `fleet_states()`, `search_projects()`,
+  `project_update()` (confirmé), `ai_ask()` (confirmé) ; permissions `fleet`, `projects.write`, `ai`.
+
+### 🛠️ Fiabilité
+- Sauvegarde automatique de `config.json` à chaque changement de version (`config.backup-<ancienne>.json`, 5 conservées).
+- CI : workflow `packages-smoke` (syntaxe des scripts d'installation, version identique, `makepkg --printsrcinfo`).
+
 ## [1.0.9] — 2026-11-08
 
 ### 🔄 Synchronisation : journal maîtrisé, PC modestes, entrées au fil de l'eau, vraie reprise

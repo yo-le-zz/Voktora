@@ -19,7 +19,7 @@ import core
 import plugins
 import theme_manager
 from plugins.ui_host import UIHost
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
@@ -69,6 +69,11 @@ from . import (
     uninstall_dialog,
     workers,
 )
+
+
+class _SyncEvents(QObject):
+    """Passe les événements de synchronisation (fils de travail) au fil de l'interface."""
+    fired = Signal(str, dict)
 
 
 class MainWindow(QMainWindow):
@@ -483,6 +488,17 @@ class MainWindow(QMainWindow):
         act_sync = QAction("🔄 Synchronisation entre PC...", self)
         act_sync.triggered.connect(self.act_sync)
         menu_tools.addAction(act_sync)
+        act_ai = QAction("💬 Assistant IA…", self)
+        act_ai.setShortcut("Ctrl+Shift+A")
+        act_ai.triggered.connect(self.act_ai_chat)
+        menu_tools.addAction(act_ai)
+        act_fleet = QAction("📊 Vue d'ensemble des projets…", self)
+        act_fleet.triggered.connect(self.act_fleet)
+        menu_tools.addAction(act_fleet)
+        act_palette = QAction("⌨️ Palette de commandes…", self)
+        act_palette.setShortcut("Ctrl+K")
+        act_palette.triggered.connect(self.act_palette)
+        menu_tools.addAction(act_palette)
         menu_tools.addSeparator()
         menu_tools.addAction(act_terminal)
         menu_tools.addAction(act_explorer)
@@ -1152,6 +1168,10 @@ class MainWindow(QMainWindow):
         self._sync_changed: dict[str, float] = {}
         self._sync_refresh_at = 0.0
         self._sync_bridge = SyncBridge(get_service())
+        # événements de synchro → plugins (dans le fil de l'interface : un plugin peut toucher à l'UI)
+        self._sync_events = _SyncEvents()
+        self._sync_events.fired.connect(lambda name, data: plugins.runtime.fire_hook(name, data=data))
+        get_service().event_hook = lambda name, data: self._sync_events.fired.emit(name, data)
         self._sync_bridge.changed.connect(self._on_sync_changed)
         QTimer.singleShot(1500, get_service().start)
 
@@ -1204,6 +1224,39 @@ class MainWindow(QMainWindow):
         from ui_dialogs import ask_source
         choice = ask_source(self, name, summary)
         get_service().resolve(peer_id, choice)
+
+    def act_fleet(self) -> None:
+        """État de tous les projets, actions groupées, recherche globale, tickets / CI."""
+        from sync import get_service
+        from ui_dialogs import FleetDialog
+        workers = {"eco": 2, "normal": 4, "fast": 8}.get(get_service().settings.performance_profile()["mode"], 4)
+        dlg = FleetDialog(self, workers)
+        dlg.open_project.connect(lambda path: (dlg.close(), self._on_project_selected(path)) if path else None)
+        dlg.show()
+        self._fleet = dlg
+
+    def act_palette(self) -> None:
+        """Ctrl+K : lancer une action de menu ou ouvrir un projet en tapant quelques lettres."""
+        from ui_dialogs import PaletteDialog, collect_actions
+        entries = [(label, action.trigger) for label, action in collect_actions(self.menuBar())]
+        for entry in core.list_projects():
+            if entry.get("path"):
+                entries.append((f"Ouvrir le projet › {entry.get('name') or Path(entry['path']).name}",
+                                lambda p=entry["path"]: self._on_project_selected(p)))
+        dlg = PaletteDialog(self, entries)
+        dlg.move(self.geometry().center().x() - 280, self.geometry().top() + 90)
+        dlg.show()
+        dlg.edit.setFocus()
+        self._palette = dlg
+
+    def act_ai_chat(self) -> None:
+        """Chat IA avec outils (permissions réglables). Fenêtre non modale : on peut continuer à travailler."""
+        from ui_dialogs import AIChatDialog
+        if getattr(self, "_ai_chat", None) is None:
+            self._ai_chat = AIChatDialog(self)
+        self._ai_chat.show()
+        self._ai_chat.raise_()
+        self._ai_chat.activateWindow()
 
     def act_sync(self) -> None:
         from ui_dialogs import SyncDialog

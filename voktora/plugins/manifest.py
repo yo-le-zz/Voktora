@@ -27,7 +27,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-API_VERSION = 3                       # version de l'API de plugins fournie par cette version de Voktora
+API_VERSION = 4                       # version de l'API de plugins fournie par cette version de Voktora
 MANIFEST_NAME = "plugin.json"
 
 # Permissions déclarables. Elles sont affichées avant l'installation et vérifiées par l'API.
@@ -48,6 +48,10 @@ PERMISSIONS: dict[str, str] = {
     "plugins.manage": "Lister les plugins et les activer/désactiver (confirmé)",
     "security":      "Lire l'état de sécurité (coffre, plugins, révocations, synchro) et auditer du code",
     "vault":         "Verrouiller le coffre et garder des secrets propres au plugin dans le coffre",
+    # API 4 (Voktora 1.1.0)
+    "fleet":         "Voir l'état Git de tous vos projets et chercher dans leurs fichiers",
+    "projects.write": "Modifier les informations d'un projet (description, catégorie, statut… ; confirmé)",
+    "ai":            "Envoyer une question au fournisseur IA configuré (confirmé à chaque appel)",
 }
 
 ID_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$")

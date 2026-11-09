@@ -26,3 +26,11 @@ def _changelog_top_version() -> str:
 
 def test_all_version_declarations_match():
     assert _pyproject_version() == _version_txt() == core.APP_VERSION == _changelog_top_version()
+
+
+def test_packaging_files_use_the_same_version():
+    version = core.APP_VERSION
+    pkgbuild = (ROOT / "Installers" / "Arch installer" / "PKGBUILD").read_text(encoding="utf-8")
+    assert f"pkgver={version}" in pkgbuild
+    for name in ("Cargo.toml", "pyproject.toml"):
+        assert f'version = "{version}"' in (ROOT / "native" / name).read_text(encoding="utf-8")

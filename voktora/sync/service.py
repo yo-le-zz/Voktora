@@ -16,6 +16,7 @@ import threading
 import time
 import traceback
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import net, secure
@@ -46,6 +47,8 @@ class SyncService:
         self._pending: dict[str, Plan] = {}
         self._requested: set[str] = set()
         self._cancel_flag = threading.Event()
+        self.last_dry_run: dict[str, dict] = {}
+        self.event_hook = None        # (nom, dict) -> None : événements pour les plugins (branché par l'interface)
         self._tick = 0
         self.logs: collections.deque[str] = collections.deque(maxlen=400)
         self.log_total = 0                       # nombre total de lignes émises (l'interface n'ajoute que les nouvelles)
@@ -340,7 +343,8 @@ class SyncService:
     def _first_sync(self) -> str:
         return {"ask": "ask"}.get(self.settings["policy"], "primary")
 
-    def sync_peer(self, peer_id: str, first_sync: str | None = None) -> Plan | None:
+    def sync_peer(self, peer_id: str, first_sync: str | None = None, full: bool = False,
+                  dry_run: bool = False) -> Plan | None:
         """Synchronise avec un pair (appelable depuis l'UI ou la surveillance). Retourne le plan exécuté,
         ou celui en attente d'une décision de l'utilisateur."""
         peer = self.settings.peer(peer_id)
@@ -352,6 +356,7 @@ class SyncService:
         plan = None
         started = time.monotonic()
         try:
+            self._event("on_sync_start", peer=peer["name"], dry_run=dry_run)
             self._progress(peer_id, 0, f"Connexion à {peer['name']} ({peer['host']}:{peer['port']})…")
             self.log(f"Début de la synchronisation avec {peer['name']} ({'principal' if self.peer_is_primary(peer_id) else 'secondaire'})", peer_id)
             try:
@@ -371,6 +376,16 @@ class SyncService:
             fresh = bool(resume) and time.time() - resume.get("ts", 0) < 86400
             if fresh and not first_sync and resume.get("choice"):
                 first_sync = resume["choice"]                       # choix déjà fait avant la coupure
+            if not (fresh and resume.get("status") in ("interrupted", "running")) and not first_sync and not full \
+                    and not dry_run and self._quick_unchanged(peer_id, remote):
+                elapsed = time.monotonic() - started
+                self.log(f"Déjà à jour (vérification rapide en {elapsed:.1f} s : aucun fichier modifié sur les deux PC)", peer_id)
+                self._clear_resume(peer_id)
+                self._event("on_sync_done", peer=peer["name"], summary="déjà à jour", errors=[], seconds=round(elapsed, 1),
+                            quick=True)
+                self._set(peer_id, state=DONE, percent=100, last_sync=time.time(), summary="déjà à jour",
+                          detail=f"à jour (vérifié en {elapsed:.1f} s)")
+                return None
             engine = SyncEngine(self.store, remote, peer_id, self.settings, self.dir / "state" / "base",
                                 self.settings.is_primary, lambda p, d: self._progress(peer_id, p, d),
                                 self._cancel_flag.is_set, self.settings["device_name"],
@@ -393,6 +408,14 @@ class SyncService:
                 self._set(peer_id, state=DECISION, percent=0, summary=plan.summary(),
                           detail="les deux PC ont des contenus différents : choisissez la source")
                 return plan
+            if dry_run:
+                lines = self.describe_plan(plan)
+                self.last_dry_run[peer_id] = {"ts": time.time(), "summary": plan.summary(), "lines": lines}
+                self.log(f"Simulation : {plan.summary()} — rien n'a été modifié", peer_id)
+                self._history_add(peer_id, peer["name"], "simulation", plan, time.monotonic() - started, [])
+                self._set(peer_id, state=DONE, percent=100, summary=plan.summary(),
+                          detail="simulation terminée : rien n'a été modifié")
+                return plan
             self._pending.pop(peer_id, None)
             result = engine.apply(plan)
             problems = result["errors"]
@@ -401,6 +424,13 @@ class SyncService:
             elapsed = time.monotonic() - started
             self.log(f"Terminé en {elapsed:.1f} s : {plan.summary()}" + (f" — {len(problems)} erreur(s)" if problems else ""), peer_id)
             self._clear_resume(peer_id)
+            self._history_add(peer_id, peer["name"], "synchro", plan, elapsed, problems)
+            self._event("on_sync_done", peer=peer["name"], summary=plan.summary(), errors=[str(p)[:200] for p in problems[:5]],
+                        seconds=round(elapsed, 1), quick=False)
+            if not problems and not plan.warnings:
+                self._quick_save(peer_id, remote)
+            else:
+                self._quick_forget(peer_id)
             self._set(peer_id, state=DONE if not problems else ERROR, percent=100, last_sync=time.time(),
                       summary=plan.summary(), detail="à jour" if not problems else f"{len(problems)} erreur(s) : {problems[0]}")
         except Cancelled:
@@ -430,6 +460,114 @@ class SyncService:
             self._run.release()
             self._emit(force=True)
         return plan
+
+    def _event(self, name: str, **data) -> None:
+        hook = self.event_hook
+        if hook:
+            with contextlib.suppress(Exception):       # un plugin ne doit jamais casser la synchronisation
+                hook(name, data)
+
+    # ── simulation et historique ──────────────────────────────────────────────
+
+    def describe_plan(self, plan: Plan, limit: int = 300) -> list[str]:
+        """Une ligne par action prévue (« reçu : projet/fichier ») — pour la simulation et l'historique."""
+        labels = {"pull": "reçu", "push": "envoyé", "merge": "fusionné", "del_local": "supprimé ici",
+                  "del_remote": "supprimé là-bas"}
+        lines = [f"{labels.get(a.kind, a.kind)} : {a.space.split(':', 1)[-1]}/{a.rel}" + (f"  ({a.note})" if a.note else "")
+                 for a in plan.actions[:limit]]
+        if len(plan.actions) > limit:
+            lines.append(f"… et {len(plan.actions) - limit} autre(s)")
+        for decision in plan.decisions:
+            lines.append(f"à trancher : {decision}")
+        return lines
+
+    def _history_path(self) -> Path:
+        return self.dir / "state" / "history.json"
+
+    def history(self) -> list[dict]:
+        import json
+        try:
+            return json.loads(self._history_path().read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return []
+
+    def _history_add(self, peer_id: str, peer_name: str, kind: str, plan: Plan, seconds: float, errors: list) -> None:
+        import json
+        entries = self.history()
+        entries.append({"ts": time.time(), "peer": peer_name, "kind": kind, "summary": plan.summary(),
+                        "seconds": round(seconds, 1), "errors": [str(e)[:200] for e in errors[:5]],
+                        "details": self.describe_plan(plan, 40)})
+        with contextlib.suppress(OSError):
+            path = self._history_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(entries[-100:], ensure_ascii=False), encoding="utf-8")
+
+    def clear_history(self) -> None:
+        with contextlib.suppress(OSError):
+            self._history_path().unlink()
+
+    # ── vérification rapide « déjà à jour » ─────────────────────────────────
+
+    def _quick_path(self, peer_id: str) -> Path:
+        return self.dir / "state" / f"quick-{peer_id[:16]}.json"
+
+    def _quick_forget(self, peer_id: str) -> None:
+        with contextlib.suppress(OSError):
+            self._quick_path(peer_id).unlink()
+
+    def _both_signatures(self, remote) -> tuple[dict, dict]:
+        """Empreintes locales et distantes calculées en même temps (aucun contenu lu)."""
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="voktora-sig") as pool:
+            far = pool.submit(remote.signatures)
+            near = self.store.signatures(self._cancel_flag.is_set)
+            return near, far.result()
+
+    def _quick_save(self, peer_id: str, remote) -> None:
+        import json
+        if not self.settings["quick_check"]:
+            return
+        try:
+            near, far = self._both_signatures(remote)
+            full_at = time.time()
+            payload = {"settings": self.settings.fingerprint(), "local": near, "remote": far, "full_at": full_at}
+            path = self._quick_path(peer_id)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(payload), encoding="utf-8")
+        except Exception as exc:  # noqa: BLE001 — optimisation seulement : jamais bloquant
+            self.log(f"Vérification rapide non enregistrée ({type(exc).__name__}: {exc})", peer_id, detail=True)
+
+    def _quick_load(self, peer_id: str) -> dict:
+        import json
+        try:
+            return json.loads(self._quick_path(peer_id).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+
+    def _quick_unchanged(self, peer_id: str, remote) -> bool:
+        """Vrai si, depuis la dernière synchro réussie, RIEN n'a bougé sur aucun des deux PC (empreinte de noms, tailles
+        et dates, sans lire de contenu). Une vérification complète est quand même faite toutes les `full_check_hours` h."""
+        if not self.settings["quick_check"]:
+            return False
+        saved = self._quick_load(peer_id)
+        if not saved or saved.get("settings") != self.settings.fingerprint():
+            return False
+        if time.time() - saved.get("full_at", 0) > float(self.settings["full_check_hours"]) * 3600:
+            self.log("Dernière vérification complète ancienne : analyse complète", peer_id, detail=True)
+            return False
+        self._progress(peer_id, 5, "Vérification rapide : y a-t-il quelque chose à synchroniser ?")
+        try:
+            near, far = self._both_signatures(remote)
+        except (ConnectionError, RemoteError):
+            raise
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"Vérification rapide impossible ({exc}) : analyse complète", peer_id, detail=True)
+            return False
+        if near == saved.get("local") and far == saved.get("remote"):
+            return True
+        changed = sorted({k for k in set(near) | set(saved.get("local", {})) if near.get(k) != saved.get("local", {}).get(k)}
+                         | {k for k in set(far) | set(saved.get("remote", {})) if far.get(k) != saved.get("remote", {}).get(k)})
+        self.log(f"Changements détectés dans {len(changed)} espace(s) : analyse complète", peer_id, detail=True)
+        return False
 
     # ── reprise après interruption ───────────────────────────────────────────
 

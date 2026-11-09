@@ -36,6 +36,10 @@ CFG = "cfg"
 APP_CONFIG_LOCAL_ONLY = {"window_geometry", "splitter_states", "github_client_id", "auth_method"}
 SECRET_WORDS = ("token", "secret", "password", "passwd", "credential", "api_key", "apikey")
 META_LOCAL_FIELDS = {"path", "drive", "name"}
+# Dossiers « extras » synchronisés (espace `x:<nom>`) et la catégorie qui les active.
+EXTRA_CATEGORY = {"plugin_settings": "plugin_settings", "themes": "themes", "profiles": "profiles"}
+AI_KEYS = ("ai", "ai_agent")                     # réglages IA : synchronisés SANS clés d'API
+ACCOUNT_FIELDS = ("login", "name", "name_custom", "avatar_url")
 GIT_NEVER = (".git/config", ".git/hooks", ".git/index.lock", ".git/gc.pid")
 
 
@@ -49,6 +53,34 @@ class ConfigIO(Protocol):
     def load(self) -> dict: ...
     def save(self, cfg: dict) -> None: ...
     def projects_root(self) -> Path: ...
+
+
+def _strip_ai_keys(ai):
+    """Copie de la config IA sans aucune clé d'API (elles restent propres à chaque PC)."""
+    if not isinstance(ai, dict):
+        return ai
+    out = json.loads(json.dumps(ai))
+    for provider in out.get("providers") or []:
+        if isinstance(provider, dict):
+            provider["api_key"] = ""
+    return out
+
+
+def _merge_ai(local, incoming):
+    """Config IA reçue + clés d'API déjà présentes ici (par identifiant de fournisseur)."""
+    if not isinstance(incoming, dict):
+        return incoming
+    keys = {p.get("id"): p.get("api_key", "") for p in (local or {}).get("providers", []) if isinstance(p, dict)}
+    merged = json.loads(json.dumps(incoming))
+    for provider in merged.get("providers") or []:
+        if isinstance(provider, dict):
+            provider["api_key"] = keys.get(provider.get("id"), "") or ""
+    return merged
+
+
+def _ignored(patterns: list[str], rel: str, name: str) -> bool:
+    import fnmatch
+    return any(fnmatch.fnmatch(name, p) or fnmatch.fnmatch(rel, p) or rel.startswith(p + "/") for p in patterns)
 
 
 class SyncPathError(ValueError):
@@ -125,8 +157,9 @@ class LocalStore:
             spaces.append(CFG)
         if s.category("project_files"):
             spaces += [f"p:{n}" for n in sorted(self.projects()) if s.project_selected(n)]
-        if s.category("plugin_settings") and "plugin_settings" in self.extras:
-            spaces.append("x:plugin_settings")
+        for extra in sorted(self.extras):
+            if s.category(EXTRA_CATEGORY.get(extra, extra)):
+                spaces.append(f"x:{extra}")
         return spaces
 
     def _root(self, space: str, create: bool = False) -> Path:
@@ -162,8 +195,10 @@ class LocalStore:
             return {}
         return self._scan(root, space.startswith("p:"), cancel, progress)
 
-    def _scan(self, root: Path, is_project: bool, cancel, progress=None) -> dict[str, Entry]:
+    def _scan(self, root: Path, is_project: bool, cancel, progress=None, stat_only: bool = False) -> dict[str, Entry]:
+        """`stat_only` : aucune lecture de contenu (taille + date seulement) — sert à la vérification rapide."""
         s = self.settings
+        ignore = self._ignore_patterns(root) if is_project else []
         last = [0.0]
 
         def tick(label: str) -> None:
@@ -202,12 +237,18 @@ class LocalStore:
                             continue
                         if rel in GIT_NEVER or any(rel.startswith(g + "/") for g in GIT_NEVER):
                             continue
+                        if ignore and _ignored(ignore, rel, entry.name):
+                            continue
                         stack.append(Path(entry.path))
                         continue
-                    if rel in GIT_NEVER or any(rel.startswith(g + "/") for g in GIT_NEVER) or s.excluded(rel):
+                    if rel in GIT_NEVER or any(rel.startswith(g + "/") for g in GIT_NEVER) or s.excluded(rel) \
+                            or (ignore and _ignored(ignore, rel, entry.name)):
                         continue
                     st = entry.stat(follow_symlinks=False)
                     if st.st_size > limit:
+                        continue
+                    if stat_only:
+                        result[rel] = Entry(str(st.st_mtime_ns), st.st_size, st.st_mode & 0o111)
                         continue
                     tick(rel)
                     touched.add(entry.path)
@@ -215,9 +256,43 @@ class LocalStore:
                                         st.st_size, st.st_mode & 0o111)
                 except (OSError, ValueError):
                     continue
-        self._prune_cache(str(root) + os.sep, touched)
-        self._save_cache()
+        if not stat_only:
+            self._prune_cache(str(root) + os.sep, touched)
+            self._save_cache()
         return result
+
+    @staticmethod
+    def _ignore_patterns(root: Path) -> list[str]:
+        """Motifs du fichier `.voktoraignore` du projet (un par ligne, `#` = commentaire, style .gitignore simplifié)."""
+        try:
+            text = (root / ".voktoraignore").read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return []
+        return [ln.strip().rstrip("/") for ln in text.splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+
+    # ── vérification rapide : empreinte d'un espace sans lire aucun contenu ──
+
+    def signature(self, space: str, cancel=None) -> str:
+        """Empreinte d'un espace : noms + tailles + dates (pas de lecture des fichiers). Identique = rien n'a bougé."""
+        if space == CFG:
+            entries = self.manifest(CFG)
+        else:
+            root = self._root(space)
+            entries = self._scan(root, space.startswith("p:"), cancel, None, stat_only=True) if root.is_dir() else {}
+        digest = hashlib.sha1()
+        for rel in sorted(entries):
+            e = entries[rel]
+            digest.update(f"{rel}\0{e.sha}\0{e.size}\0{e.mode}\n".encode("utf-8", "replace"))
+        return digest.hexdigest()
+
+    def signatures(self, cancel=None) -> dict[str, str]:
+        out = {}
+        for space in self.spaces():
+            try:
+                out[space] = self.signature(space, cancel)
+            except SyncPathError:
+                continue
+        return out
 
     def _prune_cache(self, prefix: str, touched: set[str]) -> None:
         """Oublie les fichiers disparus de ce dossier (le cache ne grossit pas indéfiniment : 100+ projets)."""
@@ -387,12 +462,24 @@ class LocalStore:
         for key, value in (cfg.get("app_config") or {}).items():
             if key in APP_CONFIG_LOCAL_ONLY or is_secret_key(key):
                 continue
-            if key == "quick_apps":
+            if key in AI_KEYS:
+                if not s.category("ai_providers"):
+                    continue
+                value = _strip_ai_keys(value) if key == "ai" else value
+            elif key == "quick_apps":
                 if not s.category("quick_actions"):
                     continue
             elif not s.category("config"):
                 continue
             out[f"app_config/{key}"] = _json_bytes(value)
+        if s.category("accounts"):
+            gh = cfg.get("github_account") or {}
+            if gh.get("login"):
+                out["account/github"] = _json_bytes({k: gh.get(k) for k in ACCOUNT_FIELDS})
+            for acc in cfg.get("forge_accounts") or []:
+                if isinstance(acc, dict) and acc.get("host") and acc.get("login"):
+                    out[f"account/forge/{acc['host']}__{acc['login']}"] = _json_bytes(
+                        {k: acc.get(k) for k in ("kind", "host", "login", "label", "name")})
         if s.category("categories"):
             out["categories"] = _json_bytes(cfg.get("categories", []))
             out["custom_statuses"] = _json_bytes(cfg.get("custom_statuses", {}))
@@ -409,6 +496,34 @@ class LocalStore:
                         out[f"meta/{name}/{field}"] = _json_bytes(value)
         return out
 
+    @staticmethod
+    def _account_set(cfg: dict, parts: list[str], value, delete: bool) -> None:
+        """Identité des comptes uniquement : jamais de jeton, jamais de suppression de compte à distance."""
+        if delete or not isinstance(value, dict):
+            return
+        if parts == ["account", "github"]:
+            acc = cfg.setdefault("github_account", {})
+            if acc.get("token_encrypted") and acc.get("login") and acc["login"] != value.get("login"):
+                return                                           # ce PC est connecté à un AUTRE compte : on n'y touche pas
+            for k in ACCOUNT_FIELDS:
+                if k in value:
+                    acc[k] = value[k]
+            acc["login_seen"] = acc.get("login")
+        elif len(parts) == 3 and parts[1] == "forge":
+            accounts = cfg.setdefault("forge_accounts", [])
+            host, login = str(value.get("host", "")), str(value.get("login", ""))
+            if not host or not login:
+                return
+            mine = next((a for a in accounts if a.get("host") == host and a.get("login") == login), None)
+            if mine is None:
+                import uuid
+                mine = {"id": uuid.uuid4().hex[:12], "kind": value.get("kind", ""), "host": host, "login": login,
+                        "token_encrypted": ""}                   # à reconnecter sur ce PC : le jeton ne voyage jamais
+                accounts.append(mine)
+            for k in ("label", "name", "kind"):
+                if value.get(k):
+                    mine[k] = value[k]
+
     def _cfg_set(self, rel: str, value, delete: bool = False) -> None:
         if self._cfg is None:
             self._cfg = self.config_io.load()
@@ -420,8 +535,12 @@ class LocalStore:
             app = cfg.setdefault("app_config", {})
             if delete:
                 app.pop(parts[1], None)
+            elif parts[1] == "ai":
+                app["ai"] = _merge_ai(app.get("ai"), value)     # les clés d'API de CE PC sont conservées
             else:
                 app[parts[1]] = value
+        elif parts[0] == "account":
+            self._account_set(cfg, parts, value, delete)
         elif rel in ("categories", "custom_statuses"):
             if not delete:
                 cfg[rel] = value

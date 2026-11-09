@@ -170,6 +170,10 @@ class RemoteStore:
     def spaces(self) -> list[str]:
         return list(self._retry(lambda: self._call("GET", "/spaces"))["spaces"])
 
+    def signatures(self) -> dict[str, str]:
+        """Empreintes rapides de tous les espaces de l'autre PC (aucune lecture de fichier là-bas)."""
+        return dict(self._retry(lambda: self._call("GET", "/signatures"))["sigs"])
+
     def manifest(self, space: str, progress=None, on_retry=None) -> dict[str, Entry]:
         """Liste des fichiers d'un espace. Pendant que l'autre PC analyse, `progress(n, étiquette)` est appelé."""
         return self._retry(lambda: self._manifest_once(space, progress), on_retry)
