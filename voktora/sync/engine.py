@@ -180,7 +180,7 @@ def _label(space: str) -> str:
         return "les réglages"
     if space.startswith("p:"):
         return f"projet « {space[2:]} »"
-    return "réglages des plugins" if space == "x:plugin_settings" else space
+    return {"x:plugin_settings": "réglages des plugins", "x:themes": "thèmes", "x:profiles": "profils de projets"}.get(space, space)
 
 
 class SyncEngine:
@@ -237,7 +237,7 @@ class SyncEngine:
                     spaces.append(s)
         projects = sorted(s for s in spaces if s.startswith("p:"))
         # Réglages d'abord : la liste des projets apparaît tout de suite ; les fichiers arrivent ensuite projet par projet.
-        return ([CFG] if CFG in spaces else []) + [s for s in spaces if s == "x:plugin_settings"] + projects
+        return ([CFG] if CFG in spaces else []) + [s for s in spaces if s.startswith("x:")] + projects
 
     def _remote(self, fn, *args):
         try:

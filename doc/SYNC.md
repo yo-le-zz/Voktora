@@ -69,3 +69,13 @@ Les réglages des plugins peuvent contenir des secrets propres à ces plugins : 
   coupure, la synchro reprend là où elle s'était arrêtée : seules les actions restantes sont refaites, le pourcentage
   repart de sa valeur, le choix de source du premier échange est conservé, les `.part` de plus d'une heure sont purgés.
   Une reprise datant de plus de 24 h est ignorée (une analyse complète est refaite, sans rien perdre).
+
+## Vérification rapide, simulation, historique (1.1.0)
+
+- **Vérification rapide** : après une synchro réussie, `sync/state/quick-<pc>.json` retient l'empreinte de chaque espace des deux PC
+  (noms + tailles + dates, sans lire de contenu). Si les deux empreintes sont inchangées → « Déjà à jour » en une requête.
+  Invalidée si les réglages de contenu changent, après `full_check_hours` (12 h par défaut) ou avec *Vérification complète*.
+  Limite : un fichier modifié en gardant la même taille ET la même date n'est vu qu'à la vérification complète périodique.
+- **Simuler** : calcule le plan, l'affiche, ne modifie rien. **Historique** : `sync/state/history.json` (100 dernières).
+- **`.voktoraignore`** : motifs `fnmatch` (`*.tmp`, `big/`), `#` pour commenter.
+- **Catégories ajoutées** : `ai_providers` (sans clés d'API), `accounts` (identité GitHub/forges, jamais les jetons), `themes`, `profiles`.

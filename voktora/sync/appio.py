@@ -28,6 +28,14 @@ class AppConfigIO:
         for key in ("categories", "custom_statuses", "projects"):
             if key in cfg:
                 current[key] = copy.deepcopy(cfg[key])
+        # comptes : seulement l'identité (le jeton et le coffre de CE PC ne sont jamais remplacés)
+        if isinstance(cfg.get("github_account"), dict):
+            mine = current.setdefault("github_account", {})
+            for k in ("login", "name", "name_custom", "avatar_url", "login_seen"):
+                if k in cfg["github_account"]:
+                    mine[k] = cfg["github_account"][k]
+        if isinstance(cfg.get("forge_accounts"), list):
+            current["forge_accounts"] = copy.deepcopy(cfg["forge_accounts"])
         if isinstance(cfg.get("app_config"), dict):
             current.setdefault("app_config", {}).update(copy.deepcopy(cfg["app_config"]))
             for stale in [k for k in current["app_config"] if k not in cfg["app_config"]
@@ -43,6 +51,7 @@ class AppConfigIO:
 
 # Réglages locaux : jamais supprimés par une synchronisation (voir store.APP_CONFIG_LOCAL_ONLY).
 _KEEP_LOCAL = {"window_geometry", "splitter_states", "github_client_id", "auth_method"}
+# (ces réglages restent aussi locaux dans store.APP_CONFIG_LOCAL_ONLY)
 
 
 def get_service():
@@ -53,7 +62,12 @@ def get_service():
             from .service import SyncService
             plugin_data = core.get_data_dir() / "plugins_data"
             plugin_data.mkdir(parents=True, exist_ok=True)
-            _service = SyncService(core.get_data_dir(), AppConfigIO(), {"plugin_settings": plugin_data})
+            extras = {"plugin_settings": plugin_data}
+            for name in ("themes", "profiles"):                       # dossiers de données synchronisables (1.1.0)
+                folder = core.get_data_dir() / name
+                folder.mkdir(parents=True, exist_ok=True)
+                extras[name] = folder
+            _service = SyncService(core.get_data_dir(), AppConfigIO(), extras)
         return _service
 
 

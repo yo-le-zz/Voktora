@@ -31,6 +31,7 @@ sans modification.
 
 from __future__ import annotations
 
+from .ai_chat_dialog import AIChatDialog, PermissionsDialog
 from .categories_dialog import CategoriesDialog
 from .config_dialog import ConfigDialog
 from .customize_dialog import CustomizeProjectDialog
@@ -38,11 +39,13 @@ from .dashboard_dialog import DashboardDialog
 from .disk_dialog import DiskUsageDialog
 from .emoji_picker_dialog import EmojiPickerDialog, IconPickerDialog
 from .encrypt_dialog import CopyWorker, EncryptProjectDialog, EncryptWorker
+from .fleet_dialog import FleetDialog
 from .forges_dialog import ForgesDialog
 from .hooks_dialog import HooksDialog
 from .json_config_editor_dialog import JsonConfigEditorDialog
 from .master_password_dialog import MasterPasswordSetupDialog
 from .migrate_dialog import ExportWorker, ImportWorker, MigrateDialog
+from .palette_dialog import PaletteDialog, collect_actions
 from .plugins_dialog import PluginsDialog
 from .profiles_dialog import ProfilesDialog
 from .quick_actions_dialog import QuickActionEditDialog, QuickActionsDialog
@@ -54,6 +57,11 @@ from .vault_dialog import VaultDialog
 from .vault_unlock_dialog import VaultUnlockDialog, ensure_unlocked, prompt_at_startup
 
 __all__ = [
+    "FleetDialog",
+    "PaletteDialog",
+    "collect_actions",
+    "AIChatDialog",
+    "PermissionsDialog",
     "CategoriesDialog",
     "ConfigDialog",
     "CustomizeProjectDialog",

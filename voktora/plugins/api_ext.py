@@ -1,5 +1,5 @@
 """
-Voktora — plugins.api_ext (API de plugins v3, Voktora 1.0.8)
+Voktora — plugins.api_ext (API de plugins v3 + v4, Voktora 1.1.0)
 Méthodes supplémentaires de `PluginAPI` : réglages, actions rapides, snapshots, espace disque, forges,
 synchronisation, plugins et SÉCURITÉ. Chaque méthode exige une permission déclarée dans `plugin.json`.
 Règle d'or : ce qui lit est libre une fois la permission accordée ; ce qui MODIFIE la sécurité (coffre, plugins,
@@ -225,3 +225,47 @@ class ExtendedAPI:
         if not name or len(name) > 64 or not all(c.isalnum() or c in "-_." for c in name):
             raise self._error("Nom de secret invalide (lettres, chiffres, - _ . ; 64 caractères max).")
         return f"plugin:{self._info.id}:{name}"
+
+
+    # -- API 4 (Voktora 1.1.0) -----------------------------------------------------------
+    def fleet_states(self) -> list[dict]:
+        """État Git de tous les projets (permission « fleet ») : branche, modifications, retard/avance, problèmes."""
+        self._require("fleet")
+        import fleet
+        return [s.to_dict() for s in fleet.scan_all(workers=2)]
+
+    def search_projects(self, query: str, content: bool = True, limit: int = 100) -> list[dict]:
+        """Recherche dans les noms de projets, de fichiers et le contenu (permission « fleet »)."""
+        self._require("fleet")
+        import fleet
+        return [h.__dict__ for h in fleet.search(str(query), content=bool(content), limit=min(int(limit), 300))]
+
+    def project_update(self, project: str | Path, **fields: Any) -> bool:
+        """Modifie description, catégorie, statut, tags, couleur ou emoji d'un projet (permission « projects.write »,
+        confirmation à chaque appel)."""
+        self._require("projects.write")
+        allowed = {"description", "category", "status", "tags", "color", "emoji", "icon"}
+        bad = set(fields) - allowed
+        if bad:
+            raise self._error(f"Champs non modifiables : {sorted(bad)}. Autorisés : {sorted(allowed)}.")
+        if not self._confirm_security("Modifier un projet", f"Le plugin « {self._info.name} » veut modifier « "
+                                      f"{Path(project).name} » : {sorted(fields)}."):
+            return False
+        return core.update_project(project, **fields)
+
+    def ai_ask(self, prompt: str, max_tokens: int = 400) -> str:
+        """Pose une question au fournisseur IA actif (permission « ai »). Le texte est envoyé à ce fournisseur :
+        l'utilisateur confirme à chaque appel. Aucune donnée de Voktora n'est ajoutée à la question."""
+        self._require("ai")
+        import ai_providers
+        provider = core.get_active_ai_provider()
+        if not provider:
+            raise self._error("Aucun fournisseur IA configuré.")
+        text = str(prompt)[:4000]
+        if not self._confirm_security("Question à l'IA", f"Le plugin « {self._info.name} » envoie ce texte à "
+                                      f"« {provider.get('name', '?')} » :\n\n{text[:300]}"):
+            raise self._error("Envoi refusé par l'utilisateur.")
+        try:
+            return ai_providers.generate(provider, text, max_tokens=min(int(max_tokens), 900))
+        except ai_providers.AIError as exc:
+            raise self._error(str(exc)) from exc

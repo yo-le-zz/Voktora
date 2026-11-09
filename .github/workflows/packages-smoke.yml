@@ -1,0 +1,34 @@
+name: Packages smoke test
+
+# Vérifications rapides des scripts de paquets (.deb, .rpm, Arch, .msi) à chaque changement des installeurs :
+# syntaxe des scripts, version identique partout. Les vrais builds restent dans build-release.yml.
+on:
+  pull_request:
+    paths: ["Installers/**", "pyproject.toml", "native/**", "voktora/version.txt"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - name: Syntaxe des scripts shell
+        run: |
+          for f in Installers/*/*.sh Installers/*.sh; do
+            echo "bash -n $f"; bash -n "$f"
+          done
+      - name: Version identique dans tous les fichiers
+        run: |
+          v=$(tr -d 'v\n' < voktora/version.txt)
+          grep -q "^version = \"$v\"" pyproject.toml
+          grep -q "^version = \"$v\"" native/Cargo.toml
+          grep -q "^pkgver=$v" "Installers/Arch installer/PKGBUILD"
+          echo "OK : $v"
+      - name: PKGBUILD valide (makepkg --printsrcinfo)
+        run: |
+          docker run --rm -v "$PWD/Installers/Arch installer:/pkg:ro" archlinux:base-devel \
+            bash -c 'useradd -m b && cp -r /pkg /home/b/pkg && chown -R b /home/b/pkg && cd /home/b/pkg && su b -c "makepkg --printsrcinfo > /dev/null"'

@@ -146,3 +146,37 @@ def all_repos() -> list[tuple[str, Repo]]:
     except (ForgeError, Exception):  # noqa: BLE001
         pass
     return out
+
+
+def _client_for_origin(origin: Remote):
+    from . import accounts
+    from .clients import make_client
+    token, kind = "", origin.kind
+    acc = accounts.account_for_host(origin.host)
+    if acc:
+        token, kind = accounts.get_token(acc["id"]), acc["kind"]
+    elif kind == "github":
+        import core
+        token = core.get_effective_token() or ""
+    if not kind:
+        from .base import ForgeError
+        raise ForgeError(f"Forge inconnue pour {origin.host}.")
+    return make_client(kind, origin.host, token)
+
+
+def project_activity(path: str | Path) -> dict:
+    """Lecture seule : tickets et demandes de fusion ouverts + état de l'intégration continue du dépôt `origin`.
+    Bloquant (réseau) : à appeler dans un thread. Une erreur sur une partie n'empêche pas les autres."""
+    from .base import ForgeError
+    info = project_info(path)
+    if not info.origin:
+        raise ForgeError("Ce projet n'a pas de dépôt distant (origin).")
+    client = _client_for_origin(info.origin)
+    o = info.origin
+    out: dict = {"repo": o.full_name, "host": o.host, "issues": [], "pulls": [], "ci": {"state": "none"}, "errors": []}
+    for key, call in (("issues", client.issues), ("pulls", client.pulls), ("ci", client.ci)):
+        try:
+            out[key] = call(o.owner, o.name)
+        except ForgeError as exc:
+            out["errors"].append(f"{key} : {exc}")
+    return out

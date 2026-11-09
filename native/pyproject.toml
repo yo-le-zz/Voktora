@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "voktora-native"
-version = "1.0.9"
+version = "1.1.0"
 description = "Extension native optionnelle de Voktora (Rust)."
 requires-python = ">=3.13"
 license = { text = "MIT" }

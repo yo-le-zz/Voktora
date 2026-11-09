@@ -341,8 +341,14 @@ def _load_config() -> dict:
 
     legacy_files, legacy_log = _absorb_legacy_files(cfg_path.parent, cfg)
 
+    # Sauvegarde automatique à chaque changement de version de l'application (1.1.0) : on garde la config d'avant.
+    version_changed = cfg_path.exists() and cfg.get("_app_version") != constants.APP_VERSION
+    if version_changed:
+        _backup_before_upgrade(cfg_path, str(cfg.get("_app_version") or "ancienne"))
+    cfg["_app_version"] = constants.APP_VERSION
+
     cfg, changed = _migrate_config(cfg)
-    if changed or legacy_files:
+    if changed or legacy_files or version_changed:
         try:
             _save_config(cfg)
         except OSError:
@@ -353,6 +359,18 @@ def _load_config() -> dict:
 
     _config_cache = cfg
     return cfg
+
+
+def _backup_before_upgrade(cfg_path: Path, old_version: str, keep: int = 5) -> None:
+    """Copie config.json vers config.backup-<ancienne version>.json (les 5 plus récentes sont gardées)."""
+    safe = "".join(c for c in old_version if c.isalnum() or c in ".-_")[:20] or "ancienne"
+    try:
+        shutil.copy2(cfg_path, cfg_path.with_name(f"config.backup-{safe}.json"))
+        old = sorted(cfg_path.parent.glob("config.backup-*.json"), key=lambda p: p.stat().st_mtime)
+        for extra in old[:-keep]:
+            extra.unlink(missing_ok=True)
+    except OSError:
+        pass  # best-effort : ne doit jamais empêcher le démarrage
 
 
 def _backup_before_projects_migration(cfg_path: Path) -> None:
