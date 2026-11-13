@@ -263,6 +263,30 @@
       "version": "1.0.0"
     },
     {
+      "api": 4,
+      "author": "yolezz",
+      "description": "Show the current time inside the interface.",
+      "entry": "main.py",
+      "files": {
+        "main.py": "bcd5190f5ff1af87c78387defd9a2e03549c5f312414fd8f883a156196732afa",
+        "plugin.json": "13a7dcc71f5578d1032119931fe30a8405f9c2ed66cf6f2171649cabc83d93dc"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "time-time",
+      "min_voktora": "",
+      "name": "Time Time",
+      "path": "plugins/time-time",
+      "permissions": [
+        "ui"
+      ],
+      "tags": [
+        "interface",
+        "utility"
+      ],
+      "tier": "official",
+      "version": "1.0.0"
+    },
+    {
       "api": 2,
       "author": "yolezz",
       "dependencies": {},
