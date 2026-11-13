@@ -118,6 +118,33 @@
       "api": 2,
       "author": "yolezz",
       "dependencies": {},
+      "description": "Trois thèmes supplémentaires : Neon Night, Coffee et Mint (Paramètres → Thème).",
+      "entry": "main.py",
+      "files": {
+        "main.py": "99e604223ebb2a3d906f31316b8c5a49e0d47a46551f7167a05797a2a66ced58",
+        "plugin.json": "4f7124e351e1964fc619458c523cb51359c66430bb121849f7e1228f43e7aafd"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "neon-themes",
+      "lang": "python",
+      "min_voktora": "",
+      "name": "Neon Themes",
+      "path": "plugins/neon-themes",
+      "permissions": [
+        "ui"
+      ],
+      "requires": [],
+      "tags": [
+        "thème",
+        "style"
+      ],
+      "tier": "official",
+      "version": "1.0.0"
+    },
+    {
+      "api": 2,
+      "author": "yolezz",
+      "dependencies": {},
       "description": "Compteur de projets dans la barre d'état, et entrée « Copier le chemin » dans le menu clic droit.",
       "entry": "main.py",
       "files": {
@@ -265,6 +292,7 @@
     {
       "api": 4,
       "author": "yolezz",
+      "dependencies": {},
       "description": "Show the current time inside the interface.",
       "entry": "main.py",
       "files": {
@@ -273,12 +301,14 @@
       },
       "homepage": "https://github.com/yo-le-zz/Voktora",
       "id": "time-time",
+      "lang": "python",
       "min_voktora": "",
       "name": "Time Time",
       "path": "plugins/time-time",
       "permissions": [
         "ui"
       ],
+      "requires": [],
       "tags": [
         "interface",
         "utility"
