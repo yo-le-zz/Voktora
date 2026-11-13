@@ -15,7 +15,7 @@
 | [LIBS.md](LIBS.md) | Bibliothèques Python par plugin (versions différentes d'un plugin à l'autre) |
 | [DEVMODE.md](DEVMODE.md) | Mode développeur : tracebacks, rechargement, validation qui exécute le code |
 | [EXAMPLES.md](EXAMPLES.md) | Exemples complets commentés |
-| [SHIPPED.md](SHIPPED.md) | Les plugins fournis (API Plus, Quick Note, System Monitor, Dev Toolbox, Theme Studio…) |
+| [SHIPPED.md](SHIPPED.md) | Les plugins fournis (API Plus, Quick Note, System Monitor, Dev Toolbox, Theme Studio, Code Inspector, DevOps Center, API Studio, Project Knowledge, Workflow Forge…) |
 | [SELF_UPDATE.md](SELF_UPDATE.md) | Mise à jour de Voktora lui-même |
 
 Voir aussi `doc/SHOPS.md` (thèmes, icônes, styles) et `doc/AI_CHAT.md` (outils IA fournis par les plugins).

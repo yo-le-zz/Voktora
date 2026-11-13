@@ -1,0 +1,25 @@
+{
+  "id": "devops-center",
+  "name": "DevOps Center",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Git, tickets/PR GitHub, Docker, serveurs SSH, déploiements avec sauvegarde et restauration automatique, pipelines personnalisables, historique.",
+  "api": 5,
+  "lang": "python",
+  "entry": "main.py",
+  "permissions": [
+    "network",
+    "projects.read",
+    "shell",
+    "ui",
+    "vault"
+  ],
+  "tags": [
+    "developpeur",
+    "git",
+    "docker",
+    "ssh",
+    "deploiement"
+  ],
+  "homepage": "https://github.com/yo-le-zz/Voktora"
+}

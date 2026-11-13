@@ -1,0 +1,21 @@
+{
+  "id": "project-knowledge",
+  "name": "Project Knowledge",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Mémoire du projet : index incrémental, recherche plein texte BM25, wiki par projet avec liens, symboles, diagrammes, documentation d'API et exports.",
+  "api": 5,
+  "lang": "python",
+  "entry": "main.py",
+  "permissions": [
+    "projects.read",
+    "ui"
+  ],
+  "tags": [
+    "developpeur",
+    "documentation",
+    "recherche",
+    "wiki"
+  ],
+  "homepage": "https://github.com/yo-le-zz/Voktora"
+}

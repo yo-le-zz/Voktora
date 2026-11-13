@@ -1,8 +1,18 @@
 """Fenêtre : sélecteurs de couleurs à gauche, aperçu en direct à droite."""
 
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (QColorDialog, QDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-                               QTextEdit, QVBoxLayout)
+from PySide6.QtWidgets import (
+    QColorDialog,
+    QDialog,
+    QFormLayout,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+)
 
 from . import themes
 
@@ -74,7 +84,7 @@ class StudioDialog(QDialog):
         return themes.slug(self.name.text())
 
     def save(self):
-        self.saved[self._id()] = {"name": self.name.text(), "description": f"Créé avec Theme Studio",
+        self.saved[self._id()] = {"name": self.name.text(), "description": "Créé avec Theme Studio",
                                   "colors": themes.clean(self.colors)}
         themes.save(self.api, self.saved)
         if self.api.options.get("auto_register"):

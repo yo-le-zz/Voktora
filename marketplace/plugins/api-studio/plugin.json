@@ -1,0 +1,23 @@
+{
+  "id": "api-studio",
+  "name": "API Studio",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Client HTTP complet : collections, variables, chaînage, tests, scripts Python/JS isolés, WebSocket, serveur mock, import OpenAPI/Postman.",
+  "api": 5,
+  "lang": "python",
+  "entry": "main.py",
+  "permissions": [
+    "network",
+    "projects.read",
+    "shell",
+    "ui"
+  ],
+  "tags": [
+    "developpeur",
+    "api",
+    "http",
+    "websocket"
+  ],
+  "homepage": "https://github.com/yo-le-zz/Voktora"
+}

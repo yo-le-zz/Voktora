@@ -74,7 +74,7 @@ class TestRealPlugins:
 
         titles = [tabs.tabText(i) for i in range(tabs.count())]
         assert {"Notes", "TODO", "Git Insights"} <= {t.strip() for t in titles}
-        assert tabs.count() == base_tabs + 3
+        assert tabs.count() == base_tabs + 3 + 5   # + 1 onglet par plugin avancé (1.1.2)
         menus = _menu_titles(window)
         assert "Plugins" in menus and menus.index("Plugins") < len(menus) - 1     # avant « Aide »
         plugins_menu = next(a.menu() for a in window.menuBar().actions() if a.text() == "Plugins")

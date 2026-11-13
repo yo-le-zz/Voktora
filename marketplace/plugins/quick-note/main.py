@@ -2,7 +2,6 @@
 
 from .ui.panel import NotePanel
 
-
 _state = {}
 state = _state
 

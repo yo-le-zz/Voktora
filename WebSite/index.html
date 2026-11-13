@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Voktora — Project Manager</title>
-  <meta name="description" content="Voktora est un gestionnaire de projets de développement avec vault chiffré, profils d'exécution, hooks, snapshots et plugins. Par yolezz."/>
+  <meta name="description" content="Voktora est un gestionnaire de projets de développement avec vault chiffré, profils d'exécution, hooks, snapshots et plugins (Code Inspector, DevOps Center, API Studio, Project Knowledge, Workflow Forge). Par yolezz."/>
   <meta property="og:title" content="Voktora — Project Manager"/>
   <meta property="og:description" content="Gérez, lancez et automatisez vos projets de développement."/>
   <meta property="og:image" content="https://voktora.pages.dev/assets/Voktora.png"/>
@@ -489,7 +489,7 @@
   <div class="hero-glow"></div>
 
   <div class="hero-badge">
-    <span>NEW</span> Version 1.0.0 disponible
+    <span>NEW</span> Version 1.1.2 disponible
   </div>
 
   <img class="hero-icon"
@@ -504,13 +504,13 @@
 
   <div class="download-row">
     <a class="dl-btn dl-btn-linux"
-       href="https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora_1.1.1_amd64.deb">
+       href="https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora_1.1.2_amd64.deb">
       <span class="dl-btn-platform">🐧 Linux (Debian/Ubuntu)</span>
       <span class="dl-btn-ext">.deb</span>
       <span class="dl-btn-platform">x86_64 · 1.0.0</span>
     </a>
     <a class="dl-btn dl-btn-windows"
-       href="https://github.com/yo-le-zz/Voktora/releases/latest/download/Voktora_1.1.1_x64.msi">
+       href="https://github.com/yo-le-zz/Voktora/releases/latest/download/Voktora_1.1.2_x64.msi">
       <span class="dl-btn-platform">🪟 Windows 10/11</span>
       <span class="dl-btn-ext">.msi</span>
       <span class="dl-btn-platform">x64 · 1.0.0</span>
@@ -598,7 +598,17 @@
       <div class="feat-card">
         <span class="feat-icon">🧩</span>
         <div class="feat-title">Plugins &amp; marketplace</div>
-        <div class="feat-desc">API v2 : onglets, menus, boutons, panneaux, styles, thèmes, événements. Installez-en en un clic depuis le marketplace, ou proposez le vôtre : votre dépôt est relié par un sous-module épinglé sur un commit (fork → PR), relu et vérifié à chaque démarrage. Activation à chaud.</div>
+        <div class="feat-desc">API 5 : onglets, menus, boutons, panneaux, styles, thèmes, événements, options, dépendances. Plugins en Python, JavaScript ou Rust, console développeur et auto-mise à jour. Installez-en en un clic depuis le marketplace, ou proposez le vôtre : votre dépôt est relié par un sous-module épinglé sur un commit (fork → PR), relu et vérifié à chaque démarrage. Activation à chaud.</div>
+      </div>
+      <div class="feat-card">
+        <span class="feat-icon">🛠️</span>
+        <div class="feat-title">5 plugins avancés (1.1.2)</div>
+        <div class="feat-desc"><strong>Code Inspector</strong> (architecture, appels certain/probable/inconnu, ponts Python × Rust), <strong>DevOps Center</strong> (Git, Docker, SSH, déploiements avec restauration automatique, pipelines), <strong>API Studio</strong> (client HTTP, tests, WebSocket, mock, OpenAPI/Postman), <strong>Project Knowledge</strong> (recherche plein texte, wiki, diagrammes) et <strong>Workflow Forge</strong> (éditeur visuel d'automatisations).</div>
+      </div>
+      <div class="feat-card">
+        <span class="feat-icon">📚</span>
+        <div class="feat-title">Documentation développeurs</div>
+        <div class="feat-desc">Guide de démarrage, référence de l'API 5, permissions, événements, JavaScript, Rust, dépendances et mode développeur : tout est dans <a href="https://github.com/yo-le-zz/Voktora/tree/main/doc/plugins">doc/plugins</a>, avec la fiche de chaque plugin livré.</div>
       </div>
       <div class="feat-card">
         <span class="feat-icon">🐙</span>
@@ -721,9 +731,9 @@
 <span class="comment"># Télécharger et installer</span>
 <span class="cmd">wget</span> <span class="str">https://github.com/yo-le-zz/Voktora</span>
      <span class="str">/releases/latest/download</span>
-     <span class="str">/voktora_1.1.1_amd64.deb</span>
+     <span class="str">/voktora_1.1.2_amd64.deb</span>
 
-<span class="cmd">sudo dpkg -i</span> voktora_1.1.1_amd64.deb
+<span class="cmd">sudo dpkg -i</span> voktora_1.1.2_amd64.deb
 
 <span class="comment"># Si dépendances manquantes</span>
 <span class="cmd">sudo apt-get install -f</span>
@@ -736,7 +746,7 @@
       <div class="install-card">
         <h3>🪟 Windows 10 / 11</h3>
         <div class="code-block">
-<span class="comment"># 1. Télécharger Voktora_1.1.1_x64.msi</span>
+<span class="comment"># 1. Télécharger Voktora_1.1.2_x64.msi</span>
 <span class="comment">#    depuis GitHub Releases</span>
 
 <span class="comment"># 2. Double-cliquer sur le .msi</span>
