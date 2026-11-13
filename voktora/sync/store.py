@@ -26,7 +26,7 @@ from typing import NamedTuple, Protocol
 
 import diskusage
 
-from . import secure
+from . import secure, transfer
 from .settings import SyncSettings
 
 PART_SUFFIX = ".voktora-sync-part"
@@ -369,6 +369,77 @@ class LocalStore:
                 while chunk := handle.read(secure.CHUNK):
                     yield chunk
         return size, chunks()
+
+    # ── delta par blocs (1.1.1) ──
+
+    def _plain_file(self, space: str, rel: str) -> Path | None:
+        """Chemin d'un fichier ordinaire existant (jamais pour `cfg`), sinon None."""
+        if space == CFG:
+            return None
+        rel = clean_rel(rel)
+        root = self._root(space)
+        path = root.joinpath(*rel.split("/"))
+        self._ensure_inside(root, path)
+        return path if path.is_file() and not path.is_symlink() else None
+
+    def file_size(self, space: str, rel: str) -> int:
+        path = self._plain_file(space, rel)
+        return path.stat().st_size if path else -1
+
+    def block_hashes(self, space: str, rel: str, cancel=None) -> tuple[int, list[str]]:
+        """(taille, empreintes des blocs de 1 Mio) du fichier ; (-1, []) s'il n'existe pas."""
+        path = self._plain_file(space, rel)
+        if path is None:
+            return -1, []
+        return path.stat().st_size, transfer.block_hashes(path, self.throttle, cancel)
+
+    def open_blocks(self, space: str, rel: str, indices: list[int]) -> Iterator[bytes]:
+        path = self._plain_file(space, rel)
+        if path is None:
+            raise FileNotFoundError(rel)
+
+        def chunks() -> Iterator[bytes]:
+            with open(path, "rb") as handle:
+                for i in indices:
+                    handle.seek(i * transfer.BLOCK)
+                    yield handle.read(transfer.BLOCK)
+        return chunks()
+
+    def write_delta(self, space: str, rel: str, size: int, indices: list[int], chunks: Iterable[bytes], mode: int = 0,
+                    expected_sha: str = "") -> None:
+        """Reconstruit le fichier : blocs `indices` reçus, les autres repris de la version actuelle ; vérifie le SHA-256."""
+        old = self._plain_file(space, rel)
+        if old is None:
+            raise SyncPathError(f"{rel} : pas de version locale pour le delta")
+        rel = clean_rel(rel)
+        root = self._root(space)
+        path = root.joinpath(*rel.split("/"))
+        tmp = path.with_name(path.name + PART_SUFFIX)
+        wanted = set(indices)
+        incoming = transfer._reslice(chunks, transfer.BLOCK)
+        total_blocks = -(-size // transfer.BLOCK) if size else 0
+        try:
+            digest = hashlib.sha256()
+            with open(old, "rb") as src, open(tmp, "wb") as dst:
+                for i in range(total_blocks):
+                    length = min(transfer.BLOCK, size - i * transfer.BLOCK)
+                    if i in wanted:
+                        block = next(incoming, b"")
+                    else:
+                        src.seek(i * transfer.BLOCK)
+                        block = src.read(length)
+                    if len(block) != length:
+                        raise SyncPathError(f"{rel} : bloc {i} incomplet (delta impossible)")
+                    digest.update(block)
+                    dst.write(block)
+            if expected_sha and digest.hexdigest() != expected_sha:
+                raise SyncPathError(f"Empreinte inattendue pour {rel} (delta) : transfert complet nécessaire")
+            if mode & 0o111:
+                os.chmod(tmp, 0o755)
+            os.replace(tmp, path)
+        finally:
+            if tmp.exists():
+                tmp.unlink()
 
     def write(self, space: str, rel: str, chunks: Iterable[bytes], mode: int = 0, mtime: float | None = None,
               expected_sha: str = "") -> None:

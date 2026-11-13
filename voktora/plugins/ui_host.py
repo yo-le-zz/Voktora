@@ -297,6 +297,84 @@ class UIHost:
             result.append((label, icon, run))
         return result
 
+    # -- API 5 : raccourcis, docks, sélecteurs, Markdown, presse-papiers ------------------------------
+    def add_shortcut(self, info: PluginInfo, sequence: str, handler: Callable, description: str = "") -> None:
+        from PySide6.QtGui import QShortcut
+        key = QKeySequence(sequence)
+        if key.isEmpty():
+            raise ValueError(f"Raccourci invalide : « {sequence} ».")
+        shortcut = QShortcut(key, self._w)
+        shortcut.setContext(Qt.ApplicationShortcut)
+        shortcut.activated.connect(lambda: handler())
+        info.teardown.append(lambda: (shortcut.setEnabled(False), shortcut.deleteLater()))
+
+    def add_dock(self, info: PluginInfo, title: str, factory: Callable, area: str, icon: str) -> None:
+        from PySide6.QtWidgets import QDockWidget
+        areas = {"left": Qt.LeftDockWidgetArea, "right": Qt.RightDockWidgetArea,
+                 "top": Qt.TopDockWidgetArea, "bottom": Qt.BottomDockWidgetArea}
+        content = self._guard(info, title, lambda: factory(PluginContext(project_path=self.current_project(), log_cb=self.log)))
+        dock = QDockWidget(title, self._w)
+        dock.setObjectName(f"plugin-dock-{info.id}-{title}")
+        if icon:
+            dock.setWindowIcon(icons.icon(icon))
+        dock.setWidget(content)
+        self._w.addDockWidget(areas[area], dock)
+        self._tab_widgets.append((info, content))
+
+        def undo() -> None:
+            self._w.removeDockWidget(dock)
+            dock.deleteLater()
+            self._tab_widgets[:] = [t for t in self._tab_widgets if t[1] is not content]
+
+        info.teardown.append(undo)
+
+    def pick_path(self, kind: str, title: str, start: str, file_filter: str) -> str | None:
+        from PySide6.QtWidgets import QFileDialog
+        if kind == "dir":
+            value = QFileDialog.getExistingDirectory(self._w, title, start)
+        elif kind == "save":
+            value = QFileDialog.getSaveFileName(self._w, title, start, file_filter)[0]
+        else:
+            value = QFileDialog.getOpenFileName(self._w, title, start, file_filter)[0]
+        return value or None
+
+    def ask_choice(self, title: str, label: str, choices: list[str], default: int) -> str | None:
+        value, ok = QInputDialog.getItem(self._w, title, label, choices, max(0, min(default, len(choices) - 1)), False)
+        return value if ok else None
+
+    def ask_number(self, title: str, label: str, default: float, low: float, high: float, decimals: int):
+        if decimals > 0:
+            value, ok = QInputDialog.getDouble(self._w, title, label, float(default), float(low), float(high), decimals)
+        else:
+            value, ok = QInputDialog.getInt(self._w, title, label, int(default), int(low), int(high))
+        return value if ok else None
+
+    def show_markdown(self, title: str, markdown: str) -> None:
+        import markdown_lite
+        from PySide6.QtWidgets import QDialog, QTextBrowser
+        dlg = QDialog(self._w)
+        dlg.setWindowTitle(title)
+        dlg.resize(680, 520)
+        layout = QVBoxLayout(dlg)
+        view = QTextBrowser()
+        view.setOpenLinks(False)
+        view.anchorClicked.connect(lambda url: self.open_url(url.toString()))
+        view.setHtml(markdown_lite.render(markdown))
+        layout.addWidget(view)
+        dlg.exec()
+
+    def open_url(self, url: str) -> None:
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+        if url.startswith(("http://", "https://")):
+            QDesktopServices.openUrl(QUrl(url))
+
+    def clipboard_get(self) -> str:
+        return QApplication.clipboard().text()
+
+    def clipboard_set(self, text: str) -> None:
+        QApplication.clipboard().setText(text)
+
     # -- dialogues ----------------------------------------------------------------------------------
     def notify(self, message: str, timeout_ms: int = 4000) -> None:
         self._w._set_status(message, timeout_ms)

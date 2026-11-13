@@ -1,0 +1,19 @@
+{
+  "id": "solar-dawn",
+  "name": "Solar Dawn",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Clair, aube chaude orange et ambre.",
+  "tags": [
+    "thème"
+  ],
+  "colors": [
+    "#fdf6e3",
+    "#3b3a36",
+    "#268bd2",
+    "#d33682",
+    "#859900",
+    "#dc322f",
+    "#b58900"
+  ]
+}

@@ -5,6 +5,39 @@ Format : [Semantic Versioning](https://semver.org/) — `MAJEUR.MINEUR.CORRECTIF
 
 ---
 
+## [1.1.1] — 2026-11-11
+
+### 🔌 Plugins (API 5)
+- **Plugins JavaScript** (processus isolé par plugin, `require`, `voktora.*`) et **plugins Rust** (compilés par Voktora, crates externes
+  permises, SDK `native/sdk/voktora-plugin`). Presque aucun code de liaison.
+- **Permissions détectées automatiquement** dans le code (Python, JS, Rust) ; `"permissions": "auto"` pour les plugins locaux ;
+  le marketplace exige la liste explicite.
+- **Options** (`api.options`) : onglet « Options » généré par Voktora pour chaque plugin.
+- Des dizaines de méthodes d'API en plus : fichiers privés, journal, minuteries, raccourcis, docks, palette, dialogues, presse-papiers,
+  système, fichiers de projet, outils IA fournis par les plugins, boutiques…
+- **Dépendances entre plugins** (`dependencies`, `provide`/`plugin`), **bibliothèques Python par plugin** (`requires`, versions
+  différentes d'un plugin à l'autre), **mises à jour automatiques** des plugins (jamais si nouvelle permission).
+- Limites réseau et de taille par plugin supprimées.
+- **Mode développeur** : console (tracebacks Voktora/plugin), rechargement automatique, auto-installation des imports,
+  validation qui EXÉCUTE réellement le plugin (`plugin_tool validate --run`, `detect`, `fix-permissions`, `new --lang`).
+- Documentation complète : `doc/plugins/` (référence d'API et icônes générées depuis le code : `tools/gen_api_doc.py`).
+- Plugins fournis : api-plus, quick-note, system-monitor, dev-toolbox, theme-studio.
+
+### 🎨 Boutiques d'apparence
+- Boutiques de **thèmes**, d'**icônes** et de **styles** (SHA-256, https, filtrage SVG/QSS), compatibles avec les plugins ;
+  les thèmes néon quittent le marketplace de plugins pour la boutique de thèmes.
+
+### 🤖 Chat IA
+- Vrai streaming, sans délai d'attente fixe, annulable, Markdown, interface refaite.
+
+### 🆙 Mise à jour de Voktora
+- Vérification des versions `vX.Y.Z` de `yo-le-zz/Voktora` (24 h), téléchargement vérifié par SHA-256, jamais d'auto-remplacement.
+
+### 🐛 Corrections
+- Icône de l'espace disque des projets.
+
+---
+
 ## [1.1.0] — 2026-11-09
 
 ### ⚡ Synchronisation
@@ -194,7 +227,7 @@ Intégrée à Voktora (menu **Outils → Synchronisation entre PC**) — voir `d
   vérifiées par SHA-256, copie hors ligne de l'index.
 - **Contributions par fork + Pull Request** : `marketplace/`, `tools/plugin_tool.py` (création, validation et analyse
   statique), CI `plugins.yml` (validation, régénération de l'index après fusion), modèle de PR, CODEOWNERS.
-- 8 plugins fournis : UI Tweaks, Quick Notes, Focus Timer, TODO Scanner, Git Insights, Zen Mode, Neon Themes,
+- 8 plugins fournis : UI Tweaks, Quick Notes, Focus Timer, TODO Scanner, Git Insights, Zen Mode, Neon Themes (déplacé en 1.1.1 vers la boutique de thèmes),
   Project Counter.
 - Correction : les plugins n'étaient jamais chargés au démarrage ni accessibles depuis un menu.
 - **Plugins communautaires par sous-module Git** : chaque auteur garde son dépôt/fork ; la PR l'ajoute en

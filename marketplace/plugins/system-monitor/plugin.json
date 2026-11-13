@@ -1,0 +1,22 @@
+{
+  "id": "system-monitor",
+  "name": "System Monitor",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Processeur, mémoire, disques et charge en temps réel dans la barre d'état et un panneau détaillé.",
+  "api": 5,
+  "lang": "python",
+  "entry": "main.py",
+  "permissions": [
+    "system",
+    "ui"
+  ],
+  "tags": [
+    "systeme",
+    "monitoring"
+  ],
+  "dependencies": {
+    "api-plus": ">=1.0.0"
+  },
+  "homepage": "https://github.com/yo-le-zz/Voktora"
+}

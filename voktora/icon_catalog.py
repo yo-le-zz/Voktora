@@ -160,7 +160,7 @@ EMOJI_TO_ICON: dict[str, str] = {
     "💎": "diamond-stone", "🌟": "star-four-points", "🎨": "palette", "🛠": "tools", "📚": "bookshelf",
     "🔬": "microscope", "🎮": "gamepad-variant", "🌐": "web", "📱": "cellphone", "💻": "laptop",
     "⌨": "keyboard", "🖥": "monitor", "📊": "chart-bar", "📈": "chart-line", "🗂": "folder-multiple",
-    "📁": "folder", "📂": "folder-open", "🐛": "bug", "🧪": "flask", "🧩": "puzzle", "🐙": "github",
+    "📁": "folder", "💽": "harddisk", "📂": "folder-open", "🐛": "bug", "🧪": "flask", "🧩": "puzzle", "🐙": "github",
     "🤖": "robot", "🧠": "brain", "🐳": "docker", "🐍": "language-python", "🦀": "language-rust",
     # sécurité
     "🔐": "shield-lock", "🔒": "lock", "🔓": "lock-open-variant", "🔑": "key-variant", "🛡": "shield-check",

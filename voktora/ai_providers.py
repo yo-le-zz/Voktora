@@ -23,13 +23,15 @@ Tous les appels sont bloquants : à lancer dans un thread de travail.
 
 from __future__ import annotations
 
+import contextlib
 import ipaddress
 import json
 import re
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 import core
 import ollama_client
@@ -104,13 +106,16 @@ def _headers(provider: dict, base: str) -> dict:
     return headers
 
 
-def _request(provider: dict, method: str, path: str, payload: dict | None, timeout: float):
+def _open(provider: dict, method: str, path: str, payload: dict | None, timeout: float, extra_headers: dict | None = None):
+    """Ouvre la requête et retourne (réponse, base). Les erreurs HTTP/réseau deviennent des AIError lisibles."""
     base = normalize_host(provider.get("kind", KIND_OPENAI), provider.get("host", ""))
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
-    request = urllib.request.Request(base + path, data=data, headers=_headers(provider, base), method=method)
+    headers = _headers(provider, base)
+    if extra_headers:
+        headers.update(extra_headers)
+    request = urllib.request.Request(base + path, data=data, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
+        return urllib.request.urlopen(request, timeout=timeout), base          # noqa: S310 — schéma validé plus haut
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")[:_ERROR_EXCERPT]
         if exc.code in (401, 403):
@@ -122,6 +127,15 @@ def _request(provider: dict, method: str, path: str, payload: dict | None, timeo
         raise AIError(f"Erreur du fournisseur ({exc.code}) : {body}") from exc
     except urllib.error.URLError as exc:
         raise AIError(f"Impossible de contacter {base} — le serveur est-il lancé ? Détail : {exc.reason}") from exc
+    except (TimeoutError, OSError) as exc:
+        raise AIError(f"Erreur réseau vers {base} : {exc}") from exc
+
+
+def _request(provider: dict, method: str, path: str, payload: dict | None, timeout: float):
+    response, base = _open(provider, method, path, payload, timeout)
+    try:
+        with response:
+            return json.loads(response.read().decode("utf-8"))
     except (TimeoutError, OSError) as exc:
         raise AIError(f"Erreur réseau vers {base} : {exc}") from exc
     except json.JSONDecodeError as exc:
@@ -160,11 +174,19 @@ def _content_text(content) -> str:
     return ""
 
 
-def generate(provider: dict, prompt: str, timeout: float = DEFAULT_TIMEOUT, max_tokens: int | None = None) -> str:
-    """Envoie `prompt` au modèle du fournisseur et retourne le texte de la réponse."""
+def generate(provider: dict, prompt: str, timeout: float = DEFAULT_TIMEOUT, max_tokens: int | None = None,
+             on_token: Callable[[str], None] | None = None, cancel: Callable[[], bool] | None = None) -> str:
+    """Envoie `prompt` au modèle du fournisseur et retourne le texte de la réponse.
+
+    Avec `on_token`, la réponse est lue en flux (SSE / NDJSON) et chaque morceau est transmis dès sa
+    réception ; `timeout` devient alors un délai d'INACTIVITÉ (entre deux morceaux), pas une durée totale.
+    `cancel()` est consulté en continu : s'il devient vrai, la connexion est fermée et le texte déjà reçu est rendu.
+    """
     model = (provider.get("model") or "").strip()
     if not model:
         raise AIError("Aucun modèle sélectionné pour ce fournisseur.")
+    if on_token is not None:
+        return stream_text(provider, prompt, on_token, timeout, max_tokens, cancel)
     if provider.get("kind") == KIND_OLLAMA:
         try:
             return ollama_client._generate(normalize_host(KIND_OLLAMA, provider.get("host", "")),
@@ -180,6 +202,95 @@ def generate(provider: dict, prompt: str, timeout: float = DEFAULT_TIMEOUT, max_
     except (KeyError, IndexError, TypeError) as exc:
         raise AIError("Réponse inattendue du fournisseur (pas de « choices »).") from exc
     return _THINK_RE.sub("", text).strip()
+
+
+# ──────────────────────────────────────────────
+# STREAMING
+# ──────────────────────────────────────────────
+
+STREAM_IDLE_TIMEOUT = 300.0     # un modèle peut mettre longtemps à se charger avant le premier morceau
+
+
+def parse_stream_line(kind: str, line: bytes | str) -> tuple[str, bool]:
+    """(texte, terminé) pour une ligne du flux. Ollama : NDJSON ; OpenAI/OmniRoute : SSE « data: {…} »."""
+    text = line.decode("utf-8", errors="replace") if isinstance(line, bytes) else line
+    text = text.strip()
+    if not text or text.startswith(":"):                    # ligne vide / commentaire keep-alive SSE
+        return "", False
+    if kind != KIND_OLLAMA:
+        if not text.startswith("data:"):
+            return "", False
+        text = text[5:].strip()
+        if text == "[DONE]":
+            return "", True
+    try:
+        obj = json.loads(text)
+    except ValueError:
+        return "", False
+    if not isinstance(obj, dict):
+        return "", False
+    if obj.get("error"):
+        err = obj["error"]
+        raise AIError(f"Erreur du fournisseur : {(err.get('message') if isinstance(err, dict) else err)!s:.300}")
+    if kind == KIND_OLLAMA:
+        return str(obj.get("response") or ""), bool(obj.get("done"))
+    try:
+        choice = obj["choices"][0]
+    except (KeyError, IndexError, TypeError):
+        return "", False
+    delta = choice.get("delta") or choice.get("message") or {}
+    return _content_text(delta.get("content")), choice.get("finish_reason") not in (None, "")
+
+
+def stream_text(provider: dict, prompt: str, on_token: Callable[[str], None], timeout: float = STREAM_IDLE_TIMEOUT,
+                max_tokens: int | None = None, cancel: Callable[[], bool] | None = None) -> str:
+    """Lit la réponse en flux ; retourne le texte complet (sans les blocs <think>)."""
+    kind = provider.get("kind") or KIND_OPENAI
+    model = (provider.get("model") or "").strip()
+    if kind == KIND_OLLAMA:
+        path = "/api/generate"
+        body: dict = {"model": model, "prompt": prompt, "stream": True}
+        if max_tokens:
+            body["options"] = {"num_predict": int(max_tokens)}
+    else:
+        path = "/chat/completions"
+        body = {"model": model, "stream": True, "messages": [{"role": "user", "content": prompt}]}
+        if max_tokens:
+            body["max_tokens"] = int(max_tokens)
+    response, base = _open(provider, "POST", path, body, timeout,
+                           {"Accept": "text/event-stream, application/x-ndjson"})
+    finished = threading.Event()
+
+    def watch() -> None:                       # une lecture bloquée ne voit pas `cancel` : on ferme la connexion
+        while not finished.wait(0.2):
+            if cancel is not None and cancel():
+                with contextlib.suppress(Exception):
+                    response.close()
+                return
+
+    if cancel is not None:
+        threading.Thread(target=watch, daemon=True, name="voktora-ai-cancel").start()
+    parts: list[str] = []
+    try:
+        with response:
+            for raw in response:
+                piece, done = parse_stream_line(kind, raw)
+                if piece:
+                    parts.append(piece)
+                    on_token(piece)
+                if done:
+                    break
+    except (TimeoutError, OSError, ValueError) as exc:
+        if cancel is not None and cancel():
+            pass                               # arrêt demandé : on rend ce qui a été reçu
+        elif isinstance(exc, TimeoutError) or "timed out" in str(exc):
+            raise AIError(f"Le fournisseur n'a rien envoyé pendant {int(timeout)} s ({base}) : "
+                          "modèle trop lent ou bloqué ?") from exc
+        else:
+            raise AIError(f"Connexion interrompue avec {base} : {exc}") from exc
+    finally:
+        finished.set()
+    return _THINK_RE.sub("", "".join(parts)).strip()
 
 
 DESCRIPTION_MAX_TOKENS = 220

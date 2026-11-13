@@ -1,8 +1,68 @@
 {
   "plugins": [
     {
+      "api": 5,
+      "author": "yolezz",
+      "dependencies": {},
+      "description": "Bibliothèque d'aides pour auteurs de plugins : formats, stockage JSON, bus d'événements, anti-rebond, cache. À mettre dans « dependencies ».",
+      "entry": "main.py",
+      "files": {
+        "helpers.py": "70aea12a8a66866630cfce67f7c0bb52a2698d14be4f0ce860b5d1d8e29a551d",
+        "main.py": "2035ee98f117a2d622aa95a02f9cab120ffcba5e8e9e374563e6973dafba0b86",
+        "plugin.json": "402500915422468583542d98321ebc88eb12fb1ae10ee4aa7238173366b5d81a"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "api-plus",
+      "lang": "python",
+      "min_voktora": "",
+      "name": "API Plus",
+      "path": "plugins/api-plus",
+      "permissions": [],
+      "requires": [],
+      "tags": [
+        "developpeur",
+        "bibliotheque"
+      ],
+      "tier": "official",
+      "version": "1.0.0"
+    },
+    {
+      "api": 5,
+      "author": "yolezz",
+      "dependencies": {
+        "api-plus": ">=1.0.0"
+      },
+      "description": "Boîte à outils : Base64, UUID, horodatages, JSON, hachages, URL, mots de passe — dans une fenêtre à onglets.",
+      "entry": "main.py",
+      "files": {
+        "main.py": "c3f0e9fdf47f914e11ad46a572a9ae604e2321ebbcb070a16b2bc32b85af3fec",
+        "plugin.json": "b3dcdc5b0d4d51b814c21b26341d3a9607ddb979456674afbf2a109b043b6733",
+        "tools/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "tools/registry.py": "f03bcf7008bfeb12f160c92b48c114178ef81033ab287c9fc998494194c6bceb",
+        "window.py": "26e5f872c31a46764743b9d65ecd14e50637c1fee9170eaf3e5509ecd388922e"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "dev-toolbox",
+      "lang": "python",
+      "min_voktora": "",
+      "name": "Dev Toolbox",
+      "path": "plugins/dev-toolbox",
+      "permissions": [
+        "clipboard",
+        "ui"
+      ],
+      "requires": [],
+      "tags": [
+        "developpeur",
+        "outils"
+      ],
+      "tier": "official",
+      "version": "1.0.0"
+    },
+    {
       "api": 2,
       "author": "yolezz",
+      "dependencies": {},
       "description": "Minuteur Pomodoro dans la barre d'état (25 min de travail, 5 min de pause).",
       "entry": "main.py",
       "files": {
@@ -11,12 +71,14 @@
       },
       "homepage": "https://github.com/yo-le-zz/Voktora",
       "id": "focus-timer",
+      "lang": "python",
       "min_voktora": "",
       "name": "Focus Timer",
       "path": "plugins/focus-timer",
       "permissions": [
         "ui"
       ],
+      "requires": [],
       "tags": [
         "productivité",
         "pomodoro"
@@ -27,6 +89,7 @@
     {
       "api": 2,
       "author": "yolezz",
+      "dependencies": {},
       "description": "Statistiques Git du projet : branche, nombre de commits, dernier commit, principaux auteurs.",
       "entry": "main.py",
       "files": {
@@ -35,6 +98,7 @@
       },
       "homepage": "https://github.com/yo-le-zz/Voktora",
       "id": "git-insights",
+      "lang": "python",
       "min_voktora": "",
       "name": "Git Insights",
       "path": "plugins/git-insights",
@@ -42,6 +106,7 @@
         "shell",
         "ui"
       ],
+      "requires": [],
       "tags": [
         "git",
         "statistiques"
@@ -52,30 +117,7 @@
     {
       "api": 2,
       "author": "yolezz",
-      "description": "Trois thèmes supplémentaires : Neon Night, Coffee et Mint (Paramètres → Thème).",
-      "entry": "main.py",
-      "files": {
-        "main.py": "99e604223ebb2a3d906f31316b8c5a49e0d47a46551f7167a05797a2a66ced58",
-        "plugin.json": "4f7124e351e1964fc619458c523cb51359c66430bb121849f7e1228f43e7aafd"
-      },
-      "homepage": "https://github.com/yo-le-zz/Voktora",
-      "id": "neon-themes",
-      "min_voktora": "",
-      "name": "Neon Themes",
-      "path": "plugins/neon-themes",
-      "permissions": [
-        "ui"
-      ],
-      "tags": [
-        "thème",
-        "style"
-      ],
-      "tier": "official",
-      "version": "1.0.0"
-    },
-    {
-      "api": 2,
-      "author": "yolezz",
+      "dependencies": {},
       "description": "Compteur de projets dans la barre d'état, et entrée « Copier le chemin » dans le menu clic droit.",
       "entry": "main.py",
       "files": {
@@ -84,6 +126,7 @@
       },
       "homepage": "https://github.com/yo-le-zz/Voktora",
       "id": "project-counter",
+      "lang": "python",
       "min_voktora": "",
       "name": "Project Counter",
       "path": "plugins/project-counter",
@@ -91,6 +134,7 @@
         "projects.read",
         "ui"
       ],
+      "requires": [],
       "tags": [
         "interface",
         "projets"
@@ -99,8 +143,40 @@
       "version": "1.0.0"
     },
     {
+      "api": 5,
+      "author": "yolezz",
+      "dependencies": {
+        "api-plus": ">=1.0.0"
+      },
+      "description": "Notes rapides par projet dans un panneau ancrable, avec enregistrement automatique et raccourci global.",
+      "entry": "main.py",
+      "files": {
+        "main.py": "ea8a66e242a63484efe555a1db529db530ac5015fe0595e126b971df0347c112",
+        "plugin.json": "ed9cce64298a0b3010d5bb3ae3d662c7facaf77e72b75763dc10a26ba9f244ea",
+        "ui/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "ui/panel.py": "66fdd01c5fa8450edd8c3a77a56d08abe622c7dea2e51733d6be20f370c98fa9"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "quick-note",
+      "lang": "python",
+      "min_voktora": "",
+      "name": "Quick Note",
+      "path": "plugins/quick-note",
+      "permissions": [
+        "ui"
+      ],
+      "requires": [],
+      "tags": [
+        "notes",
+        "productivite"
+      ],
+      "tier": "official",
+      "version": "1.0.0"
+    },
+    {
       "api": 2,
       "author": "yolezz",
+      "dependencies": {},
       "description": "Un bloc-notes par projet, dans un onglet dédié, sauvegardé automatiquement.",
       "entry": "main.py",
       "files": {
@@ -109,6 +185,7 @@
       },
       "homepage": "https://github.com/yo-le-zz/Voktora",
       "id": "quick-notes",
+      "lang": "python",
       "min_voktora": "",
       "name": "Quick Notes",
       "path": "plugins/quick-notes",
@@ -116,6 +193,7 @@
         "projects.read",
         "ui"
       ],
+      "requires": [],
       "tags": [
         "notes",
         "productivité"
@@ -124,8 +202,70 @@
       "version": "1.0.0"
     },
     {
+      "api": 5,
+      "author": "yolezz",
+      "dependencies": {
+        "api-plus": ">=1.0.0"
+      },
+      "description": "Processeur, mémoire, disques et charge en temps réel dans la barre d'état et un panneau détaillé.",
+      "entry": "main.py",
+      "files": {
+        "format.py": "4dc02c9b5f2840032571557b25688c558421e26b2747e56bad8cc89c7b8f8768",
+        "main.py": "e1601eec9921deaf7b9765b28f5d9db32d0c37cc278e8659fdd60fe7b7baf9ce",
+        "plugin.json": "a1724d163bb24b678899f1cbec0e27ebdaf468af6a69f9e39207a57efa677b9b"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "system-monitor",
+      "lang": "python",
+      "min_voktora": "",
+      "name": "System Monitor",
+      "path": "plugins/system-monitor",
+      "permissions": [
+        "system",
+        "ui"
+      ],
+      "requires": [],
+      "tags": [
+        "systeme",
+        "monitoring"
+      ],
+      "tier": "official",
+      "version": "1.0.0"
+    },
+    {
+      "api": 5,
+      "author": "yolezz",
+      "dependencies": {},
+      "description": "Créez vos thèmes avec aperçu EN DIRECT : couleurs, import/export JSON, enregistrement dans Paramètres → Thèmes.",
+      "entry": "main.py",
+      "files": {
+        "main.py": "ab324350c9de2574b60cb0f33628fb2e854bd5e9469e972933e8f625deb1909d",
+        "plugin.json": "9c60f52fb64371da912672358ceaaced36456443bf342284267cd76b3648277b",
+        "studio.py": "01dce5540ce86db7c9cf865add036ede9dd0f4c912af539fa56b2bb13eb9db9d",
+        "themes.py": "d2fb4989ffa3a100408941b891a8aa544902298640fe458445779985423b36a7"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "theme-studio",
+      "lang": "python",
+      "min_voktora": "",
+      "name": "Theme Studio",
+      "path": "plugins/theme-studio",
+      "permissions": [
+        "clipboard",
+        "ui"
+      ],
+      "requires": [],
+      "tags": [
+        "developpeur",
+        "apparence"
+      ],
+      "tier": "official",
+      "version": "1.0.0"
+    },
+    {
       "api": 2,
       "author": "yolezz",
+      "dependencies": {},
       "description": "Liste les TODO, FIXME et HACK du projet ouvert, dans un onglet dédié.",
       "entry": "main.py",
       "files": {
@@ -134,6 +274,7 @@
       },
       "homepage": "https://github.com/yo-le-zz/Voktora",
       "id": "todo-scanner",
+      "lang": "python",
       "min_voktora": "",
       "name": "TODO Scanner",
       "path": "plugins/todo-scanner",
@@ -141,6 +282,7 @@
         "files",
         "ui"
       ],
+      "requires": [],
       "tags": [
         "code",
         "qualité"
@@ -151,6 +293,7 @@
     {
       "api": 2,
       "author": "yolezz",
+      "dependencies": {},
       "description": "Ajuste l'apparence : mode compact, coins arrondis, police plus grande, barres de défilement fines.",
       "entry": "main.py",
       "files": {
@@ -159,12 +302,14 @@
       },
       "homepage": "https://github.com/yo-le-zz/Voktora",
       "id": "ui-tweaks",
+      "lang": "python",
       "min_voktora": "",
       "name": "UI Tweaks",
       "path": "plugins/ui-tweaks",
       "permissions": [
         "ui"
       ],
+      "requires": [],
       "tags": [
         "interface",
         "style"
@@ -175,6 +320,7 @@
     {
       "api": 2,
       "author": "yolezz",
+      "dependencies": {},
       "description": "Masque la barre latérale, la barre de menus et la barre d'état pour se concentrer (Ctrl+Shift+Z).",
       "entry": "main.py",
       "files": {
@@ -183,12 +329,14 @@
       },
       "homepage": "https://github.com/yo-le-zz/Voktora",
       "id": "zen-mode",
+      "lang": "python",
       "min_voktora": "",
       "name": "Zen Mode",
       "path": "plugins/zen-mode",
       "permissions": [
         "ui"
       ],
+      "requires": [],
       "tags": [
         "interface",
         "concentration"

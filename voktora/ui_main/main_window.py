@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 import core
+import icons
 import plugins
 import theme_manager
 from plugins.ui_host import UIHost
@@ -481,7 +482,7 @@ class MainWindow(QMainWindow):
         act_explorer = QAction("📁 Ouvrir l'explorateur", self)
         act_explorer.triggered.connect(self.act_open_explorer)
         
-        act_disk = QAction("💽 Espace disque des projets...", self)
+        act_disk = QAction(icons.icon("mdi:harddisk"), "Espace disque des projets...", self)
         act_disk.triggered.connect(self.act_disk_usage)
         menu_tools.addAction(act_builder)
         menu_tools.addAction(act_disk)
@@ -522,6 +523,15 @@ class MainWindow(QMainWindow):
         menu_prefs.addSeparator()
         menu_prefs.addAction(act_theme)
         menu_prefs.addAction(act_plugins)
+        act_shops = QAction(icons.icon("mdi:storefront-outline"), "Boutiques d'apparence (thèmes, icônes, styles)...", self)
+        act_shops.triggered.connect(self.act_shops)
+        menu_prefs.addAction(act_shops)
+        act_devc = QAction(icons.icon("mdi:console"), "Console développeur (plugins)...", self)
+        act_devc.triggered.connect(self.act_dev_console)
+        menu_prefs.addAction(act_devc)
+        act_upd = QAction(icons.icon("mdi:update"), "Rechercher une mise à jour de Voktora...", self)
+        act_upd.triggered.connect(lambda: self.act_check_update(manual=True))
+        menu_prefs.addAction(act_upd)
         menu_prefs.addSeparator()
         menu_prefs.addAction(act_diag)
 
@@ -1130,6 +1140,10 @@ class MainWindow(QMainWindow):
         plugins.fire_hook("on_open", opened, log_cb=self._log)
 
     def _load_plugins(self) -> None:
+        if core.get_app_config().get("plugins", {}).get("developer_mode"):
+            from plugins import devtools
+            devtools.enable(True)
+        QTimer.singleShot(8000, self.act_check_update)
         plugins.load_all()
         plugins.fire_hook("on_start", log_cb=self._log)
         if any(p.origin == "market" for p in plugins.get_all()):
@@ -1141,6 +1155,22 @@ class MainWindow(QMainWindow):
                     if plugin_market.refresh_revocations():
                         self._revocations_ready.emit()
             threading.Thread(target=fetch, daemon=True, name="voktora-revocations").start()
+
+            def update() -> None:            # mises à jour automatiques (sans nouvelle permission), au plus toutes les 12 h
+                try:
+                    report = plugin_market.auto_update(
+                        apply=lambda ids: self._ui_host.post(lambda: self._plugins_updated(ids)))
+                except Exception:  # noqa: BLE001 — hors ligne, index illisible… : silencieux
+                    return
+                if report.skipped:
+                    self._ui_host.post(lambda: self._log("[plugins] mises à jour à valider : " + " ; ".join(
+                        f"{k} ({v})" for k, v in report.skipped.items())))
+            threading.Thread(target=update, daemon=True, name="voktora-plugin-update").start()
+
+    def _plugins_updated(self, ids: list[str]) -> None:
+        for plugin_id in ids:
+            plugins.runtime.reload_plugin(plugin_id)
+        self._set_status("Plugins mis à jour : " + ", ".join(ids), 6000)
 
     def _apply_revocations(self) -> None:
         removed = plugins.runtime.enforce_revocations()
@@ -1243,6 +1273,7 @@ class MainWindow(QMainWindow):
             if entry.get("path"):
                 entries.append((f"Ouvrir le projet › {entry.get('name') or Path(entry['path']).name}",
                                 lambda p=entry["path"]: self._on_project_selected(p)))
+        entries += plugins.palette_entries()          # commandes ajoutées par les plugins (api.add_palette_command)
         dlg = PaletteDialog(self, entries)
         dlg.move(self.geometry().center().x() - 280, self.geometry().top() + 90)
         dlg.show()
@@ -1262,6 +1293,47 @@ class MainWindow(QMainWindow):
         from ui_dialogs import SyncDialog
         SyncDialog(self, self._sync_bridge).exec()
         self._refresh_all()
+
+    def act_dev_console(self) -> None:
+        from ui_dialogs import DevConsoleDialog
+        DevConsoleDialog(self).exec()
+
+    def act_check_update(self, manual: bool = False) -> None:
+        """Vérifie les versions GitHub (tags vX.Y.Z) ; téléchargement vérifié par SHA-256, jamais d'auto-remplacement."""
+        import self_update
+
+        def work() -> None:
+            try:
+                release = self_update.check() if manual else self_update.check_if_due()
+                error = ""
+            except Exception as exc:  # noqa: BLE001
+                release, error = None, str(exc)
+            self._ui_host.post(lambda: self._update_found(release, error, manual))
+        threading.Thread(target=work, daemon=True, name="voktora-self-update").start()
+
+    def _update_found(self, release, error: str, manual: bool) -> None:
+        import self_update
+        from PySide6.QtWidgets import QMessageBox
+        if release is None:
+            if manual:
+                QMessageBox.information(self, "Mise à jour", error or f"Voktora {core.APP_VERSION} est à jour.")
+            return
+        self._set_status(f"Voktora {release.version} est disponible", 8000)
+        if QMessageBox.question(self, "Mise à jour disponible", f"Voktora {release.version} est disponible "
+                                f"(vous avez {core.APP_VERSION}).\n\n{release.notes[:600]}\n\nTélécharger et vérifier le fichier ?"
+                                ) != QMessageBox.Yes:
+            return
+        try:
+            path = self_update.download(release)
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Mise à jour", str(exc))
+            return
+        QMessageBox.information(self, "Mise à jour prête", f"Fichier vérifié (SHA-256) :\n{path}\n\n"
+                                "Fermez Voktora puis installez-le (Voktora ne remplace pas son propre programme en marche).")
+
+    def act_shops(self) -> None:
+        from ui_dialogs import ShopDialog
+        ShopDialog(self).exec()
 
     def act_plugins(self) -> None:
         from ui_dialogs import PluginsDialog

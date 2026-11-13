@@ -1,0 +1,19 @@
+{
+  "id": "mint",
+  "name": "Mint",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Clair, menthe et vert d'eau.",
+  "tags": [
+    "thème"
+  ],
+  "colors": [
+    "#f3fbf7",
+    "#1d3b32",
+    "#0f9d78",
+    "#7b61c9",
+    "#2e9e5b",
+    "#d64545",
+    "#c98a00"
+  ]
+}

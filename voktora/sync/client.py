@@ -15,7 +15,7 @@ import time
 import urllib.parse
 from collections.abc import Iterator
 
-from . import secure
+from . import secure, transfer
 from .store import Entry, SyncPathError
 
 TIMEOUT = 30.0
@@ -132,10 +132,13 @@ class RemoteStore:
                 last = exc
         raise last or ConnectionError("injoignable")
 
+    features: set = frozenset()
+
     def hello(self) -> dict:
         started = time.monotonic()
         info = self._call("GET", "/hello")
         info["rtt_ms"] = int((time.monotonic() - started) * 1000)
+        self.features = set(info.get("features", ()))          # delta / zip : seulement avec un pair 1.1.1+
         return info
 
     def keepalive(self) -> bool:
@@ -211,9 +214,24 @@ class RemoteStore:
             raise ConnectionError("analyse interrompue (réponse incomplète)")
         return {rel: Entry(v[0], int(v[1]), int(v[2])) for rel, v in result.items()}
 
-    def open_reader(self, space: str, rel: str) -> tuple[int, Iterator[bytes]]:
-        path = "/file?" + urllib.parse.urlencode({"space": space, "rel": rel})
-        conn, resp, ctx = self._request("GET", "/file", {"space": space, "rel": rel})
+    def block_hashes(self, space: str, rel: str) -> tuple[int, list[str]] | None:
+        """(taille, empreintes de blocs) du fichier de l'autre PC ; None si ce PC ne gère pas le delta (version < 1.1.1)."""
+        try:
+            data = self._call("GET", "/blocks", {"space": space, "rel": rel})
+        except RemoteError as exc:
+            if exc.status == 404:
+                return None
+            raise
+        return int(data["size"]), list(data["hashes"])
+
+    def open_reader(self, space: str, rel: str, blocks: list[int] | None = None,
+                    zip: bool = False) -> tuple[int, Iterator[bytes]]:  # noqa: A002
+        params = {"space": space, "rel": rel}
+        if blocks is not None:
+            params["blocks"] = transfer.encode_ranges(blocks)
+        if zip:
+            params["z"] = "1"
+        conn, resp, ctx = self._request("GET", "/file", params)
         if resp.status != 200:
             raw = resp.read()
             conn.close()
@@ -222,25 +240,35 @@ class RemoteStore:
             raise RemoteError(resp.status, raw[:200].decode("utf-8", "replace"))
         size = int(resp.getheader("X-Voktora-Size", "0"))
         enc = self._enc
+        zipped = resp.getheader("X-Voktora-Zip") == "1"
 
         def stream() -> Iterator[bytes]:
             try:
-                yield from secure.decrypt_stream(enc, ctx, resp.read)
+                plain = secure.decrypt_stream(enc, ctx, resp.read)
+                yield from (transfer.decompress_chunks(plain) if zipped else plain)
             except (OSError, http.client.HTTPException) as exc:
                 raise ConnectionError(str(exc)) from exc
             except secure.AuthError as exc:
                 raise ConnectionError(f"flux interrompu ou altéré ({exc})") from exc
             finally:
                 conn.close()
-        del path
         return size, stream()
 
-    def write(self, space: str, rel: str, size: int, chunks, mode: int = 0, sha: str = "") -> None:
+    def write(self, space: str, rel: str, size: int, chunks, mode: int = 0, sha: str = "",
+              blocks: list[int] | None = None, total: int = 0, zip: bool = False) -> None:  # noqa: A002
+        """Envoie un fichier. `blocks` + `total` : delta (seuls ces blocs sont envoyés). `zip` : compression par blocs."""
         params = {"space": space, "rel": rel, "mode": mode, "sha": sha}
+        if blocks is not None:
+            params["blocks"], params["total"] = transfer.encode_ranges(blocks), total
+        spool = None
+        if zip:
+            params["z"] = "1"
+            spool = transfer.Spool(chunks)                    # taille chiffrée connue avant l'envoi
+            chunks = spool.iter()
         path = "/file?" + urllib.parse.urlencode(params)
         headers = secure.sign_headers(self.secret, self.device_id, "PUT", path)
         ctx = (headers["X-Voktora-Nonce"] + path).encode()
-        headers["Content-Length"] = str(secure.encrypted_length(size))
+        headers["Content-Length"] = str(spool.encrypted_length if spool else secure.encrypted_length(size))
         conn = self._connect()
         try:
             conn.putrequest("PUT", path, skip_accept_encoding=True)
@@ -259,6 +287,8 @@ class RemoteStore:
             raise ConnectionError(f"{self.host}:{self.port} injoignable ({exc})") from exc
         finally:
             conn.close()
+            if spool:
+                spool.close()
         if resp.status != 200:
             message = json.loads(raw).get("error", "") if raw else ""
             if resp.status == 423:

@@ -1,0 +1,10 @@
+{
+  "id": "compact",
+  "name": "Compact",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Marges réduites pour voir plus de choses à l'écran.",
+  "tags": [
+    "style"
+  ]
+}

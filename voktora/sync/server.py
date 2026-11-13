@@ -13,7 +13,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-from . import net, secure
+from . import net, secure, transfer
 from .settings import SyncSettings
 from .store import LocalStore, SyncPathError
 
@@ -178,7 +178,8 @@ class _Handler(BaseHTTPRequestHandler):
             return self._json({"id": o.settings.device_id, "name": o.settings["device_name"],
                                "primary_id": o.settings["primary_id"], "status": o.status_fn(),
                                "busy": o.busy_fn() or o.session.held_by_other(dev),
-                               "port": o.port, "time": time.time(), "version": 2})
+                               "port": o.port, "time": time.time(), "version": 3,
+                               "features": ["delta", "zip"]})
         if route == "/keepalive":
             return self._json({"ok": o.session.touch(dev)})
         if route == "/request-sync":
@@ -199,11 +200,25 @@ class _Handler(BaseHTTPRequestHandler):
             return self._json({"sigs": store.signatures()})
         if route == "/manifest":
             return self._manifest(query["space"])
+        if route == "/blocks" and method == "GET":
+            o.session.touch(dev)
+            size, hashes = store.block_hashes(query["space"], query["rel"])
+            return self._json({"size": size, "hashes": hashes})
         if route == "/file" and method == "GET":
-            size, chunks = store.open_reader(query["space"], query["rel"])
+            if query.get("blocks"):
+                indices = transfer.decode_ranges(query["blocks"])
+                chunks = store.open_blocks(query["space"], query["rel"], indices)
+                size = sum(1 for _ in indices)
+            else:
+                size, chunks = store.open_reader(query["space"], query["rel"])
+            zipped = query.get("z") == "1"
+            if zipped:
+                chunks = transfer.compress_chunks(chunks)
             self.send_response(200)
             self.send_header("Content-Type", "application/octet-stream")
             self.send_header("X-Voktora-Size", str(size))
+            if zipped:
+                self.send_header("X-Voktora-Zip", "1")
             self.send_header("Connection", "close")
             self.end_headers()
             for block in secure.encrypt_stream(self._enc, self._ctx, chunks):
@@ -219,8 +234,15 @@ class _Handler(BaseHTTPRequestHandler):
                 data = self.rfile.read(n) if n > 0 else b""
                 remaining -= len(data)
                 return data
-            store.write(query["space"], query["rel"], secure.decrypt_stream(self._enc, self._ctx, read),
-                        int(query.get("mode", "0") or 0), expected_sha=query.get("sha", ""))
+            incoming = secure.decrypt_stream(self._enc, self._ctx, read)
+            if query.get("z") == "1":
+                incoming = transfer.decompress_chunks(incoming)
+            mode = int(query.get("mode", "0") or 0)
+            if query.get("blocks"):
+                store.write_delta(query["space"], query["rel"], int(query["total"]), transfer.decode_ranges(query["blocks"]),
+                                  incoming, mode, expected_sha=query.get("sha", ""))
+            else:
+                store.write(query["space"], query["rel"], incoming, mode, expected_sha=query.get("sha", ""))
             return self._json({"ok": True})
         if route == "/delete" and method == "POST":
             body = self._body_json()

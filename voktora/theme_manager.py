@@ -20,6 +20,7 @@ API publique :
 
 from __future__ import annotations
 
+import contextlib
 import json
 import shutil
 from pathlib import Path
@@ -290,6 +291,11 @@ def get_available_themes() -> list[str]:
         names += [k for k in plugins.extra_themes() if k not in names]      # thèmes fournis par des plugins
     except Exception:
         pass
+    try:
+        import shops
+        names += [k for k in shops.installed_themes() if k not in names]    # thèmes de la boutique
+    except Exception:
+        pass
     return names
 
 
@@ -307,6 +313,12 @@ def load_theme(name: str) -> dict:
         plugin_theme = plugins.extra_themes().get(name)
     except Exception:
         plugin_theme = None
+    if plugin_theme is None:
+        try:
+            import shops
+            plugin_theme = shops.installed_themes().get(name)
+        except Exception:
+            plugin_theme = None
     if plugin_theme is not None:
         t = dict(plugin_theme)
         t["colors"] = _normalize_colors(t["colors"])
@@ -357,6 +369,9 @@ def apply_theme_to_app(app) -> None:
     qss = _build_qss(theme)
     try:
         import plugins
+        with contextlib.suppress(Exception):
+            import shops
+            qss += "\n" + shops.extra_stylesheet()      # styles de la boutique (après le thème)
         qss += "\n" + plugins.extra_stylesheet()        # styles ajoutés par les plugins (après le thème)
     except Exception:
         pass         # un plugin ne doit jamais empêcher d'appliquer le thème

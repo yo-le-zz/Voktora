@@ -1,0 +1,14 @@
+{
+  "name": "Coffee",
+  "description": "Tons café chauds, doux pour les yeux.",
+  "colors": {
+    "base": "#2a211c",
+    "text": "#f0e4d7",
+    "blue": "#d4a373",
+    "mauve": "#c08497",
+    "green": "#a3b18a",
+    "red": "#e07a5f",
+    "yellow": "#e9c46a",
+    "primary": "#d4a373"
+  }
+}

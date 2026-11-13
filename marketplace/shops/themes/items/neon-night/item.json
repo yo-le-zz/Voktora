@@ -1,0 +1,19 @@
+{
+  "id": "neon-night",
+  "name": "Neon Night",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Fond nuit, néons cyan et magenta.",
+  "tags": [
+    "thème"
+  ],
+  "colors": [
+    "#0b0b1e",
+    "#f5f5ff",
+    "#00f0ff",
+    "#ff2bd6",
+    "#39ff88",
+    "#ff3860",
+    "#fff95b"
+  ]
+}

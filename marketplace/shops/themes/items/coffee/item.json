@@ -1,0 +1,19 @@
+{
+  "id": "coffee",
+  "name": "Coffee",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Tons café chauds, doux pour les yeux.",
+  "tags": [
+    "thème"
+  ],
+  "colors": [
+    "#2a211c",
+    "#f0e4d7",
+    "#d4a373",
+    "#c08497",
+    "#a3b18a",
+    "#e07a5f",
+    "#e9c46a"
+  ]
+}

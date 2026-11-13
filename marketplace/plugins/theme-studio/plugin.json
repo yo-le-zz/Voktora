@@ -1,0 +1,19 @@
+{
+  "id": "theme-studio",
+  "name": "Theme Studio",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Créez vos thèmes avec aperçu EN DIRECT : couleurs, import/export JSON, enregistrement dans Paramètres → Thèmes.",
+  "api": 5,
+  "lang": "python",
+  "entry": "main.py",
+  "permissions": [
+    "clipboard",
+    "ui"
+  ],
+  "tags": [
+    "developpeur",
+    "apparence"
+  ],
+  "homepage": "https://github.com/yo-le-zz/Voktora"
+}

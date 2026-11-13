@@ -1,0 +1,9 @@
+[package]
+name = "voktora-plugin"
+version = "1.0.0"
+edition = "2021"
+description = "SDK pour écrire des plugins Voktora en Rust (API de plugins v5) sans code de liaison"
+license = "MIT"
+
+[dependencies]
+serde_json = "1"

@@ -27,7 +27,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import merge
+from . import merge, transfer
 from .settings import SyncSettings
 from .store import CFG, Entry, LocalStore, SyncPathError
 
@@ -239,9 +239,9 @@ class SyncEngine:
         # Réglages d'abord : la liste des projets apparaît tout de suite ; les fichiers arrivent ensuite projet par projet.
         return ([CFG] if CFG in spaces else []) + [s for s in spaces if s.startswith("x:")] + projects
 
-    def _remote(self, fn, *args):
+    def _remote(self, fn, *args, **kwargs):
         try:
-            return fn(*args)
+            return fn(*args, **kwargs)
         except (ConnectionError, TimeoutError, OSError) as exc:
             if isinstance(exc, FileNotFoundError):
                 raise
@@ -546,13 +546,17 @@ class SyncEngine:
         if a.conflict_copy:
             self._save_conflict_copy(a)
         if a.kind == PULL:
-            size, chunks = self._remote(remote.open_reader, a.space, a.rel)
-            data = self._tee(chunks, a)
-            local.write(a.space, a.rel, data, a.mode, expected_sha=a.sha)
+            if not self._pull_delta(a):
+                zipped = self._use_zip(a)
+                size, chunks = self._remote(remote.open_reader, a.space, a.rel, **({"zip": True} if zipped else {}))
+                data = self._tee(chunks, a)
+                local.write(a.space, a.rel, data, a.mode, expected_sha=a.sha)
             self.base.set(a.space, a.rel, a.sha)
         elif a.kind == PUSH:
-            size, chunks = local.open_reader(a.space, a.rel)
-            self._remote(remote.write, a.space, a.rel, size, self._tee(chunks, a), a.mode, a.sha)
+            if not self._push_delta(a):
+                size, chunks = local.open_reader(a.space, a.rel)
+                self._remote(remote.write, a.space, a.rel, size, self._tee(chunks, a), a.mode, a.sha,
+                             **({"zip": True} if self._use_zip(a) else {}))
             self.base.set(a.space, a.rel, a.sha)
         elif a.kind == DEL_LOCAL:
             local.delete(a.space, a.rel)
@@ -562,6 +566,68 @@ class SyncEngine:
             self.base.set(a.space, a.rel, None)
         elif a.kind == MERGE:
             self._do_merge(a)
+
+    # ── transferts allégés (1.1.1) : delta par blocs et compression ─────────────────────────────
+
+    def _use_zip(self, a: Action) -> bool:
+        return (self.settings["compress"] and a.space != CFG and "zip" in getattr(self.remote, "features", ())
+                and transfer.wants_compression(a.rel, a.size))
+
+    def _delta_candidate(self, a: Action) -> bool:
+        return (self.settings["delta"] and a.space != CFG and a.size >= transfer.DELTA_MIN
+                and "delta" in getattr(self.remote, "features", ()) and self.local.file_size(a.space, a.rel) > 0)
+
+    def _delta_plan(self, a: Action, have_side, want_side) -> list[int] | None:
+        """Blocs à transférer, ou None si le delta ne vaut pas le coup / n'est pas possible."""
+        remote_info = self._remote(self.remote.block_hashes, a.space, a.rel)
+        if remote_info is None:
+            return None
+        remote_size, remote_hashes = remote_info
+        if remote_size <= 0:
+            return None
+        _, local_hashes = self.local.block_hashes(a.space, a.rel, self.cancel)
+        have, want = (local_hashes, remote_hashes) if have_side == "local" else (remote_hashes, local_hashes)
+        changed = transfer.changed_blocks(have, want)
+        if not transfer.worth_delta(changed, len(want)):
+            return None
+        self._say(f"Delta : {a.rel} — {len(changed)} bloc(s) sur {len(want)} à transférer", detail=True)
+        return changed
+
+    def _pull_delta(self, a: Action) -> bool:
+        if not self._delta_candidate(a):
+            return False
+        try:
+            changed = self._delta_plan(a, "local", "remote")
+            if changed is None:
+                return False
+            _, chunks = self._remote(self.remote.open_reader, a.space, a.rel, blocks=changed,
+                                     **({"zip": True} if self.settings["compress"] and "zip" in getattr(self.remote, "features", ()) else {}))
+            self.local.write_delta(a.space, a.rel, a.size, changed, self._tee_plain(chunks), a.mode, expected_sha=a.sha)
+            return True
+        except SyncPathError as exc:
+            self._say(f"Delta impossible pour {a.rel} ({exc}) : transfert complet", detail=True)
+            return False
+
+    def _push_delta(self, a: Action) -> bool:
+        if not self._delta_candidate(a):
+            return False
+        try:
+            changed = self._delta_plan(a, "remote", "local")
+            if changed is None:
+                return False
+            chunks = self.local.open_blocks(a.space, a.rel, changed)
+            self._remote(self.remote.write, a.space, a.rel, len(changed) * transfer.BLOCK, self._tee_plain(chunks),
+                         a.mode, a.sha, blocks=changed, total=a.size,
+                         **({"zip": True} if self.settings["compress"] and "zip" in getattr(self.remote, "features", ()) else {}))
+            return True
+        except SyncPathError as exc:
+            self._say(f"Delta impossible pour {a.rel} ({exc}) : transfert complet", detail=True)
+            return False
+
+    def _tee_plain(self, chunks):
+        for chunk in chunks:
+            self._check()
+            yield chunk
 
     def _tee(self, chunks, a: Action):
         """Garde le texte (≤256 Ko) transféré pour pouvoir fusionner plus tard, et surveille l'annulation."""

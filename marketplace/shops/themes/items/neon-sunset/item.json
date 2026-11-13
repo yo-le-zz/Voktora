@@ -1,0 +1,19 @@
+{
+  "id": "neon-sunset",
+  "name": "Neon Sunset",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Coucher de soleil néon, rose et orange.",
+  "tags": [
+    "thème"
+  ],
+  "colors": [
+    "#1a0f1f",
+    "#ffeef8",
+    "#ff9e64",
+    "#ff4fa3",
+    "#7dffb2",
+    "#ff5c7a",
+    "#ffd166"
+  ]
+}

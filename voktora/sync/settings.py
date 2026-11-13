@@ -54,6 +54,8 @@ DEFAULTS: dict = {
     "log_level": "normal",              # "quiet" (essentiel) | "normal" (par projet) | "detailed" (par fichier)
     "performance": "auto",
     "quick_check": True,
+    "delta": True,                 # transfert par blocs des gros fichiers déjà présents
+    "compress": True,              # compression des fichiers compressibles
     "full_check_hours": 12,              # "auto" | "eco" (PC peu puissant) | "normal" | "fast"
 }
 SECRET_KEYS = {"peers", "invites"}

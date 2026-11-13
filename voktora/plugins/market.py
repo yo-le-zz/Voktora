@@ -39,17 +39,23 @@ from pathlib import Path, PurePosixPath
 
 import core
 
-from . import audit, lock, runtime
+from . import audit, deps, lock, runtime
 from . import manifest as manifest_mod
 
 DEFAULT_URL = "https://raw.githubusercontent.com/yo-le-zz/Voktora/main/marketplace"
 INDEX_NAME = "index.json"
 SCHEMA = 1
 
-ALLOWED_SUFFIXES = frozenset({".py", ".json", ".md", ".txt", ".qss", ".svg", ".png", ".css"})
-MAX_FILES = 40
-MAX_FILE_BYTES = 512 * 1024
-MAX_PLUGIN_BYTES = 2 * 1024 * 1024
+ALLOWED_SUFFIXES = frozenset({
+    ".py", ".json", ".md", ".txt", ".qss", ".svg", ".png", ".css",
+    # 1.1.1 : plus de limite par extension pour les contenus non exécutables ni binaires natifs
+    ".js", ".mjs", ".rs", ".toml", ".lock", ".html", ".htm", ".yaml", ".yml", ".ini", ".cfg", ".csv", ".tsv", ".xml",
+    ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".ttf", ".otf", ".woff", ".woff2", ".wav", ".ogg", ".mp3", ".qml",
+    ".ui", ".po", ".pyi", ".rst", ".license", ".typed",
+})
+MAX_FILES = 500                       # 1.1.1 : plugins à nombreux fichiers (plugins de plusieurs modules)
+MAX_FILE_BYTES = 32 * 1024 * 1024
+MAX_PLUGIN_BYTES = 256 * 1024 * 1024
 MAX_INDEX_BYTES = 1024 * 1024
 TIMEOUT = 15.0
 _SHA_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -84,6 +90,9 @@ class MarketEntry:
     tier: str = TIER_OFFICIAL
     repo: str = ""                                   # communauté : https://github.com/<auteur>/<dépôt>
     commit: str = ""                                 # communauté : SHA complet du commit épinglé
+    lang: str = "python"
+    requires: list[str] = field(default_factory=list)
+    dependencies: dict[str, str] = field(default_factory=dict)
 
     @property
     def community(self) -> bool:
@@ -145,6 +154,8 @@ def parse_entry(raw: object) -> MarketEntry:
     manifest, errors = manifest_mod.validate(raw)
     if manifest is None or not isinstance(raw, dict):
         raise MarketError("Entrée d'index invalide : " + " ".join(errors))
+    if manifest.auto_permissions:
+        raise MarketError(f"{manifest.id} : le marketplace exige la liste explicite des permissions (pas « auto »).")
     files = raw.get("files")
     if not isinstance(files, dict) or not files or len(files) > MAX_FILES:
         raise MarketError(f"{manifest.id} : liste de fichiers absente ou trop longue.")
@@ -168,11 +179,14 @@ def parse_entry(raw: object) -> MarketEntry:
             raise MarketError(f"{manifest.id} : le dossier doit être plugins/{manifest.id}.")
     else:
         raise MarketError(f"{manifest.id} : niveau « {tier} » inconnu.")
+    if manifest.lang == "rust" and tier != TIER_OFFICIAL:
+        raise MarketError(f"{manifest.id} : le code natif (Rust) n'est accepté qu'au niveau officiel.")
     return MarketEntry(
         id=manifest.id, name=manifest.name, version=manifest.version, author=manifest.author,
         description=manifest.description, api=manifest.api, permissions=list(manifest.permissions),
         tags=list(manifest.tags), homepage=manifest.homepage, path=folder, files=clean,
         min_voktora=manifest.min_voktora, tier=tier, repo=repo, commit=commit,
+        lang=manifest.lang, requires=list(manifest.requires), dependencies=dict(manifest.dependencies),
     )
 
 
@@ -377,7 +391,7 @@ def install(entry: MarketEntry, base: str | None = None, on_progress: ProgressCa
         content = _fetch(file_url(entry, base, name), limit=MAX_FILE_BYTES)
         size += len(content)
         if size > MAX_PLUGIN_BYTES:
-            raise MarketError(f"{entry.name} dépasse {MAX_PLUGIN_BYTES // 1024} Ko : installation refusée.")
+            raise MarketError(f"{entry.name} dépasse {MAX_PLUGIN_BYTES // (1024 * 1024)} Mo : installation refusée.")
         if hashlib.sha256(content).hexdigest() != digest:
             raise MarketError(
                 f"Empreinte incorrecte pour {name} : fichier modifié ou index périmé. Installation annulée.")
@@ -474,3 +488,125 @@ def uninstall(plugin_id: str, purge_data: bool = False) -> bool:
     if purge_data:
         shutil.rmtree(core.get_data_dir() / "plugins_data" / plugin_id, ignore_errors=True)
     return existed
+
+
+# ── Dépendances entre plugins et mises à jour automatiques (1.1.1) ──────────────────
+
+def _catalog(entries: list[MarketEntry]) -> dict[str, tuple[str, dict[str, str]]]:
+    return {e.id: (e.version, e.dependencies) for e in entries}
+
+
+def _installed_versions() -> dict[str, str]:
+    return {p.id: p.version for p in runtime.get_all() if p.version != "?"}
+
+
+def dependencies_to_install(entry: MarketEntry, entries: list[MarketEntry]) -> tuple[list[MarketEntry], list[str]]:
+    """Plugins du marketplace à installer AVANT `entry` (dans l'ordre), et problèmes (introuvable, version…)."""
+    order, problems = deps.missing_for_install(entry.dependencies, _installed_versions(), _catalog(entries))
+    by_id = {e.id: e for e in entries}
+    return [by_id[i] for i in order], problems
+
+
+def install_with_dependencies(entry: MarketEntry, entries: list[MarketEntry], base: str | None = None,
+                              on_progress: ProgressCallback | None = None) -> list[str]:
+    """Installe les dépendances manquantes puis le plugin. Retourne les identifiants installés, dans l'ordre."""
+    needed, problems = dependencies_to_install(entry, entries)
+    if problems:
+        raise MarketError(f"{entry.name} : " + " ; ".join(problems))
+    done: list[str] = []
+    for item in [*needed, entry]:
+        install(item, base, on_progress)
+        done.append(item.id)
+    return done
+
+
+@dataclass
+class UpdateReport:
+    updated: list[str] = field(default_factory=list)
+    skipped: dict[str, str] = field(default_factory=dict)       # id → pourquoi (ex. nouvelles permissions)
+    installed_dependencies: list[str] = field(default_factory=list)
+
+
+AUTO_UPDATE_SECONDS = 12 * 3600
+
+
+def auto_update_enabled() -> bool:
+    cfg = core.get_app_config().get("plugins", {})
+    return bool(cfg.get("auto_update", True)) if isinstance(cfg, dict) else True
+
+
+def set_auto_update(enabled: bool) -> None:
+    cfg = core.get_app_config()
+    section = cfg.get("plugins") if isinstance(cfg.get("plugins"), dict) else {}
+    section["auto_update"] = bool(enabled)
+    cfg["plugins"] = section
+    core.set_app_config(cfg)
+
+
+def _due() -> bool:
+    import time
+    cfg = core.get_app_config().get("plugins", {})
+    last = float(cfg.get("last_auto_update", 0)) if isinstance(cfg, dict) else 0.0
+    return time.time() - last >= AUTO_UPDATE_SECONDS
+
+
+def _stamp_update() -> None:
+    import time
+    cfg = core.get_app_config()
+    section = cfg.get("plugins") if isinstance(cfg.get("plugins"), dict) else {}
+    section["last_auto_update"] = time.time()
+    cfg["plugins"] = section
+    core.set_app_config(cfg)
+
+
+def auto_update(entries: list[MarketEntry] | None = None, force: bool = False,
+                apply: Callable[[list[str]], None] | None = None) -> UpdateReport:
+    """Met à jour les plugins du marketplace installés, SANS surprise :
+      • jamais si la nouvelle version demande une permission de plus (signalé, à confirmer à la main) ;
+      • jamais si elle casserait la version exigée par un plugin qui en dépend ;
+      • les nouvelles dépendances (sans nouvelle permission pour le plugin) sont installées d'abord.
+    `apply(ids)` : appelé avec les identifiants mis à jour (à exécuter sur le thread de l'interface : rechargement).
+    Écrit sur disque uniquement ; ne recharge rien lui-même."""
+    report = UpdateReport()
+    if not force and not (auto_update_enabled() and _due()):
+        return report
+    if entries is None:
+        entries, _cached = fetch_index(use_cache_on_error=False)
+    by_id = {e.id: e for e in entries}
+    graph = {p.id: dict(p.dependencies) for p in runtime.get_all()}
+    for info in list(runtime.get_all()):
+        entry = by_id.get(info.id)
+        if info.origin != "market" or entry is None or not manifest_mod.is_newer(entry.version, info.version):
+            continue
+        if not entry.compatible:
+            report.skipped[info.id] = f"nécessite une version plus récente de Voktora (API {entry.api})"
+            continue
+        added = permission_changes(info.permissions, entry.permissions)
+        if added:
+            report.skipped[info.id] = "nouvelles permissions : " + ", ".join(added) + " — à confirmer dans Plugins → Marketplace"
+            continue
+        broken = deps.breaks_dependents(info.id, entry.version, graph)
+        if broken:
+            report.skipped[info.id] = "casserait : " + ", ".join(broken)
+            continue
+        try:
+            needed, problems = dependencies_to_install(entry, entries)
+            if problems:
+                report.skipped[info.id] = "; ".join(problems)
+                continue
+            risky = [d.id for d in needed if d.permissions and d.id not in {p.id for p in runtime.get_all()}]
+            if risky:
+                report.skipped[info.id] = "nouvelle dépendance à installer à la main : " + ", ".join(risky)
+                continue
+            for dep in needed:
+                install(dep)
+                report.installed_dependencies.append(dep.id)
+            install(entry)
+            report.updated.append(info.id)
+        except MarketError as exc:
+            report.skipped[info.id] = str(exc)
+    if report.updated and apply is not None:
+        apply(report.updated)
+    if not force:
+        _stamp_update()
+    return report

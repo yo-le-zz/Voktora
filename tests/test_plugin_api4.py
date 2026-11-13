@@ -30,7 +30,7 @@ def host(isolated_data_dir):
 
 
 def test_v4_declared():
-    assert manifest.API_VERSION == 4
+    assert manifest.API_VERSION >= 4
     for p in ("fleet", "projects.write", "ai"):
         assert p in manifest.PERMISSIONS
     assert "on_sync_start" in runtime.EVENTS and "on_sync_done" in runtime.EVENTS

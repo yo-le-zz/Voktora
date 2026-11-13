@@ -1,0 +1,14 @@
+{
+  "name": "Mint",
+  "description": "Clair, menthe et vert d'eau.",
+  "colors": {
+    "base": "#f3fbf7",
+    "text": "#1d3b32",
+    "blue": "#0f9d78",
+    "mauve": "#7b61c9",
+    "green": "#2e9e5b",
+    "red": "#d64545",
+    "yellow": "#c98a00",
+    "primary": "#0f9d78"
+  }
+}

@@ -12,15 +12,17 @@ import threading
 import ai_agent
 import ai_providers
 import core
-from PySide6.QtCore import QObject, Qt, Signal
+import markdown_lite
+from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Signal
+from PySide6.QtGui import QDesktopServices, QKeyEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QTextBrowser,
     QVBoxLayout,
@@ -75,27 +77,51 @@ class _Bridge(QObject):
     finished = Signal(str)
 
 
+class _Composer(QPlainTextEdit):
+    """Zone de saisie : Entrée envoie, Maj+Entrée ajoute une ligne."""
+    submitted = Signal()
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter) and not event.modifiers() & Qt.ShiftModifier:
+            self.submitted.emit()
+            return
+        super().keyPressEvent(event)
+
+
+# genre → (étiquette, couleur)
+_STYLE = {"user": ("Vous", "#89b4fa"), "assistant": ("Assistant", "#a6e3a1"), "tool": ("outil", "#f9e2af"),
+          "result": ("résultat", "#7f849c"), "denied": ("refusé", "#f38ba8"), "error": ("erreur", "#f38ba8"),
+          "info": ("", "#7f849c")}
+RENDER_INTERVAL_MS = 60                     # le flux ne redessine pas à chaque jeton
+
+
 class AIChatDialog(QDialog):
     def __init__(self, parent=None, generate=None):
         super().__init__(parent)
         self.setWindowTitle("Assistant IA")
-        self.setMinimumSize(640, 560)
+        self.setMinimumSize(720, 620)
         self._generate = generate
         self._agent: ai_agent.Agent | None = None
         self._busy = False
         self._cancel = threading.Event()
         self._answer = threading.Event()
         self._allowed = False
+        self._messages: list[list[str]] = []        # [genre, texte]
+        self._streaming = False                     # le dernier message « assistant » est en cours d'écriture
         self._bridge = _Bridge()
-        self._bridge.line.connect(self._append)
+        self._bridge.line.connect(self._on_event)
         self._bridge.confirm.connect(self._ask_confirmation)
         self._bridge.finished.connect(self._done)
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.setInterval(RENDER_INTERVAL_MS)
+        self._timer.timeout.connect(self._render)
 
         v = QVBoxLayout(self)
         top = QHBoxLayout()
         self.provider = QComboBox()
         self.provider.currentIndexChanged.connect(lambda _: setattr(self, "_agent", None))
-        perms = QPushButton("🔐 Permissions…")
+        perms = QPushButton("Permissions…")
         perms.clicked.connect(self._permissions)
         clear = QPushButton("Nouvelle discussion")
         clear.clicked.connect(self._reset)
@@ -105,12 +131,18 @@ class AIChatDialog(QDialog):
         top.addWidget(clear)
         v.addLayout(top)
         self.view = QTextBrowser()
-        self.view.setOpenExternalLinks(False)
+        self.view.setOpenLinks(False)
+        self.view.anchorClicked.connect(lambda url: QDesktopServices.openUrl(QUrl(url)))
+        self.view.document().setDefaultStyleSheet("p, li { line-height: 135%; }")
         v.addWidget(self.view, 1)
+        self.status = QLabel("")
+        self.status.setStyleSheet("color:#7f849c")
+        v.addWidget(self.status)
         bottom = QHBoxLayout()
-        self.edit = QLineEdit()
-        self.edit.setPlaceholderText("Demandez quelque chose… (ex. « liste mes projets Rust », « synchronise »)")
-        self.edit.returnPressed.connect(self._send)
+        self.edit = _Composer()
+        self.edit.setFixedHeight(64)
+        self.edit.setPlaceholderText("Demandez quelque chose… (Entrée envoie, Maj+Entrée = nouvelle ligne)")
+        self.edit.submitted.connect(self._send)
         self.send = QPushButton("Envoyer")
         self.send.clicked.connect(self._send)
         self.stop = QPushButton("Arrêter")
@@ -121,7 +153,7 @@ class AIChatDialog(QDialog):
         bottom.addWidget(self.stop)
         v.addLayout(bottom)
         self._load_providers()
-        self._append("info", "Bonjour ! Je peux utiliser les outils de Voktora selon vos permissions (bouton « Permissions »).")
+        self._add("info", "Bonjour ! Je peux utiliser les outils de Voktora selon vos permissions (bouton « Permissions »).")
 
     # ── fournisseurs ──
     def _load_providers(self) -> None:
@@ -131,17 +163,56 @@ class AIChatDialog(QDialog):
         index = next((i for i, p in enumerate(ai["providers"]) if p["id"] == ai["active"]), 0)
         self.provider.setCurrentIndex(index)
         if not ai["providers"]:
-            self._append("error", "Aucun fournisseur IA configuré : ajoutez-en un dans Configuration → IA (Ollama, OmniRoute…).")
+            self._add("error", "Aucun fournisseur IA configuré : ajoutez-en un dans Configuration → IA (Ollama, OmniRoute…).")
             self.send.setEnabled(False)
 
     # ── affichage ──
-    def _append(self, kind: str, text: str) -> None:
-        style = {"user": ("Vous", "#89b4fa"), "assistant": ("Assistant", "#a6e3a1"), "tool": ("🔧 outil", "#f9e2af"),
-                 "result": ("↳ résultat", "#7f849c"), "denied": ("⛔", "#f38ba8"), "error": ("⚠", "#f38ba8"),
-                 "info": ("", "#7f849c")}[kind]
-        label = f"<b style='color:{style[1]}'>{style[0]}</b> " if style[0] else ""
-        body = html.escape(text).replace("\n", "<br>")
-        self.view.append(f"<p style='margin:4px 0'>{label}{body}</p>")
+    def _add(self, kind: str, text: str) -> None:
+        self._messages.append([kind, text])
+        self._schedule()
+
+    def _schedule(self) -> None:
+        if not self._timer.isActive():
+            self._timer.start()
+
+    def _render(self) -> None:
+        parts: list[str] = []
+        last = len(self._messages) - 1
+        for index, (kind, text) in enumerate(self._messages):
+            label, color = _STYLE[kind]
+            if kind == "assistant":
+                body = markdown_lite.render(text)
+                if self._streaming and index == last:
+                    body += f"<span style='color:{color}'>▍</span>"
+                parts.append(f"<div style='margin:10px 0 2px 0'><b style='color:{color}'>{label}</b></div>{body}")
+            elif kind == "user":
+                parts.append(f"<div style='margin:12px 0 2px 0'><b style='color:{color}'>{label}</b></div>"
+                             f"<p style='margin:2px 0'>{html.escape(text).replace(chr(10), '<br>')}</p>")
+            elif kind in ("tool", "result"):
+                parts.append(f"<div style='color:{color};font-size:12px;margin:1px 0 1px 12px'>"
+                             f"<b>{label}</b> <code>{html.escape(text[:300])}</code></div>")
+            else:
+                prefix = f"<b style='color:{color}'>{label}</b> " if label else ""
+                parts.append(f"<p style='color:{color};margin:6px 0'>{prefix}{html.escape(text)}</p>")
+        bar = self.view.verticalScrollBar()
+        stick = bar.value() >= bar.maximum() - 24
+        self.view.setHtml("".join(parts))
+        if stick:
+            bar.setValue(bar.maximum())
+
+    def _on_event(self, kind: str, text: str) -> None:
+        if kind == "token":
+            if not self._streaming:
+                self._messages.append(["assistant", ""])
+                self._streaming = True
+                self.status.setText("L'assistant écrit…")
+            self._messages[-1][1] += text
+            self._schedule()
+            return
+        self._streaming = False
+        if kind == "tool":
+            self.status.setText("Utilisation d'un outil…")
+        self._add(kind, text)
 
     def _permissions(self) -> None:
         PermissionsDialog(self).exec()
@@ -150,17 +221,17 @@ class AIChatDialog(QDialog):
         if self._busy:
             return
         self._agent = None
-        self.view.clear()
-        self._append("info", "Nouvelle discussion.")
+        self._messages.clear()
+        self._add("info", "Nouvelle discussion.")
 
     # ── envoi ──
     def _send(self) -> None:
-        text = self.edit.text().strip()
+        text = self.edit.toPlainText().strip()
         provider = self.provider.currentData()
         if not text or self._busy or not provider:
             return
         self.edit.clear()
-        self._append("user", text)
+        self._add("user", text)
         if self._agent is None:
             self._agent = ai_agent.Agent(provider, self._confirm_from_thread,
                                          lambda k, t: self._bridge.line.emit(k, t), self._generate,
@@ -169,6 +240,7 @@ class AIChatDialog(QDialog):
         self._cancel.clear()
         self.send.setEnabled(False)
         self.stop.setEnabled(True)
+        self.status.setText("L'assistant réfléchit…")
         agent = self._agent
 
         def work() -> None:
@@ -186,10 +258,17 @@ class AIChatDialog(QDialog):
 
     def _done(self, answer: str) -> None:
         if answer:
-            self._append("assistant", answer)
+            if self._streaming and self._messages and self._messages[-1][0] == "assistant":
+                self._messages[-1][1] = answer                 # texte final, propre (sans <think>)
+            elif not (self._messages and self._messages[-1][0] == "assistant" and self._messages[-1][1] == answer):
+                self._messages.append(["assistant", answer])
+        self._streaming = False
         self._busy = False
+        self.status.setText("")
         self.send.setEnabled(True)
         self.stop.setEnabled(False)
+        self._timer.stop()
+        self._render()
         self.edit.setFocus()
 
     # ── confirmation (le fil de travail attend la réponse de l'utilisateur) ──

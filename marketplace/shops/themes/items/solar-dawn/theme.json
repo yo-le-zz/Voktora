@@ -1,0 +1,14 @@
+{
+  "name": "Solar Dawn",
+  "description": "Clair, aube chaude orange et ambre.",
+  "colors": {
+    "base": "#fdf6e3",
+    "text": "#3b3a36",
+    "blue": "#268bd2",
+    "mauve": "#d33682",
+    "green": "#859900",
+    "red": "#dc322f",
+    "yellow": "#b58900",
+    "primary": "#cb4b16"
+  }
+}

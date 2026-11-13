@@ -10,10 +10,10 @@
 
 ```bash
 # 1. Télécharger le .deb depuis la dernière release
-wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora_1.1.0_amd64.deb
+wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora_1.1.1_amd64.deb
 
 # 2. Installer
-sudo apt install ./voktora_1.1.0_amd64.deb   # résout aussi les dépendances
+sudo apt install ./voktora_1.1.1_amd64.deb   # résout aussi les dépendances
 
 # 4. Lancer
 voktora
@@ -24,11 +24,11 @@ voktora
 
 ```bash
 # 1. Télécharger le .rpm depuis la dernière release
-wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora-1.1.0-1.x86_64.rpm
+wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora-1.1.1-1.x86_64.rpm
 
 # 2. Installer (les bibliothèques Qt nécessaires sont résolues automatiquement)
-sudo dnf install ./voktora-1.1.0-1.x86_64.rpm        # Fedora / RHEL
-sudo zypper install ./voktora-1.1.0-1.x86_64.rpm     # openSUSE
+sudo dnf install ./voktora-1.1.1-1.x86_64.rpm        # Fedora / RHEL
+sudo zypper install ./voktora-1.1.1-1.x86_64.rpm     # openSUSE
 
 # 3. Lancer
 voktora
@@ -36,8 +36,8 @@ voktora
 ## Arch Linux, Omarchy, EndeavourOS, Manjaro, CachyOS (`.pkg.tar.zst`)
 
 ```bash
-wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora-1.1.0-1-x86_64.pkg.tar.zst
-sudo pacman -U ./voktora-1.1.0-1-x86_64.pkg.tar.zst
+wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora-1.1.1-1-x86_64.pkg.tar.zst
+sudo pacman -U ./voktora-1.1.1-1-x86_64.pkg.tar.zst
 ```
 
 Un `PKGBUILD` de référence (`voktora-bin`) est fourni dans `Installers/Arch installer/`.
@@ -69,7 +69,7 @@ Les données utilisateur (`~/.voktora/`) ne sont **pas** supprimées.
 
 ### Via le .msi (recommandé)
 
-1. Télécharger `Voktora_1.1.0_x64.msi` depuis [les releases GitHub](https://github.com/yo-le-zz/Voktora/releases/latest)
+1. Télécharger `Voktora_1.1.1_x64.msi` depuis [les releases GitHub](https://github.com/yo-le-zz/Voktora/releases/latest)
 2. Double-cliquer sur le `.msi`
 3. Suivre l'assistant d'installation (Next → Install → Finish)
 4. Voktora est disponible dans le menu Démarrer et sur le Bureau

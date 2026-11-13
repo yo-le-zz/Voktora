@@ -1,5 +1,7 @@
 # Plugins Voktora (API 3 — Voktora 1.0.8)
 
+> **1.1.1 : API 5, plugins JavaScript et Rust, options, dépendances, mode développeur — documentation complète dans [`doc/plugins/`](plugins/README.md).**
+
 Les plugins ajoutent des fonctions à Voktora **sans toucher à son code** : onglets de projet, menus,
 boutons, panneaux latéraux, widgets de barre d'état, styles, thèmes, réactions aux événements.
 Ils s'installent depuis le **Marketplace** (Paramètres → Plugins) ou à la main.
@@ -192,4 +194,4 @@ un bac à sable.
 
 `ui-tweaks` (styles), `quick-notes` (onglet + réglages), `focus-timer` (barre d'état), `todo-scanner`
 (analyse asynchrone), `git-insights` (`api.run`), `zen-mode` (barre d'outils, `main_window`),
-`neon-themes` (thèmes), `project-counter` (menu clic droit, événements) — dans `marketplace/plugins/`.
+`project-counter` (menu clic droit, événements) — dans `marketplace/plugins/`.

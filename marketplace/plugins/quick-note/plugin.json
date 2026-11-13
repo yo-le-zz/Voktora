@@ -1,0 +1,21 @@
+{
+  "id": "quick-note",
+  "name": "Quick Note",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Notes rapides par projet dans un panneau ancrable, avec enregistrement automatique et raccourci global.",
+  "api": 5,
+  "lang": "python",
+  "entry": "main.py",
+  "permissions": [
+    "ui"
+  ],
+  "tags": [
+    "notes",
+    "productivite"
+  ],
+  "dependencies": {
+    "api-plus": ">=1.0.0"
+  },
+  "homepage": "https://github.com/yo-le-zz/Voktora"
+}

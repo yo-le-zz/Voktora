@@ -1,0 +1,14 @@
+{
+  "name": "Neon Sunset",
+  "description": "Coucher de soleil néon, rose et orange.",
+  "colors": {
+    "base": "#1a0f1f",
+    "text": "#ffeef8",
+    "blue": "#ff9e64",
+    "mauve": "#ff4fa3",
+    "green": "#7dffb2",
+    "red": "#ff5c7a",
+    "yellow": "#ffd166",
+    "primary": "#ff4fa3"
+  }
+}

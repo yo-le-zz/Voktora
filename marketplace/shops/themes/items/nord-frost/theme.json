@@ -1,0 +1,14 @@
+{
+  "name": "Nord Frost",
+  "description": "Bleus glacés inspirés de Nord.",
+  "colors": {
+    "base": "#2e3440",
+    "text": "#eceff4",
+    "blue": "#88c0d0",
+    "mauve": "#b48ead",
+    "green": "#a3be8c",
+    "red": "#bf616a",
+    "yellow": "#ebcb8b",
+    "primary": "#88c0d0"
+  }
+}

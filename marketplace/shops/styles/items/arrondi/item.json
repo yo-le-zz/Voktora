@@ -1,0 +1,10 @@
+{
+  "id": "arrondi",
+  "name": "Arrondi",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Boutons, champs et onglets aux angles arrondis.",
+  "tags": [
+    "style"
+  ]
+}

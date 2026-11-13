@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "kind": "styles",
+  "items": [
+    {
+      "id": "arrondi",
+      "name": "Arrondi",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Boutons, champs et onglets aux angles arrondis.",
+      "tags": [
+        "style"
+      ],
+      "files": {
+        "style.qss": "0969a3642aefabf04b9de6adea3bfce9c9e6005570967f5941e5269fbeb5a89f"
+      }
+    },
+    {
+      "id": "compact",
+      "name": "Compact",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Marges réduites pour voir plus de choses à l'écran.",
+      "tags": [
+        "style"
+      ],
+      "files": {
+        "style.qss": "f8d0c73bc1c358a8cef9c0bf6a0b13aae156abe26d3f4e00c792a0cdbcc5993f"
+      }
+    }
+  ]
+}

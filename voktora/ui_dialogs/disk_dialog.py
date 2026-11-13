@@ -82,6 +82,7 @@ class DiskUsageDialog(QDialog):
     def __init__(self, parent=None, paths: list[Path] | None = None):
         super().__init__(parent)
         self.setWindowTitle("Espace disque des projets")
+        self.setWindowIcon(icons.icon("mdi:harddisk"))
         self.setMinimumSize(900, 580)
         self._paths = paths
         self._usages: list[du.ProjectUsage] = []
