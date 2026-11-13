@@ -9,7 +9,7 @@ import string
 import time
 import urllib.parse
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 def b64(text, o):
@@ -32,10 +32,10 @@ def timestamp(text, o):
     if re.fullmatch(r"-?\d+(\.\d+)?", t):
         v = float(t)
         v = v / 1000 if abs(v) > 1e11 else v
-        return datetime.fromtimestamp(v, timezone.utc).isoformat()
-    dt = datetime.fromisoformat(t.replace("Z", "+00:00"))
+        return datetime.fromtimestamp(v, UTC).isoformat()
+    dt = datetime.fromisoformat(t)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return str(int(dt.timestamp()))
 
 

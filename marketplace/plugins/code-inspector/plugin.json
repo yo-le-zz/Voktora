@@ -1,0 +1,13 @@
+{
+  "id": "code-inspector",
+  "name": "Code Inspector",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Comprend un projet : architecture, dépendances, graphe d'appels avec niveau de certitude, ponts Python × Rust, qualité, exports JSON/HTML/SVG/Markdown/PDF.",
+  "api": 5,
+  "lang": "python",
+  "entry": "main.py",
+  "permissions": ["projects.read", "ui"],
+  "tags": ["developpeur", "analyse", "architecture", "rust", "python"],
+  "homepage": "https://github.com/yo-le-zz/Voktora"
+}

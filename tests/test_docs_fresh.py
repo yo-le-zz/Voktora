@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_generated_docs_are_fresh():
-    done = subprocess.run([sys.executable, str(ROOT / "tools" / "gen_api_doc.py"), "--check"], capture_output=True, text=True)
+    done = subprocess.run([sys.executable, str(ROOT / "tools" / "gen_api_doc.py"), "--check"], capture_output=True, text=True, check=False)
     assert done.returncode == 0, done.stderr
 
 

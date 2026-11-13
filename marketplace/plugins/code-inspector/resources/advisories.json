@@ -1,0 +1,43 @@
+{
+  "_comment": "Base LOCALE et NON EXHAUSTIVE d'avis publics connus. Complétez avec pip-audit, npm audit ou cargo audit pour une vérification à jour.",
+  "vulnerabilities": [
+    {"ecosystem": "pypi", "name": "requests", "fixed": "2.31.0", "id": "CVE-2023-32681", "summary": "Fuite de l'en-tête Proxy-Authorization vers l'hôte de destination lors d'une redirection HTTPS."},
+    {"ecosystem": "pypi", "name": "urllib3", "fixed": "1.26.18", "id": "CVE-2023-45803", "summary": "Le corps de la requête n'est pas supprimé lors d'une redirection 303 (fuite possible de données)."},
+    {"ecosystem": "pypi", "name": "jinja2", "fixed": "3.1.3", "id": "CVE-2024-22195", "summary": "Injection XSS via l'attribut xmlattr avec des clés contenant des espaces."},
+    {"ecosystem": "pypi", "name": "pyyaml", "fixed": "5.4", "id": "CVE-2020-14343", "summary": "Exécution de code arbitraire avec full_load/FullLoader sur des documents YAML non fiables."},
+    {"ecosystem": "pypi", "name": "pillow", "fixed": "10.0.1", "id": "CVE-2023-4863", "summary": "Dépassement de tampon dans libwebp embarquée (images WebP piégées)."},
+    {"ecosystem": "pypi", "name": "flask", "fixed": "2.2.5", "id": "CVE-2023-30861", "summary": "Cookie de session potentiellement mis en cache et exposé par un proxy partagé."},
+    {"ecosystem": "npm", "name": "lodash", "fixed": "4.17.21", "id": "CVE-2021-23337", "summary": "Injection de commandes via _.template."},
+    {"ecosystem": "npm", "name": "minimist", "fixed": "1.2.6", "id": "CVE-2021-44906", "summary": "Pollution de prototype."},
+    {"ecosystem": "npm", "name": "node-fetch", "fixed": "2.6.7", "id": "CVE-2022-0235", "summary": "Fuite d'informations sensibles vers un hôte tiers lors d'une redirection."},
+    {"ecosystem": "crates", "name": "time", "fixed": "0.2.23", "id": "RUSTSEC-2020-0071", "summary": "Accès potentiellement non sûr à l'environnement (segfault)."},
+    {"ecosystem": "crates", "name": "smallvec", "fixed": "1.6.1", "id": "RUSTSEC-2021-0003", "summary": "Dépassement de tampon dans insert_many."}
+  ],
+  "deprecated": [
+    {"ecosystem": "pypi", "name": "pycrypto", "reason": "Abandonné depuis 2013, failles connues.", "replacement": "pycryptodome ou cryptography"},
+    {"ecosystem": "pypi", "name": "nose", "reason": "Non maintenu, incompatible avec les Python récents.", "replacement": "pytest"},
+    {"ecosystem": "pypi", "name": "mock", "reason": "Intégré à la bibliothèque standard.", "replacement": "unittest.mock"},
+    {"ecosystem": "pypi", "name": "six", "reason": "Couche de compatibilité Python 2, devenue inutile.", "replacement": "code Python 3 natif"},
+    {"ecosystem": "pypi", "name": "distribute", "reason": "Fusionné dans setuptools.", "replacement": "setuptools"},
+    {"ecosystem": "pypi", "name": "sklearn", "reason": "Paquet de redirection obsolète.", "replacement": "scikit-learn"},
+    {"ecosystem": "npm", "name": "request", "reason": "Déprécié depuis 2020.", "replacement": "fetch natif, undici ou axios"},
+    {"ecosystem": "npm", "name": "moment", "reason": "En mode maintenance seule.", "replacement": "date-fns, dayjs ou Temporal"},
+    {"ecosystem": "npm", "name": "node-uuid", "reason": "Déprécié.", "replacement": "uuid"},
+    {"ecosystem": "crates", "name": "failure", "reason": "Non maintenu.", "replacement": "thiserror ou anyhow"},
+    {"ecosystem": "crates", "name": "lazy_static", "reason": "Remplaçable par la bibliothèque standard.", "replacement": "std::sync::LazyLock / OnceLock"}
+  ],
+  "aliases": {"pillow": "PIL", "pyyaml": "yaml", "opencv-python": "cv2", "opencv-python-headless": "cv2", "beautifulsoup4": "bs4",
+              "scikit-learn": "sklearn", "python-dateutil": "dateutil", "pyserial": "serial", "gitpython": "git", "pyopenssl": "OpenSSL",
+              "python-dotenv": "dotenv", "pyside6": "PySide6", "pyqt6": "PyQt6", "protobuf": "google.protobuf", "attrs": "attr"},
+  "frameworks": {
+    "pypi": {"django": "Django", "flask": "Flask", "fastapi": "FastAPI", "pyside6": "Qt (PySide6)", "pyqt6": "Qt (PyQt6)",
+             "pyqt5": "Qt (PyQt5)", "numpy": "NumPy", "pandas": "pandas", "torch": "PyTorch", "tensorflow": "TensorFlow",
+             "pytest": "pytest", "sqlalchemy": "SQLAlchemy", "pydantic": "Pydantic", "maturin": "maturin (PyO3)", "pyo3": "PyO3",
+             "scrapy": "Scrapy", "celery": "Celery", "aiohttp": "aiohttp", "tkinter": "Tkinter"},
+    "npm": {"react": "React", "vue": "Vue", "svelte": "Svelte", "express": "Express", "next": "Next.js", "electron": "Electron",
+            "jest": "Jest", "vite": "Vite", "typescript": "TypeScript", "angular": "Angular", "@angular/core": "Angular"},
+    "crates": {"tokio": "Tokio", "serde": "serde", "actix-web": "Actix Web", "axum": "Axum", "rocket": "Rocket", "pyo3": "PyO3",
+               "clap": "clap", "rayon": "Rayon", "wasm-bindgen": "wasm-bindgen", "tauri": "Tauri", "bevy": "Bevy"},
+    "cmake": {"qt5": "Qt 5", "qt6": "Qt 6", "boost": "Boost", "opencv": "OpenCV", "sdl2": "SDL2", "gtest": "GoogleTest"}
+  }
+}

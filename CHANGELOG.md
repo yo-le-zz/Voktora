@@ -5,6 +5,34 @@ Format : [Semantic Versioning](https://semver.org/) — `MAJEUR.MINEUR.CORRECTIF
 
 ---
 
+## [1.1.2] — 2026-11-13
+
+### 🧩 Cinq plugins avancés (marketplace officiel, API 5)
+- **code-inspector** : analyse statique Python/Rust/JS/C++/config, graphe d'architecture (appels classés *certain / probable / inconnu*),
+  ponts Python × Rust, audit de dépendances hors-ligne, exports JSON / Markdown+Mermaid / SVG / HTML interactif / PDF.
+- **devops-center** : Git (sans push), Docker, SSH, GitHub, pipelines, déploiements avec sauvegarde et restauration automatique,
+  confirmation obligatoire en production.
+- **api-studio** : client HTTP (auth, OAuth2 + PKCE), variables, extraction, scripts Python/JS, WebSocket, serveur mock,
+  import/export OpenAPI et Postman.
+- **project-knowledge** : recherche plein texte BM25 + similarité TF-IDF (ce ne sont PAS des embeddings), wiki, diagrammes, doc d'API.
+- **workflow-forge** : éditeur visuel d'automatisations (blocs, expressions, cron, déclencheurs, moteur d'exécution).
+- Chacun a ses tests (`tests/test_plugin_*.py`) et passe `plugin_tool validate --run`.
+
+### 🌐 Site et documentation
+- Site : version affichée 1.1.2, présentation des cinq plugins et de la documentation développeurs.
+- Documentation : fiches des plugins fournis (`doc/plugins/SHIPPED.md`), index du marketplace régénéré.
+
+### 🔧 Divers
+- Nettoyages ruff ; version synchronisée partout (1.1.2).
+
+### ⚠️ Limites connues
+- L'isolation des scripts n'est pas un bac à sable de sécurité ; le déploiement SSH n'a pas été testé sur un vrai serveur ;
+  le jeton `http_in` de Workflow Forge est stocké en clair dans les données du plugin ; les blocs Rust/JS exigent rustc/node.
+- Reporté : synchronisation >2 PC, notifications, archivage de projets, paquets signés, import de raccourcis/thèmes,
+  accessibilité, suggestions IA de diff/commit.
+
+---
+
 ## [1.1.1] — 2026-11-11
 
 ### 🔌 Plugins (API 5)

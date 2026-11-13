@@ -1,0 +1,22 @@
+{
+  "id": "workflow-forge",
+  "name": "Workflow Forge",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Éditeur visuel d'automatisations : blocs, conditions, boucles, branches parallèles, déclencheurs (fichiers, Git, cron, HTTP local), test à blanc, journaux.",
+  "api": 5,
+  "lang": "python",
+  "entry": "main.py",
+  "permissions": [
+    "network",
+    "projects.read",
+    "shell",
+    "ui"
+  ],
+  "tags": [
+    "automatisation",
+    "developpeur",
+    "workflow"
+  ],
+  "homepage": "https://github.com/yo-le-zz/Voktora"
+}

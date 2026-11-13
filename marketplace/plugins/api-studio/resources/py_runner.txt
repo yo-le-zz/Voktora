@@ -1,0 +1,19 @@
+import json, sys, types
+data = json.load(sys.stdin)
+logs, tests = [], []
+class Resp:
+    def __init__(self, d):
+        self.status = d["status"]; self.headers = d["headers"]; self.text = d["text"]; self.seconds = d.get("seconds", 0)
+    def json(self):
+        return json.loads(self.text)
+ns = {"vars": dict(data["vars"]), "request": data["request"], "log": lambda *a: logs.append(" ".join(map(str, a))),
+      "test": lambda name, ok: tests.append({"name": str(name), "ok": bool(ok)})}
+if data.get("response"):
+    ns["response"] = Resp(data["response"])
+error = ""
+try:
+    exec(compile(data["code"], "<script>", "exec"), ns)
+except BaseException as exc:
+    error = f"{type(exc).__name__}: {exc}"
+sys.stdout.write("\n\x00RESULT\x00" + json.dumps({"vars": {k: str(v) for k, v in ns["vars"].items()}, "request": ns["request"],
+                                                  "logs": logs, "tests": tests, "error": error}))

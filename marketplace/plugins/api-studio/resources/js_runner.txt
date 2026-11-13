@@ -1,0 +1,14 @@
+const vm = require('vm');
+let input = '';
+process.stdin.on('data', d => input += d);
+process.stdin.on('end', () => {
+  const data = JSON.parse(input);
+  const logs = [], tests = [];
+  const sandbox = { vars: Object.assign({}, data.vars), request: data.request,
+    log: (...a) => logs.push(a.join(' ')), test: (n, ok) => tests.push({ name: String(n), ok: !!ok }) };
+  if (data.response) { const r = data.response; sandbox.response = { status: r.status, headers: r.headers, text: r.text, json: () => JSON.parse(r.text) }; }
+  let error = '';
+  try { vm.runInNewContext(data.code, sandbox, { timeout: data.timeout || 5000 }); } catch (e) { error = String(e); }
+  const vars = {}; for (const k of Object.keys(sandbox.vars)) vars[k] = String(sandbox.vars[k]);
+  process.stdout.write('\n\u0000RESULT\u0000' + JSON.stringify({ vars, request: sandbox.request, logs, tests, error }));
+});

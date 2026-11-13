@@ -14,6 +14,7 @@ import json
 import os
 import re
 import shutil
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -498,7 +499,15 @@ def clear_migration_log() -> None:
         pass
 
 
+_SAVE_LOCK = threading.Lock()   # plusieurs threads (plugins) peuvent sauvegarder en même temps : un seul config.tmp
+
+
 def _save_config(cfg: dict) -> None:
+    with _SAVE_LOCK:
+        _save_config_locked(cfg)
+
+
+def _save_config_locked(cfg: dict) -> None:
     global _config_cache
     cfg_path = paths.get_config_path()
     try:
