@@ -109,5 +109,17 @@ Réservé au mainteneur (CODEOWNERS) : même flux, mais le code est dans `market
 | `todo-scanner` | onglet + analyse en arrière-plan (`run_async`) |
 | `git-insights` | `api.run` (commandes git) dans un onglet |
 | `zen-mode` | bouton de barre d'outils, accès à la fenêtre (`main_window`) |
-| `neon-themes` | `register_theme` : trois thèmes supplémentaires |
 | `project-counter` | barre d'état, menu clic droit, événements |
+
+
+## Boutiques d'apparence (1.1.1)
+
+Les thèmes, packs d'icônes et styles ne sont plus des plugins : chaque type a **sa propre boutique** dans
+`marketplace/shops/<type>/` (`index.json` + `items/<id>/`). Les trois thèmes de l'ancien plugin `neon-themes`
+(Neon Night, Coffee, Mint) y sont désormais des objets à part entière. Voir `doc/SHOPS.md`.
+
+```
+python tools/shop_tool.py new themes mon-theme   # modèle
+python tools/shop_tool.py validate               # règles de sécurité (SVG, QSS, extensions)
+python tools/shop_tool.py build-index            # régénère les index (SHA-256)
+```

@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidgetItem,
     QMessageBox,
     QProgressBar,
     QPushButton,
@@ -83,6 +84,7 @@ class PluginsDialog(QDialog):
         root.addWidget(self._tabs, stretch=1)
         self._tabs.addTab(self._build_installed_tab(), icons.icon("mdi:puzzle-outline"), "Installés")
         self._tabs.addTab(self._build_market_tab(), icons.icon("mdi:storefront-outline"), "Marketplace")
+        self._tabs.addTab(self._build_options_tab(), icons.icon("mdi:tune-variant"), "Options")
         self._tabs.currentChanged.connect(self._on_tab)
 
         self._bar = QProgressBar()
@@ -141,6 +143,12 @@ class PluginsDialog(QDialog):
             row.addWidget(button)
         row.addStretch()
         v.addLayout(row)
+        from PySide6.QtWidgets import QCheckBox
+        self._auto_update = QCheckBox("Mettre à jour automatiquement les plugins du marketplace "
+                                      "(jamais si une nouvelle permission est demandée)")
+        self._auto_update.setChecked(market.auto_update_enabled())
+        self._auto_update.toggled.connect(market.set_auto_update)
+        v.addWidget(self._auto_update)
         self._on_installed_selected(None, None)
         return page
 
@@ -271,6 +279,55 @@ class PluginsDialog(QDialog):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(plugins.plugins_dir())))
 
     # ── Onglet Marketplace ────────────────────────────────────────────────────────────
+    # ── Onglet Options (réglages de chaque plugin, construits par Voktora) ────────────
+    def _build_options_tab(self) -> QWidget:
+        from PySide6.QtWidgets import QListWidget, QSplitter, QStackedWidget
+        page = QWidget()
+        v = QVBoxLayout(page)
+        v.setContentsMargins(4, 12, 4, 4)
+        intro = QLabel("Les plugins qui déclarent des options apparaissent ici : Voktora construit et enregistre "
+                       "leurs réglages (synchronisés entre vos PC avec les réglages de plugins).")
+        intro.setWordWrap(True)
+        v.addWidget(intro)
+        split = QSplitter()
+        self._opt_list = QListWidget()
+        self._opt_stack = QStackedWidget()
+        self._opt_empty = QLabel("Aucun plugin actif ne propose d'options.")
+        self._opt_empty.setAlignment(Qt.AlignCenter)
+        self._opt_stack.addWidget(self._opt_empty)
+        self._opt_panels: dict[str, QWidget] = {}
+        self._opt_list.currentItemChanged.connect(self._opt_select)
+        split.addWidget(self._opt_list)
+        split.addWidget(self._opt_stack)
+        split.setSizes([220, 560])
+        v.addWidget(split, 1)
+        self._fill_options()
+        return page
+
+    def _fill_options(self) -> None:
+        from .plugin_options_panel import PluginOptionsPanel
+        self._opt_list.clear()
+        for panel in self._opt_panels.values():
+            self._opt_stack.removeWidget(panel)
+            panel.deleteLater()
+        self._opt_panels.clear()
+        for info in plugins.get_all():
+            if info.loaded and info.options is not None and (info.options.schema() or info.options.buttons):
+                panel = PluginOptionsPanel(info.options)
+                self._opt_stack.addWidget(panel)
+                self._opt_panels[info.id] = panel
+                item = QListWidgetItem(icons.icon("mdi:puzzle-outline"), info.name)
+                item.setData(Qt.UserRole, info.id)
+                self._opt_list.addItem(item)
+        if self._opt_list.count():
+            self._opt_list.setCurrentRow(0)
+        else:
+            self._opt_stack.setCurrentWidget(self._opt_empty)
+
+    def _opt_select(self, current, _previous) -> None:
+        if current is not None and current.data(Qt.UserRole) in self._opt_panels:
+            self._opt_stack.setCurrentWidget(self._opt_panels[current.data(Qt.UserRole)])
+
     def _build_market_tab(self) -> QWidget:
         page = QWidget()
         v = QVBoxLayout(page)
@@ -321,6 +378,8 @@ class PluginsDialog(QDialog):
     def _on_tab(self, index: int) -> None:
         if index == 1 and not self._market_entries and self._worker is None:
             self._load_market()
+        elif index == 2:
+            self._fill_options()
 
     def _busy(self, active: bool, message: str = "") -> None:
         self._bar.setRange(0, 0)
@@ -404,6 +463,12 @@ class PluginsDialog(QDialog):
         if added:
             extra += ("<p style='color:#f38ba8'><b>Cette mise à jour demande de NOUVELLES permissions : "
                       + ", ".join(added) + "</b></p>")
+        if entry.dependencies:
+            extra += "<p>Dépend de : " + ", ".join(f"{k} {v}" for k, v in entry.dependencies.items()) + "</p>"
+        if entry.requires:
+            extra += "<p>Bibliothèques Python : " + ", ".join(entry.requires) + "</p>"
+        if entry.lang != "python":
+            extra += f"<p>Langage : <b>{entry.lang}</b></p>"
         if entry.tags:
             extra += "<p>Mots-clés : " + ", ".join(entry.tags) + "</p>"
         if not entry.compatible:
@@ -414,7 +479,7 @@ class PluginsDialog(QDialog):
         self._btn_install.setEnabled(entry.compatible and not self._installing)
 
     def _confirm_install(self, name: str, version: str, author: str, permissions: list[str],
-                         local: bool = False, entry: market.MarketEntry | None = None) -> bool:
+                         local: bool = False, entry: market.MarketEntry | None = None, extra: str = "") -> bool:
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Warning)
         box.setWindowTitle("Installer un plugin")
@@ -423,13 +488,28 @@ class PluginsDialog(QDialog):
             f"Ce plugin demande :\n{_permission_lines(permissions)}\n\n{WARNING}"
             + (f"\n\n{COMMUNITY_WARNING}\nDépôt : {entry.repo}\nCommit : {entry.commit}"
                if entry is not None and entry.community else "")
-            + (self._new_permissions_text(entry) if entry is not None else "")
+            + (self._new_permissions_text(entry) if entry is not None else "") + extra
             + ("\n\nSource : fichier local (non vérifié par le marketplace)." if local else ""))
         box.addButton("Installer", QMessageBox.AcceptRole)
         cancel = box.addButton("Annuler", QMessageBox.RejectRole)
         box.setDefaultButton(cancel)
         box.exec()
         return box.clickedButton() is not cancel
+
+    @staticmethod
+    def _requirements_text(entry: market.MarketEntry, needed: list[market.MarketEntry]) -> str:
+        parts = []
+        if needed:
+            parts.append("Plugins installés avec lui (dépendances) :\n" + "\n".join(
+                f"  • {d.name} v{d.version} — {', '.join(d.permissions) or 'aucune permission'}" for d in needed))
+        if entry.requires:
+            parts.append("Bibliothèques Python externes (PyPI, roues uniquement, propres à ce plugin) :\n  • "
+                         + "\n  • ".join(entry.requires))
+        if entry.lang == "rust":
+            parts.append("CODE NATIF (Rust) : Voktora ne peut pas le restreindre.")
+        elif entry.lang == "js":
+            parts.append("Plugin JavaScript (moteur isolé, uniquement l'API Voktora).")
+        return ("\n\n" + "\n\n".join(parts)) if parts else ""
 
     @staticmethod
     def _new_permissions_text(entry: market.MarketEntry) -> str:
@@ -441,12 +521,19 @@ class PluginsDialog(QDialog):
         entry = self._selected_entry()
         if entry is None or (self._worker is not None and self._worker.isRunning()):
             return
-        if not self._confirm_install(entry.name, entry.version, entry.author, entry.permissions, entry=entry):
+        needed, problems = market.dependencies_to_install(entry, self._market_entries)
+        if problems:
+            QMessageBox.warning(self, "Dépendances impossibles", "\n".join(problems))
+            return
+        permissions = sorted(set(entry.permissions).union(*[d.permissions for d in needed]))
+        if not self._confirm_install(entry.name, entry.version, entry.author, permissions, entry=entry,
+                                     extra=self._requirements_text(entry, needed)):
             return
         self._busy(True, f"Installation de « {entry.name} »…")
         self._installing = True
         self._btn_install.setEnabled(False)
-        self._worker = TaskWorker(lambda ctx: market.install(entry, on_progress=ctx.progress))
+        self._worker = TaskWorker(lambda ctx: market.install_with_dependencies(
+            entry, self._market_entries, on_progress=ctx.progress))
         self._worker.progress.connect(self._on_install_progress)
         self._worker.succeeded.connect(lambda _r, e=entry: self._on_installed(e))
         self._worker.failed.connect(self._on_install_failed)

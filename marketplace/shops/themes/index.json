@@ -1,0 +1,138 @@
+{
+  "schema": 1,
+  "kind": "themes",
+  "items": [
+    {
+      "id": "coffee",
+      "name": "Coffee",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Tons café chauds, doux pour les yeux.",
+      "tags": [
+        "thème"
+      ],
+      "colors": [
+        "#2a211c",
+        "#f0e4d7",
+        "#d4a373",
+        "#c08497",
+        "#a3b18a",
+        "#e07a5f",
+        "#e9c46a"
+      ],
+      "files": {
+        "theme.json": "3e587fc8ce5f9338acee5b6c8925d0d219e8126f64f5db10326244524cc57f1d"
+      }
+    },
+    {
+      "id": "mint",
+      "name": "Mint",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Clair, menthe et vert d'eau.",
+      "tags": [
+        "thème"
+      ],
+      "colors": [
+        "#f3fbf7",
+        "#1d3b32",
+        "#0f9d78",
+        "#7b61c9",
+        "#2e9e5b",
+        "#d64545",
+        "#c98a00"
+      ],
+      "files": {
+        "theme.json": "da24cbf4d4801acc72b8cd6ff54d92ecef65ad0181d23af020930af5dad0b218"
+      }
+    },
+    {
+      "id": "neon-night",
+      "name": "Neon Night",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Fond nuit, néons cyan et magenta.",
+      "tags": [
+        "thème"
+      ],
+      "colors": [
+        "#0b0b1e",
+        "#f5f5ff",
+        "#00f0ff",
+        "#ff2bd6",
+        "#39ff88",
+        "#ff3860",
+        "#fff95b"
+      ],
+      "files": {
+        "theme.json": "c33b87c53eae3b35f3e958eae1ff50341eec20f6dc5ab008553c5b8d1cfb08a5"
+      }
+    },
+    {
+      "id": "neon-sunset",
+      "name": "Neon Sunset",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Coucher de soleil néon, rose et orange.",
+      "tags": [
+        "thème"
+      ],
+      "colors": [
+        "#1a0f1f",
+        "#ffeef8",
+        "#ff9e64",
+        "#ff4fa3",
+        "#7dffb2",
+        "#ff5c7a",
+        "#ffd166"
+      ],
+      "files": {
+        "theme.json": "253a4077bd8401c2d18bacde0f244779704339d82e3338015f7f2e2712c9f75c"
+      }
+    },
+    {
+      "id": "nord-frost",
+      "name": "Nord Frost",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Bleus glacés inspirés de Nord.",
+      "tags": [
+        "thème"
+      ],
+      "colors": [
+        "#2e3440",
+        "#eceff4",
+        "#88c0d0",
+        "#b48ead",
+        "#a3be8c",
+        "#bf616a",
+        "#ebcb8b"
+      ],
+      "files": {
+        "theme.json": "cddf48d2124c30c70e7aed15136fcfc6cca6a4acd1c06497086b4cd73c0c933b"
+      }
+    },
+    {
+      "id": "solar-dawn",
+      "name": "Solar Dawn",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Clair, aube chaude orange et ambre.",
+      "tags": [
+        "thème"
+      ],
+      "colors": [
+        "#fdf6e3",
+        "#3b3a36",
+        "#268bd2",
+        "#d33682",
+        "#859900",
+        "#dc322f",
+        "#b58900"
+      ],
+      "files": {
+        "theme.json": "73f62813584208c1948f800401748fddf47e2043f63f084af713a4bf879e7a13"
+      }
+    }
+  ]
+}

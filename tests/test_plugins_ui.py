@@ -81,7 +81,6 @@ class TestRealPlugins:
         assert {a.text() for a in plugins_menu.actions()} == {"UI Tweaks", "Focus Timer", "Zen Mode"}
         assert window._ui_host._toolbar is not None and window._ui_host._toolbar.isVisibleTo(window)
         assert window._ui_host.context_actions(["/x"])[0][0] == "Copier le chemin"
-        assert "neon-themes-neon-night" in plugins.extra_themes()
         assert window.statusBar().children().__len__() > base_status
 
         for plugin_id in ALL_IDS:

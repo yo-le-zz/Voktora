@@ -3,7 +3,11 @@
 Outil des contributeurs et de la CI pour les plugins Voktora (bibliothèque standard uniquement).
 
     python tools/plugin_tool.py new mon-plugin --author toi      # crée marketplace/plugins/mon-plugin/
+    python tools/plugin_tool.py new mon-plugin --lang js|rust    # modèle JavaScript ou Rust (défaut : python)
     python tools/plugin_tool.py validate                         # vérifie tous les plugins (ou : validate mon-plugin)
+    python tools/plugin_tool.py validate --run                   # … et EXÉCUTE chaque plugin dans un bac jetable
+    python tools/plugin_tool.py detect                           # permissions détectées dans le code
+    python tools/plugin_tool.py fix-permissions                  # les écrit dans plugin.json
     python tools/plugin_tool.py build-index                      # régénère marketplace/index.json
     python tools/plugin_tool.py build-index --check              # échoue si index.json n'est pas à jour
     python tools/plugin_tool.py zip mon-plugin                   # archive .zip installable depuis l'application
@@ -57,8 +61,14 @@ def _load_manifest_module():
 
 manifest = _load_manifest_module()
 
-ALLOWED_SUFFIXES = {".py", ".json", ".md", ".txt", ".qss", ".svg", ".png", ".css"}
-MAX_FILES, MAX_FILE_BYTES, MAX_PLUGIN_BYTES = 40, 512 * 1024, 2 * 1024 * 1024
+ALLOWED_SUFFIXES = set(frozenset({
+    ".py", ".json", ".md", ".txt", ".qss", ".svg", ".png", ".css",
+    # 1.1.1 : plus de limite par extension pour les contenus non exécutables ni binaires natifs
+    ".js", ".mjs", ".rs", ".toml", ".lock", ".html", ".htm", ".yaml", ".yml", ".ini", ".cfg", ".csv", ".tsv", ".xml",
+    ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".ttf", ".otf", ".woff", ".woff2", ".wav", ".ogg", ".mp3", ".qml",
+    ".ui", ".po", ".pyi", ".rst", ".license", ".typed",
+}))
+MAX_FILES, MAX_FILE_BYTES, MAX_PLUGIN_BYTES = 500, 32 * 1024 * 1024, 256 * 1024 * 1024
 
 def _load_by_path(name: str, filename: str):
     path = CODE_ROOT / "voktora" / "plugins" / filename
@@ -71,6 +81,7 @@ def _load_by_path(name: str, filename: str):
 
 audit = _load_by_path("voktora_plugin_audit", "audit.py")      # MÊMES règles que dans l'application
 lock = _load_by_path("voktora_plugin_lock", "lock.py")
+detect = _load_by_path("voktora_plugin_detect", "detect.py")   # permissions détectées dans le code (même table que l'appli)
 
 
 def _show(path: Path) -> str:
@@ -218,6 +229,16 @@ def validate_plugin(folder: Path) -> tuple[list[str], list[str]]:
         errors.append(f"{folder.name} : plugin trop volumineux ({total // 1024} Ko).")
     if not (folder / parsed.entry).is_file():
         errors.append(f"{folder.name} : fichier d'entrée « {parsed.entry} » introuvable.")
+    if data.get("permissions") == "auto":
+        errors.append(f"{folder.name} : « permissions »: \"auto\" est réservé aux plugins locaux ; "
+                      "listez-les (outil : fix-permissions).")
+    elif parsed.lang == "rust" and community:
+        errors.append(f"{folder.name} : un plugin Rust est du code natif sans bac à sable : niveau officiel uniquement.")
+    else:
+        for perm, reasons in detect.missing_permissions(folder, list(parsed.permissions), data).items():
+            errors.append(f"{folder.name} : le code utilise « {perm} » sans la déclarer ({'; '.join(reasons[:2])}).")
+        for perm in detect.unused_permissions(folder, list(parsed.permissions), data):
+            warnings.append(f"{folder.name} : permission « {perm} » déclarée mais inutilisée.")
     with tempfile.TemporaryDirectory() as tmp:          # on n'analyse que ce qui sera réellement exécuté
         for path in files:
             if path.suffix == ".py" and not path.is_symlink():
@@ -265,6 +286,43 @@ def _render(index: dict) -> str:
     return json.dumps(index, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
 
 
+def _devtools():
+    sys.path.insert(0, str(CODE_ROOT / "voktora"))
+    from plugins import devtools  # noqa: PLC0415 — dépend de PySide6 : seulement pour --run / sync
+    return devtools
+
+
+def _run_check(folder: Path) -> list[str]:
+    """Exécute VRAIMENT le plugin (sous-processus jetable) : charge, événements, déchargement."""
+    result = _devtools().validate(folder, run=True)
+    return [f"{folder.name} : {e}" for e in result["errors"]]
+
+
+def cmd_detect(args: argparse.Namespace) -> int:
+    for folder in _plugin_dirs(args.plugins):
+        found = detect.detect_folder(folder)
+        print(f"{folder.name} : {', '.join(sorted(found.permissions)) or '(aucune permission)'}")
+        for perm in sorted(found.permissions):
+            for reason in found.reasons.get(perm, [])[:3]:
+                print(f"    {perm:<12} {reason}")
+        for warning in found.warnings:
+            print(f"    ! {warning}")
+    return 0
+
+
+def cmd_fix_permissions(args: argparse.Namespace) -> int:
+    """Écrit dans plugin.json la liste exacte des permissions détectées (et remplace « auto »)."""
+    for folder in _plugin_dirs(args.plugins):
+        path = folder / manifest.MANIFEST_NAME
+        data = json.loads(path.read_text(encoding="utf-8"))
+        found = sorted(detect.detect_folder(folder, data).permissions)
+        if data.get("permissions") != found:
+            data["permissions"] = found
+            path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            print(f"{folder.name} : permissions = {found}")
+    return 0
+
+
 def cmd_validate(args: argparse.Namespace) -> int:
     folders = _plugin_dirs(args.plugins)
     if not folders:
@@ -275,6 +333,9 @@ def cmd_validate(args: argparse.Namespace) -> int:
     for folder in folders:
         errors, warnings = validate_plugin(folder)
         status = "ERREUR" if errors else "ok"
+        if getattr(args, "run", False) and not errors:
+            errors += _run_check(folder)
+            status = "ERREUR" if errors else "ok"
         print(f"[{status}] {folder.name}")
         for message in errors:
             print(f"    ✗ {message}")
@@ -310,7 +371,7 @@ def cmd_build_index(args: argparse.Namespace) -> int:
 
 TEMPLATE_MAIN = '''"""{name} — plugin Voktora.
 
-Documentation de l'API : doc/PLUGINS.md
+Documentation de l'API : doc/plugins/
 """
 
 
@@ -319,25 +380,62 @@ def on_load(api):
                         icon="mdi:hand-wave-outline")
 '''
 
+TEMPLATE_JS = """// {name} — plugin Voktora (JavaScript). Aucun code de liaison : `voktora` est global.
+voktora.addMenuAction("Plugins/{name}", "Dire bonjour", ctx => voktora.notify("Bonjour depuis {name} !"));
+"""
+
+TEMPLATE_RUST_LIB = """use voktora_plugin::{{plugin, Api}};
+
+plugin!(on_load, on_unload);
+
+fn on_load(api: &Api) {{
+    api.add_menu_action("Plugins/{name}", "Dire bonjour", |a, _ctx| a.notify("Bonjour depuis {name} !"));
+}}
+
+fn on_unload(_api: &Api) {{}}
+"""
+
+TEMPLATE_RUST_CARGO = """[package]
+name = "{crate}"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+voktora-plugin = {{ path = "../voktora-sdk" }}
+# Toutes les crates voulues : serde = "1", regex = "1", image = "0.25"…
+"""
+
 
 def cmd_new(args: argparse.Namespace) -> int:
     if not manifest.ID_RE.match(args.id):
         print("Identifiant invalide : minuscules, chiffres et tirets (ex. mon-plugin).", file=sys.stderr)
         return 2
-    folder = PLUGINS / args.id
+    folder = (Path(args.dir).resolve() if args.dir else PLUGINS) / args.id
     if folder.exists():
         print(f"{folder} existe déjà.", file=sys.stderr)
         return 2
     name = args.name or args.id.replace("-", " ").title()
+    entry = {"python": "main.py", "js": "main.js", "rust": "Cargo.toml"}[args.lang]
     folder.mkdir(parents=True)
+    permissions = ["ui", "native"] if args.lang == "rust" else ["ui"]
     (folder / "plugin.json").write_text(json.dumps({
         "id": args.id, "name": name, "version": "1.0.0", "author": args.author, "description": "À compléter.",
-        "api": manifest.API_VERSION, "entry": "main.py", "permissions": ["ui"], "tags": [],
+        "api": manifest.API_VERSION, "lang": args.lang, "entry": entry, "permissions": permissions, "tags": [],
         "homepage": "",
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    (folder / "main.py").write_text(TEMPLATE_MAIN.format(name=name), encoding="utf-8")
+    if args.lang == "python":
+        (folder / "main.py").write_text(TEMPLATE_MAIN.format(name=name), encoding="utf-8")
+    elif args.lang == "js":
+        (folder / "main.js").write_text(TEMPLATE_JS.format(name=name), encoding="utf-8")
+    else:
+        (folder / "src").mkdir()
+        (folder / "Cargo.toml").write_text(TEMPLATE_RUST_CARGO.format(crate=args.id), encoding="utf-8")
+        (folder / "src" / "lib.rs").write_text(TEMPLATE_RUST_LIB.format(name=name), encoding="utf-8")
     print(f"Plugin créé : {_show(folder)}\nÉtapes suivantes : modifiez-le, puis "
-          f"« python tools/plugin_tool.py validate {args.id} » et ouvrez une Pull Request.")
+          f"« python tools/plugin_tool.py validate {args.id} --run » et ouvrez une Pull Request.")
     return 0
 
 
@@ -538,7 +636,14 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     p_validate = sub.add_parser("validate", help="vérifie les plugins")
     p_validate.add_argument("plugins", nargs="*", help="identifiants (tous par défaut)")
+    p_validate.add_argument("--run", action="store_true", help="exécute réellement chaque plugin (sous-processus jetable)")
     p_validate.set_defaults(func=cmd_validate)
+    p_detect = sub.add_parser("detect", help="affiche les permissions détectées dans le code")
+    p_detect.add_argument("plugins", nargs="*")
+    p_detect.set_defaults(func=cmd_detect)
+    p_fix = sub.add_parser("fix-permissions", help="écrit les permissions détectées dans plugin.json")
+    p_fix.add_argument("plugins", nargs="*")
+    p_fix.set_defaults(func=cmd_fix_permissions)
     p_index = sub.add_parser("build-index", help="génère marketplace/index.json")
     p_index.add_argument("--check", action="store_true", help="échoue si l'index n'est pas à jour")
     p_index.set_defaults(func=cmd_build_index)
@@ -546,6 +651,8 @@ def main(argv: list[str] | None = None) -> int:
     p_new.add_argument("id")
     p_new.add_argument("--name", default="")
     p_new.add_argument("--author", default="votre-pseudo")
+    p_new.add_argument("--lang", choices=["python", "js", "rust"], default="python")
+    p_new.add_argument("--dir", default="", help="dossier parent (par défaut marketplace/plugins)")
     p_new.set_defaults(func=cmd_new)
     p_zip = sub.add_parser("zip", help="crée une archive installable")
     p_zip.add_argument("id")

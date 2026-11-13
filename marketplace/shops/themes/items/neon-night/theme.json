@@ -1,0 +1,14 @@
+{
+  "name": "Neon Night",
+  "description": "Fond nuit, néons cyan et magenta.",
+  "colors": {
+    "base": "#0b0b1e",
+    "text": "#f5f5ff",
+    "blue": "#00f0ff",
+    "mauve": "#ff2bd6",
+    "green": "#39ff88",
+    "red": "#ff3860",
+    "yellow": "#fff95b",
+    "primary": "#ff2bd6"
+  }
+}

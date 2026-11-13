@@ -139,11 +139,26 @@ def resolve_id(value: str | None) -> str | None:
     return None
 
 
+def _pack_svg(icon_id: str):
+    try:
+        import shops
+        return shops.icon_file(icon_id[len(catalog.PREFIX):])
+    except Exception:
+        return None
+
+
 def icon(value: str | None, color: str | None = None) -> QIcon:
     """QIcon pour un identifiant d'icône ou un emoji hérité ; QIcon() vide si l'icône est inconnue."""
     icon_id = resolve_id(value)
     if icon_id is None or not load():
         return QIcon()
+    svg = _pack_svg(icon_id)
+    if svg is not None:                                  # pack d'icônes de la boutique
+        key = (icon_id, f"svg:{svg}:{color or ''}")
+        cached = _cache.get(key)
+        if cached is None:
+            cached = _cache[key] = QIcon(str(svg))
+        return cached
     char = _charmap.get(icon_id[len(catalog.PREFIX):]) or _charmap.get(catalog.FALLBACK_ICON[len(catalog.PREFIX):])
     if not char:
         return QIcon()

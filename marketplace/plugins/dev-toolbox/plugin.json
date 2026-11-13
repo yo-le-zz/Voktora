@@ -1,0 +1,22 @@
+{
+  "id": "dev-toolbox",
+  "name": "Dev Toolbox",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Boîte à outils : Base64, UUID, horodatages, JSON, hachages, URL, mots de passe — dans une fenêtre à onglets.",
+  "api": 5,
+  "lang": "python",
+  "entry": "main.py",
+  "permissions": [
+    "clipboard",
+    "ui"
+  ],
+  "tags": [
+    "developpeur",
+    "outils"
+  ],
+  "dependencies": {
+    "api-plus": ">=1.0.0"
+  },
+  "homepage": "https://github.com/yo-le-zz/Voktora"
+}

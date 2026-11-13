@@ -19,6 +19,14 @@ os.environ.setdefault(
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+if os.environ.get("VOKTORA_JS_WORKER") == "1":       # processus d'un plugin JavaScript (voir plugins/js_worker.py)
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location("js_worker", os.path.join(os.path.dirname(__file__), "plugins", "js_worker.py"))
+    _mod = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+    _mod.run()
+    raise SystemExit(0)
+
 import core
 import linux_env
 from PySide6.QtCore import Qt

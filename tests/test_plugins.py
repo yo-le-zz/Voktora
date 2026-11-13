@@ -267,7 +267,7 @@ def served(monkeypatch):
 class TestMarket:
     def test_repo_index_is_valid_and_up_to_date(self):
         entries = market.parse_index((MARKET_DIR / "index.json").read_bytes())
-        assert len(entries) >= 8 and all(e.compatible for e in entries)
+        assert len(entries) >= 7 and all(e.compatible for e in entries)
         import subprocess
         done = subprocess.run([sys.executable, str(REPO / "tools" / "plugin_tool.py"), "build-index", "--check"],
                               capture_output=True, text=True, check=False)
@@ -276,20 +276,19 @@ class TestMarket:
     def test_fetch_install_load_update_uninstall(self, pdir, served):
         entries, cached = market.fetch_index()
         assert not cached
-        entry = next(e for e in entries if e.id == "neon-themes")
+        entry = next(e for e in entries if e.id == "project-counter")
         assert market.status(entry) == "new"
         progress: list[tuple] = []
         folder = market.install(entry, on_progress=lambda d, t, n: progress.append((d, t, n)))
         assert (folder / "main.py").is_file() and (folder / ".source.json").is_file()
         assert progress[-1][0] == progress[-1][1] == 2
         plugins.load_all()
-        assert plugins.find("neon-themes").loaded and market.status(entry) == "installed"
-        assert "neon-themes-neon-night" in plugins.extra_themes()
+        assert plugins.find("project-counter").origin == "market" and market.status(entry) == "installed"
         # version supérieure dans l'index -> « update »
         newer = market.MarketEntry(**{**entry.__dict__, "version": "9.0.0"})
         assert market.status(newer) == "update"
-        assert market.uninstall("neon-themes", purge_data=True)
-        assert not (pdir / "neon-themes").exists() and market.installed_version("neon-themes") is None
+        assert market.uninstall("project-counter", purge_data=True)
+        assert not (pdir / "project-counter").exists() and market.installed_version("project-counter") is None
 
     def test_tampered_file_is_rejected_and_nothing_installed(self, pdir, monkeypatch, served):
         entries, _ = market.fetch_index()
@@ -326,7 +325,7 @@ class TestMarket:
         market.fetch_index()
         monkeypatch.setattr(market, "_fetch", lambda *a, **k: (_ for _ in ()).throw(market.MarketError("offline")))
         entries, cached = market.fetch_index()
-        assert cached and len(entries) >= 8
+        assert cached and len(entries) >= 7
         with pytest.raises(market.MarketError):
             market.fetch_index(use_cache_on_error=False)
 

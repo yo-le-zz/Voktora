@@ -1,0 +1,16 @@
+{
+  "id": "api-plus",
+  "name": "API Plus",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Bibliothèque d'aides pour auteurs de plugins : formats, stockage JSON, bus d'événements, anti-rebond, cache. À mettre dans « dependencies ».",
+  "api": 5,
+  "lang": "python",
+  "entry": "main.py",
+  "permissions": [],
+  "tags": [
+    "developpeur",
+    "bibliotheque"
+  ],
+  "homepage": "https://github.com/yo-le-zz/Voktora"
+}

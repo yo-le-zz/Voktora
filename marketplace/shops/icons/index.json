@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "kind": "icons",
+  "items": [
+    {
+      "id": "lignes-fines",
+      "name": "Lignes fines",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Dix icônes au trait fin ; les autres gardent l'icône d'origine.",
+      "tags": [
+        "icônes"
+      ],
+      "files": {
+        "cog.svg": "ce3760d9d08e3a0a6456c9274753e4b84fcf19e24f2e542b3b25ece8f9cb85d1",
+        "delete.svg": "fba2f9e27ff6771861763bbe65346a53ee6740e38578debe36c985251cf5f130",
+        "folder.svg": "49e6bb95b08781285d0c70de5c6e6aa594f972188ed8d7e264ffab2977e8a0c2",
+        "magnify.svg": "ca5d874c67a5679a730bfae780a38613f7ab7d0406df6d31dc0132fda6656d9e",
+        "pencil.svg": "7e67110b4db1442994cdda4ad8e87322a48232c401e79b2c77ef57a3c8e2008a",
+        "play.svg": "7fd97c6df5995817d1a3a4cb4d779cf4f991ce90e85d2083c9e90580b8e684fa",
+        "plus.svg": "465cf0c263ccf02e67a2062b58679228cd8054f8760b8a34d9f5a52c6edfa215",
+        "puzzle.svg": "7f14a3e8d397d15ff31cdf349d4a7159fd895b0c774b92a8ed90d1f6ae2b0034",
+        "refresh.svg": "28642c1187f98ab0ade7ce115f47c4888e489271620bb18d6a0d5063dbc9c267",
+        "star.svg": "8ca7c0a4952306b79fa5efe3c7a276f5abd6d59594665e5804e1bb9b3636ee80"
+      }
+    }
+  ]
+}

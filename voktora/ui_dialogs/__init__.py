@@ -20,6 +20,7 @@ une intention de découpage jamais finalisée) :
   snapshot_dialog.py        — SnapshotDialog
   dashboard_dialog.py       — DashboardDialog
   plugins_dialog.py         — PluginsDialog
+  shop_dialog.py            — ShopDialog (boutiques de thèmes, d'icônes et de styles)
 
 Contrairement à core/, aucune classe de ce package n'en référence une
 autre ni ne partage d'état mutable au niveau module : un simple ré-export
@@ -36,6 +37,7 @@ from .categories_dialog import CategoriesDialog
 from .config_dialog import ConfigDialog
 from .customize_dialog import CustomizeProjectDialog
 from .dashboard_dialog import DashboardDialog
+from .dev_console_dialog import DevConsoleDialog
 from .disk_dialog import DiskUsageDialog
 from .emoji_picker_dialog import EmojiPickerDialog, IconPickerDialog
 from .encrypt_dialog import CopyWorker, EncryptProjectDialog, EncryptWorker
@@ -49,6 +51,7 @@ from .palette_dialog import PaletteDialog, collect_actions
 from .plugins_dialog import PluginsDialog
 from .profiles_dialog import ProfilesDialog
 from .quick_actions_dialog import QuickActionEditDialog, QuickActionsDialog
+from .shop_dialog import ShopDialog
 from .snapshot_dialog import SnapshotDialog
 from .status_dialog import EditStatusDialog, StatusDialog
 from .sync_dialog import SyncBridge, SyncDialog, ask_source
@@ -79,6 +82,8 @@ __all__ = [
     "MasterPasswordSetupDialog",
     "ExportWorker", "ImportWorker", "MigrateDialog",
     "PluginsDialog",
+    "ShopDialog",
+    "DevConsoleDialog",
     "ProfilesDialog",
     "SnapshotDialog",
     "EditStatusDialog", "StatusDialog",

@@ -1,0 +1,19 @@
+{
+  "id": "nord-frost",
+  "name": "Nord Frost",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Bleus glacés inspirés de Nord.",
+  "tags": [
+    "thème"
+  ],
+  "colors": [
+    "#2e3440",
+    "#eceff4",
+    "#88c0d0",
+    "#b48ead",
+    "#a3be8c",
+    "#bf616a",
+    "#ebcb8b"
+  ]
+}

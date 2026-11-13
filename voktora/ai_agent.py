@@ -34,6 +34,8 @@ import core
 OFF, ASK, AUTO = "off", "ask", "auto"
 LEVELS = (OFF, ASK, AUTO)
 
+CHAT_MAX_TOKENS = 2048
+STREAM_IDLE_TIMEOUT = 300.0     # délai d'inactivité entre deux morceaux (pas une durée totale)
 MAX_STEPS = 6                 # appels d'outils enchaînés au maximum par message
 RESULT_LIMIT = 3500           # caractères d'un résultat d'outil renvoyés au modèle
 HISTORY_LIMIT = 9000          # caractères d'historique envoyés au modèle (contexte réduit)
@@ -68,6 +70,8 @@ PERMISSIONS: dict[str, Permission] = {p.id: p for p in (
     Permission("plugins.modify", "Modifier un plugin", "Activer ou désactiver un plugin.", writes=True),
     Permission("config.read", "Lire les réglages", "Lire les réglages de l'application (sans les secrets).", default=AUTO),
     Permission("config.write", "Modifier les réglages", "Changer un réglage de l'application.", writes=True),
+    Permission("plugins.tools", "Outils ajoutés par des plugins", "Utiliser les outils que vos plugins proposent à l'assistant "
+               "(toujours confirmé : le code du plugin peut tout faire).", writes=True),
     Permission("commands.run", "Exécuter des commandes", "Lancer un programme (git, ls…) dans un projet. Sans shell.",
                writes=True),
 )}
@@ -377,6 +381,15 @@ def build_tools() -> dict[str, Tool]:
              {"command": "ex. git status", "project?": "nom du projet (dossier courant)"}, _t_run_command,
              lambda a: f"Exécuter : {a.get('command') or a.get('args')}" + (f"  (dans {a.get('project')})" if a.get("project") else "")),
     ]
+    try:
+        import plugins
+        for info, spec in plugins.ai_tools():
+            handler = spec["handler"]
+            tools.append(Tool(spec["name"], "plugins.tools", f"[plugin {info.name}] {spec['description']}", dict(spec["params"]),
+                              (lambda a, h=handler: h(a)),
+                              (lambda a, n=spec["name"], p=info.name: f"Plugin « {p} » : {n} {json.dumps(a, ensure_ascii=False)[:200]}")))
+    except Exception:  # noqa: BLE001, S110 — un plugin défaillant ne doit pas casser l'assistant
+        pass
     return {t.name: t for t in tools}
 
 
@@ -438,6 +451,49 @@ def _history_text(history: list[ChatMessage]) -> str:
     return "\n\n".join(reversed(parts))
 
 
+class _Visible:
+    """Filtre du flux : ne laisse passer vers l'écran que le texte lisible (ni blocs d'outil, ni <think>)."""
+
+    _STOPS = ("```tool", "<tool_call>")
+
+    def __init__(self, emit: Callable[[str], None]) -> None:
+        self._emit = emit
+        self._buf = ""
+        self._sent = 0
+        self.emitted = False
+
+    def _visible(self, final: bool) -> str:
+        text = re.sub(r"<think>.*?(</think>|$)", "", self._buf, flags=re.DOTALL | re.IGNORECASE)
+        for stop in self._STOPS:
+            cut = text.find(stop)
+            if cut != -1:
+                return text[:cut]
+        if not final:                                   # retient un début possible de marqueur / de <think>
+            for stop in (*self._STOPS, "<think>"):
+                for k in range(len(stop) - 1, 0, -1):
+                    if text.endswith(stop[:k]):
+                        return text[:-k]
+        return text
+
+    def _push(self, final: bool) -> None:
+        visible = self._visible(final)
+        if len(visible) > self._sent:
+            self._emit(visible[self._sent:])
+            self._sent = len(visible)
+            self.emitted = True
+
+    def feed(self, piece: str) -> None:
+        self._buf += piece
+        self._push(False)
+
+    def finish(self) -> None:
+        self._push(True)
+
+    def replace(self, answer: str) -> None:
+        self._buf, self._sent = answer, 0
+        self._push(True)
+
+
 def _truncate(value: Any) -> str:
     text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, default=str)
     return text if len(text) <= RESULT_LIMIT else text[:RESULT_LIMIT] + "… [tronqué]"
@@ -493,7 +549,12 @@ class Agent:
             if self.cancel():
                 return answer or "(arrêté)"
             prompt = f"{system}\n\n{_history_text(self.history)}\n\nAssistant :"
-            answer = self.generate(self.provider, prompt, timeout=120.0, max_tokens=900)
+            view = _Visible(lambda piece: self.on_event("token", piece))
+            answer = self.generate(self.provider, prompt, timeout=STREAM_IDLE_TIMEOUT, max_tokens=CHAT_MAX_TOKENS,
+                                   on_token=view.feed, cancel=self.cancel)
+            view.finish()
+            if not view.emitted:                       # fournisseur de test / non-flux : rien n'a été diffusé
+                view.replace(answer)
             call = parse_tool_call(answer) if catalog else None
             if call is None:
                 self.history.append(ChatMessage("assistant", answer))

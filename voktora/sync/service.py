@@ -364,6 +364,7 @@ class SyncService:
             except (ConnectionError, RemoteError) as exc:
                 raise PeerGone(f"{peer['name']} est injoignable ({exc}). Utilisez « Tester la connexion » pour le détail.") from exc
             remote = self._remote(peer)              # le port a pu changer pendant la recherche
+            remote.features = set(info.get("features", ()))        # delta / compression : pair 1.1.1+ seulement
             self._progress(peer_id, 0, f"Connecté ({info.get('rtt_ms', '?')} ms) — réservation de {peer['name']}…")
             remote.lock()
             locked = True

@@ -16,8 +16,12 @@ Exemple de `plugin.json` :
       "entry": "main.py",
       "permissions": ["ui", "projects.read"],
       "tags": ["notes"],
-      "homepage": "https://github.com/yo-le-zz/Voktora"
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "lang": "python",                       # ou "js" / "rust"
+      "requires": ["rich>=13"],               # bibliothèques PyPI propres au plugin (dossier libs/ dédié)
+      "dependencies": {"api-plus": ">=1.0.0"} # autres plugins nécessaires
     }
+    « permissions »: "auto" détecte les permissions depuis le code (plugins locaux ; le marketplace exige la liste).
 """
 
 from __future__ import annotations
@@ -27,7 +31,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-API_VERSION = 4                       # version de l'API de plugins fournie par cette version de Voktora
+API_VERSION = 5                       # version de l'API de plugins fournie par cette version de Voktora
 MANIFEST_NAME = "plugin.json"
 
 # Permissions déclarables. Elles sont affichées avant l'installation et vérifiées par l'API.
@@ -52,11 +56,25 @@ PERMISSIONS: dict[str, str] = {
     "fleet":         "Voir l'état Git de tous vos projets et chercher dans leurs fichiers",
     "projects.write": "Modifier les informations d'un projet (description, catégorie, statut… ; confirmé)",
     "ai":            "Envoyer une question au fournisseur IA configuré (confirmé à chaque appel)",
+    # API 5 (Voktora 1.1.1)
+    "files.write":   "Écrire des fichiers dans vos projets (confirmé à chaque écriture)",
+    "libs":          "Installer des bibliothèques Python externes (PyPI) réservées à ce plugin",
+    "native":        "Exécuter du code natif (Rust) : AUCUN bac à sable, mêmes droits que Voktora",
+    "system":        "Lire l'état de l'ordinateur (processeur, mémoire, disques, processus)",
+    "clipboard":     "Lire et écrire le presse-papiers",
+    "ai.tools":      "Ajouter des outils à l'assistant IA (chaque appel reste soumis à ses permissions)",
 }
+
+LANGS = ("python", "js", "rust")
+AUTO = "auto"                           # « permissions": "auto » : détectées depuis le code (plugins locaux)
 
 ID_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$")
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
-ENTRY_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]{0,80}\.py$")
+ENTRY_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_./-]{0,80}\.(py|js|mjs)$")
+REQUIRES_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,60}(\[[A-Za-z0-9,._-]{1,40}\])?"
+                         r"((==|>=|<=|~=|!=|>|<)[0-9A-Za-z.*+!-]{1,24}(,(==|>=|<=|~=|!=|>|<)[0-9A-Za-z.*+!-]{1,24})*)?$")
+RANGE_RE = re.compile(r"^(\*|(>=|<=|==|>|<|\^|~)?\s*\d+(\.\d+){0,2})(\s*,\s*(>=|<=|==|>|<)\s*\d+(\.\d+){0,2})*$")
+RUST_ENTRY = "Cargo.toml"
 
 MAX_NAME = 60
 MAX_DESCRIPTION = 400
@@ -79,13 +97,18 @@ class Manifest:
     tags: list[str] = field(default_factory=list)
     homepage: str = ""
     min_voktora: str = ""
+    lang: str = "python"
+    requires: list[str] = field(default_factory=list)          # bibliothèques PyPI propres au plugin
+    dependencies: dict[str, str] = field(default_factory=dict)  # autres plugins : {id: « >=1.0.0 »}
+    auto_permissions: bool = False                              # permissions détectées depuis le code
 
     def to_dict(self) -> dict:
         return {
             "id": self.id, "name": self.name, "version": self.version, "author": self.author,
             "description": self.description, "api": self.api, "entry": self.entry,
             "permissions": list(self.permissions), "tags": list(self.tags),
-            "homepage": self.homepage, "min_voktora": self.min_voktora,
+            "homepage": self.homepage, "min_voktora": self.min_voktora, "lang": self.lang,
+            "requires": list(self.requires), "dependencies": dict(self.dependencies),
         }
 
 
@@ -95,6 +118,34 @@ def version_tuple(version: str) -> tuple[int, int, int]:
     if not parts:
         return (0, 0, 0)
     return tuple(int(p or 0) for p in parts.groups())   # type: ignore[return-value]
+
+
+def satisfies(version: str, spec: str) -> bool:
+    """`version` respecte-t-elle `spec` ? « * », « 1.2 », « >=1.0.0 », « ^1.2.0 », « ~1.2 », « >=1,<2 »."""
+    spec = (spec or "*").strip()
+    if spec in ("", "*"):
+        return True
+    have = version_tuple(version)
+    for part in (p.strip() for p in spec.split(",")):
+        match = re.match(r"^(>=|<=|==|>|<|\^|~)?\s*(\d+(?:\.\d+){0,2})$", part)
+        if not match:
+            return False
+        op, number = match.group(1) or "==", match.group(2)
+        want = version_tuple(number)
+        size = number.count(".") + 1
+        if op == "^":
+            upper = (want[0] + 1, 0, 0) if want[0] else (0, want[1] + 1, 0) if want[1] else (0, 0, want[2] + 1)
+            ok = want <= have < upper
+        elif op == "~":
+            upper = (want[0], want[1] + 1, 0) if size >= 2 else (want[0] + 1, 0, 0)
+            ok = want <= have < upper
+        elif op == "==":
+            ok = have[:size] == want[:size]
+        else:
+            ok = {">=": have >= want, "<=": have <= want, ">": have > want, "<": have < want}[op]
+        if not ok:
+            return False
+    return True
 
 
 def is_newer(candidate: str, installed: str) -> bool:
@@ -141,15 +192,40 @@ def validate(data: object) -> tuple[Manifest | None, list[str]]:
     elif api > API_VERSION:
         errors.append(f"Ce plugin vise l'API {api}, cette version de Voktora fournit l'API {API_VERSION}.")
 
-    entry = data.get("entry", "main.py")
-    if not isinstance(entry, str) or not ENTRY_RE.match(entry) or ".." in entry.split("/"):
-        errors.append("« entry » doit être un fichier .py relatif au dossier du plugin (ex. « main.py »).")
-        entry = "main.py"
+    lang = data.get("lang", "python")
+    if lang not in LANGS:
+        errors.append(f"« lang » doit valoir : {', '.join(LANGS)}.")
+        lang = "python"
+    default_entry = {"python": "main.py", "js": "main.js", "rust": RUST_ENTRY}[lang]
+    entry = data.get("entry", default_entry)
+    if lang == "rust":
+        if entry != RUST_ENTRY:
+            errors.append(f"Un plugin Rust a pour « entry » {RUST_ENTRY!r}.")
+    elif not isinstance(entry, str) or not ENTRY_RE.match(entry) or ".." in entry.split("/"):
+        errors.append("« entry » doit être un fichier .py/.js relatif au dossier du plugin (ex. « main.py »).")
+        entry = default_entry
+    elif entry.endswith(".py") != (lang == "python"):
+        errors.append(f"« entry » ({entry}) ne correspond pas à « lang » ({lang}).")
 
-    permissions = data.get("permissions", [])
+    auto = data.get("permissions") == AUTO
+    permissions = [] if auto else data.get("permissions", [])
     if not isinstance(permissions, list) or not all(isinstance(p, str) for p in permissions):
-        errors.append("« permissions » doit être une liste de chaînes.")
+        errors.append("« permissions » doit être une liste de chaînes (ou \"auto\").")
         permissions = []
+
+    requires = data.get("requires", [])
+    if not isinstance(requires, list) or len(requires) > 30 or not all(
+            isinstance(r, str) and REQUIRES_RE.match(r.strip()) for r in requires):
+        errors.append("« requires » : liste de bibliothèques PyPI (« nom », « nom==1.2.3 », « nom>=2,<3 »), 30 au plus.")
+        requires = []
+    dependencies = data.get("dependencies", {})
+    if not isinstance(dependencies, dict) or len(dependencies) > 20 or not all(
+            isinstance(k, str) and ID_RE.match(k) and isinstance(v, str) and RANGE_RE.match(v.strip())
+            for k, v in dependencies.items()):
+        errors.append("« dependencies » : objet {\"id-du-plugin\": \">=1.0.0\"} (20 au plus).")
+        dependencies = {}
+    if plugin_id in dependencies:
+        errors.append("Un plugin ne peut pas dépendre de lui-même.")
     unknown = sorted(set(permissions) - set(PERMISSIONS))
     if unknown:
         errors.append(f"Permission(s) inconnue(s) : {', '.join(unknown)}. Valeurs possibles : {', '.join(PERMISSIONS)}.")
@@ -164,7 +240,9 @@ def validate(data: object) -> tuple[Manifest | None, list[str]]:
     return Manifest(
         id=plugin_id, name=name, version=version, author=author, description=description,
         api=api, entry=entry, permissions=sorted(set(permissions)), tags=list(tags),
-        homepage=homepage, min_voktora=min_voktora,
+        homepage=homepage, min_voktora=min_voktora, lang=lang,
+        requires=[r.strip() for r in requires], dependencies={k: v.strip() for k, v in dependencies.items()},
+        auto_permissions=auto,
     ), []
 
 

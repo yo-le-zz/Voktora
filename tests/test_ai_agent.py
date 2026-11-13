@@ -144,7 +144,7 @@ def test_chat_dialog_roundtrip_with_confirmation(project, monkeypatch):
     script = Script(_tool("update_project", name="demo", fields={"description": "via chat"}), "Description mise à jour.")
     dlg = AIChatDialog(generate=script)
     monkeypatch.setattr(QMessageBox, "exec", lambda self: QMessageBox.Yes)
-    dlg.edit.setText("décris demo")
+    dlg.edit.setPlainText("décris demo")
     dlg._send()
     import time
     for _ in range(100):

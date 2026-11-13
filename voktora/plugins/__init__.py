@@ -17,6 +17,7 @@ from .runtime import (
     PluginError,
     PluginInfo,
     PluginSettings,
+    ai_tools,
     all_buttons,
     all_commands,
     disabled_ids,
@@ -28,10 +29,12 @@ from .runtime import (
     get_ui_host,
     load_all,
     market_url,
+    palette_entries,
     plugin_data_dir,
     plugins_dir,
     set_enabled,
     set_market_url,
+    set_trace_hook,
     set_ui_host,
     unload,
 )
@@ -39,7 +42,7 @@ from .runtime import (
 __all__ = [
     "API_VERSION", "EVENTS", "PERMISSIONS", "Manifest", "ManifestError", "PluginAPI", "PluginButton",
     "PluginCommand", "PluginContext", "PluginError", "PluginInfo", "PluginSettings", "all_buttons",
-    "all_commands", "disabled_ids", "extra_stylesheet", "extra_themes", "find", "fire_hook", "get_all",
+    "ai_tools", "palette_entries", "set_trace_hook", "all_commands", "disabled_ids", "extra_stylesheet", "extra_themes", "find", "fire_hook", "get_all",
     "get_ui_host", "load_all", "market_url", "plugin_data_dir", "plugins_dir", "set_enabled",
     "set_market_url", "set_ui_host", "unload",
 ]

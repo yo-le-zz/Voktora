@@ -741,3 +741,109 @@ def test_dry_run_changes_nothing_and_lists_actions(pcs):
     assert last["kind"] == "synchro" and any("sub/b.txt" in d for d in last["details"])
     laptop.svc.clear_history()
     assert laptop.svc.history() == []
+
+
+# ── 1.1.1 : delta par blocs et compression ─────────────────────────────────────
+
+def _big(seed: int, blocks: int = 10) -> bytes:
+    import random
+    rnd = random.Random(seed)
+    return b"".join(rnd.randbytes(1024 * 1024) for _ in range(blocks))
+
+
+def test_delta_pull_transfers_only_changed_blocks(pcs):
+    main, laptop = pcs
+    laptop.svc.settings["log_level"] = "detailed"
+    data = _big(1)
+    a, b = setup_project(main, laptop, {"x.txt": "x\n"})
+    (a / "big.bin").write_bytes(data)
+    laptop.svc.sync_peer(main.id, "primary")
+    assert (b / "big.bin").read_bytes() == data
+    changed = bytearray(data)
+    changed[3 * 1024 * 1024 + 10: 3 * 1024 * 1024 + 20] = b"X" * 10         # un seul bloc modifié
+    (a / "big.bin").write_bytes(bytes(changed))
+    laptop.svc.clear_log()
+    laptop.svc.sync_peer(main.id, "primary")
+    assert (b / "big.bin").read_bytes() == bytes(changed)
+    assert any("Delta : demo/big.bin — 1 bloc(s) sur 10" in line or "big.bin — 1 bloc(s) sur 10" in line
+               for line in laptop.svc.logs)
+
+
+def test_delta_push_and_growing_file(pcs):
+    main, laptop = pcs
+    laptop.svc.settings["log_level"] = "detailed"
+    data = _big(2, 9)
+    a, b = setup_project(main, laptop, {"x.txt": "x\n"})
+    (a / "log.bin").write_bytes(data)
+    laptop.svc.sync_peer(main.id, "primary")
+    grown = data + _big(3, 2)                                  # le fichier grandit sur CE PC (ajout de 2 blocs)
+    (b / "log.bin").write_bytes(grown)
+    laptop.svc.clear_log()
+    laptop.svc.sync_peer(main.id, "local")
+    assert (a / "log.bin").read_bytes() == grown
+    assert any("2 bloc(s) sur 11" in line for line in laptop.svc.logs)
+
+
+def test_delta_falls_back_to_full_transfer_when_result_is_wrong(pcs, monkeypatch):
+    main, laptop = pcs
+    data = _big(4)
+    a, b = setup_project(main, laptop, {"x.txt": "x\n"})
+    (a / "big.bin").write_bytes(data)
+    laptop.svc.sync_peer(main.id, "primary")
+    (a / "big.bin").write_bytes(data[:5 * 1024 * 1024] + b"Z" * 1000 + data[5 * 1024 * 1024 + 1000:])
+    real = laptop.svc.store.write_delta
+    monkeypatch.setattr(laptop.svc.store, "write_delta", lambda *a_, **k: (_ for _ in ()).throw(SyncPathError("simulé")))
+    laptop.svc.sync_peer(main.id, "primary")
+    assert (b / "big.bin").read_bytes() == (a / "big.bin").read_bytes()      # transfert complet de secours
+    del real
+
+
+def test_no_delta_or_zip_with_older_peer(pcs, monkeypatch):
+    main, laptop = pcs
+    a, b = setup_project(main, laptop, {"t.txt": "texte\n" * 20000})
+    from sync import server as server_mod
+    orig = server_mod._Handler._json
+
+    def old_json(self, obj, *a, **k):
+        if isinstance(obj, dict) and "features" in obj:
+            obj = {k_: v for k_, v in obj.items() if k_ != "features"}      # comme un pair en 1.1.0
+        return orig(self, obj, *a, **k)
+    monkeypatch.setattr(server_mod._Handler, "_json", old_json)
+    laptop.svc.sync_peer(main.id, "primary")
+    assert (b / "t.txt").read_text() == "texte\n" * 20000
+
+
+def test_compression_roundtrip_and_savings(pcs, monkeypatch):
+    from sync import transfer
+    main, laptop = pcs
+    text = ("ligne répétitive de texte très compressible\n" * 5000)
+    a, b = setup_project(main, laptop, {"texte.txt": text, "photo.jpg": "x" * 100000})
+    sizes = []
+    real = transfer.compress_chunks
+    monkeypatch.setattr(transfer, "compress_chunks", lambda chunks: [sizes.append(len(c)) or c for c in real(chunks)].__iter__())
+    laptop.svc.sync_peer(main.id, "primary")                     # reçoit via /file?z=1 (compression côté serveur)
+    assert (b / "texte.txt").read_text() == text
+    assert sizes and sum(sizes) < len(text.encode()) / 5          # bien compressé en transit
+    write(b, "retour.txt", text)                                  # envoi dans l'autre sens (PUT compressé, spool)
+    laptop.svc.sync_peer(main.id)
+    assert (a / "retour.txt").read_text() == text
+
+
+def test_transfer_helpers():
+    from sync import transfer
+    assert transfer.encode_ranges([0, 1, 2, 5, 7, 8]) == "0-2,5,7-8"
+    assert transfer.decode_ranges("0-2,5,7-8") == [0, 1, 2, 5, 7, 8]
+    assert transfer.decode_ranges("") == []
+    import pytest
+    with pytest.raises(ValueError):
+        transfer.decode_ranges("5-2")
+    with pytest.raises(ValueError):
+        transfer.decode_ranges("0-99999999999")
+    blob = b"abc" * 500000 + bytes(range(256)) * 10
+    packed = list(transfer.compress_chunks([blob]))
+    assert b"".join(transfer.decompress_chunks(packed)) == blob
+    with pytest.raises(ValueError):
+        list(transfer.decompress_chunks([b"\x09abc"]))
+    bomb = transfer.ZLIB + __import__("zlib").compress(b"\0" * 50_000_000, 9)      # bombe : bornée, refusée
+    with pytest.raises(ValueError):
+        list(transfer.decompress_chunks([bomb]))
