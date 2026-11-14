@@ -338,7 +338,6 @@
       "description": "UUID v4, lorem ipsum, horodatages et couleurs de test, copiés en un clic (plugin JavaScript ; valeurs non cryptographiques).",
       "entry": "main.js",
       "files": {
-        "lib/gen.js": "6c1443e4d86984df5fd9577849269e31200a10650ea73ea2df83da4738207764",
         "main.js": "92f8923af1978a59c8475ff903c27f876f054fab6de3a277380ebd5e944aea9d",
         "plugin.json": "3497040f3346dbf3d017946bdc3b3a3efef576638fe32d5cd5866f0cedc58519"
       },
@@ -431,7 +430,6 @@
       "description": "Formate, minifie, trie les clés et valide le JSON du presse-papiers, avec ligne et colonne de l'erreur (plugin JavaScript).",
       "entry": "main.js",
       "files": {
-        "lib/jsonfmt.js": "91aab77da6ba729312c2eef714c0780d5887be4d696bc6c597295b6517f27253",
         "main.js": "b554f9625346eb527c8cc72be1581a30ccdb021dc82fd43bdc995b357fd2225f",
         "plugin.json": "7e387903506b9c41f887c735241c0d6874d00fac93e0bfca230f87d3f7a1924a"
       },
@@ -726,7 +724,6 @@
       "description": "Convertit le presse-papiers : camelCase, snake_case, kebab-case, slug, tri et dédoublonnage de lignes… (plugin JavaScript).",
       "entry": "main.js",
       "files": {
-        "lib/cases.js": "7edf2514be4afd4af66de4aa7dd268c53de3b6d390521f9c544e6fce740379b1",
         "main.js": "58daf2039a79fbc03db148d13573018afdb338693e22ef2cbd0bd0f349b2441b",
         "plugin.json": "bd44a9fdc44b51993b821773e1daa77863693191e7bc9e772c83061123115e2a"
       },
@@ -775,6 +772,33 @@
       "tags": [
         "developpeur",
         "apparence"
+      ],
+      "tier": "official",
+      "version": "1.0.0"
+    },
+    {
+      "api": 4,
+      "author": "yolezz",
+      "dependencies": {},
+      "description": "Show the current time inside the interface.",
+      "entry": "main.py",
+      "files": {
+        "main.py": "bcd5190f5ff1af87c78387defd9a2e03549c5f312414fd8f883a156196732afa",
+        "plugin.json": "13a7dcc71f5578d1032119931fe30a8405f9c2ed66cf6f2171649cabc83d93dc"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "time-time",
+      "lang": "python",
+      "min_voktora": "",
+      "name": "Time Time",
+      "path": "plugins/time-time",
+      "permissions": [
+        "ui"
+      ],
+      "requires": [],
+      "tags": [
+        "interface",
+        "utility"
       ],
       "tier": "official",
       "version": "1.0.0"
