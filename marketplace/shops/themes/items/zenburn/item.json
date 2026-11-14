@@ -1,0 +1,20 @@
+{
+  "id": "zenburn",
+  "name": "Zenburn",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Gris chauds peu fatigants, inspiré de Zenburn.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#3f3f3f",
+    "#dcdccc",
+    "#8cd0d3",
+    "#dc8cc3",
+    "#7f9f7f",
+    "#cc9393",
+    "#f0dfaf"
+  ]
+}

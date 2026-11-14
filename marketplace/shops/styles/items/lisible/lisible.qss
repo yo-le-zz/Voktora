@@ -1,0 +1,3 @@
+* { font-size: 11pt; }
+QTreeView::item, QListView::item, QTableView::item { padding: 4px; }
+QToolTip { font-size: 10pt; }

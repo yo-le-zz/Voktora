@@ -1,0 +1,20 @@
+{
+  "id": "oled-black",
+  "name": "OLED Noir",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Noir pur : économise les écrans OLED.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#000000",
+    "#e6e6e6",
+    "#4aa3ff",
+    "#b48cff",
+    "#4ade80",
+    "#ff5c5c",
+    "#fbbf24"
+  ]
+}

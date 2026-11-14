@@ -1,0 +1,20 @@
+{
+  "id": "tokyo-night",
+  "name": "Tokyo Night",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Bleu nuit et néons discrets, inspiré de Tokyo Night.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#1a1b26",
+    "#c0caf5",
+    "#7aa2f7",
+    "#bb9af7",
+    "#9ece6a",
+    "#f7768e",
+    "#e0af68"
+  ]
+}

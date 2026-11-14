@@ -1,0 +1,4 @@
+QMenu { padding: 6px; }
+QMenu::item { padding: 6px 26px 6px 12px; border-radius: 5px; }
+QMenu::separator { height: 1px; margin: 5px 8px; background: palette(mid); }
+QComboBox QAbstractItemView { padding: 4px; }

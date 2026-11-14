@@ -1,0 +1,20 @@
+{
+  "id": "cobalt",
+  "name": "Cobalt",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Bleu cobalt saturé, inspiré de Cobalt.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#193549",
+    "#ffffff",
+    "#0088ff",
+    "#9a5feb",
+    "#3ad900",
+    "#ff628c",
+    "#ffc600"
+  ]
+}

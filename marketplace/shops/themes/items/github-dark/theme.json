@@ -1,0 +1,14 @@
+{
+  "name": "GitHub Dark",
+  "description": "Gris GitHub sobre.",
+  "colors": {
+    "base": "#0d1117",
+    "text": "#e6edf3",
+    "blue": "#58a6ff",
+    "mauve": "#bc8cff",
+    "green": "#3fb950",
+    "red": "#f85149",
+    "yellow": "#d29922",
+    "primary": "#58a6ff"
+  }
+}

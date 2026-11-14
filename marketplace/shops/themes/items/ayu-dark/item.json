@@ -1,0 +1,20 @@
+{
+  "id": "ayu-dark",
+  "name": "Ayu Dark",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Noir bleuté et orange, inspiré d'Ayu.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#0b0e14",
+    "#bfbdb6",
+    "#59c2ff",
+    "#d2a6ff",
+    "#aad94c",
+    "#f07178",
+    "#e6b450"
+  ]
+}

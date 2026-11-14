@@ -1,0 +1,20 @@
+{
+  "id": "text-case-js",
+  "name": "Text Case (JS)",
+  "author": "yolezz",
+  "homepage": "https://github.com/yo-le-zz/Voktora",
+  "version": "1.0.0",
+  "api": 5,
+  "lang": "js",
+  "description": "Convertit le presse-papiers : camelCase, snake_case, kebab-case, slug, tri et dédoublonnage de lignes… (plugin JavaScript).",
+  "permissions": [
+    "clipboard",
+    "ui"
+  ],
+  "tags": [
+    "texte",
+    "productivité",
+    "javascript"
+  ],
+  "entry": "main.js"
+}

@@ -1,0 +1,4 @@
+QPushButton:focus, QToolButton:focus, QComboBox:focus, QSpinBox:focus { border: 2px solid palette(highlight); }
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus { border: 2px solid palette(highlight); }
+QTreeView:focus, QListView:focus, QTableView:focus { border: 2px solid palette(highlight); }
+QTabBar::tab:focus { border: 2px solid palette(highlight); }

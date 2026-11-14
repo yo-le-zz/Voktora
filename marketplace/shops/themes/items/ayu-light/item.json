@@ -1,0 +1,20 @@
+{
+  "id": "ayu-light",
+  "name": "Ayu Light",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Ayu clair, lumineux.",
+  "tags": [
+    "thème",
+    "clair"
+  ],
+  "colors": [
+    "#fafafa",
+    "#5c6166",
+    "#399ee6",
+    "#a37acc",
+    "#86b300",
+    "#f07171",
+    "#f2ae49"
+  ]
+}

@@ -1,0 +1,5 @@
+QPushButton, QLineEdit, QComboBox, QSpinBox, QTextEdit, QPlainTextEdit { border-radius: 10px; }
+QListView, QTreeView, QTableView, QTabWidget::pane, QGroupBox { border-radius: 10px; }
+QMenu { border-radius: 10px; padding: 4px; }
+QMenu::item { border-radius: 6px; }
+QToolTip { border-radius: 8px; padding: 4px 8px; }

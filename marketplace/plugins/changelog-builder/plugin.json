@@ -1,0 +1,24 @@
+{
+  "id": "changelog-builder",
+  "name": "Changelog Builder",
+  "author": "yolezz",
+  "homepage": "https://github.com/yo-le-zz/Voktora",
+  "version": "1.0.0",
+  "api": 5,
+  "lang": "python",
+  "description": "Génère un changelog depuis les commits Git (Conventional Commits) entre deux références, propose la prochaine version SemVer et l'insère dans CHANGELOG.md.",
+  "permissions": [
+    "clipboard",
+    "files",
+    "files.write",
+    "projects.read",
+    "shell",
+    "ui"
+  ],
+  "tags": [
+    "git",
+    "changelog",
+    "release"
+  ],
+  "entry": "main.py"
+}

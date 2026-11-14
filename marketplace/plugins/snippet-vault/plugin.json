@@ -1,0 +1,21 @@
+{
+  "id": "snippet-vault",
+  "name": "Snippet Vault",
+  "author": "yolezz",
+  "homepage": "https://github.com/yo-le-zz/Voktora",
+  "version": "1.0.0",
+  "api": 5,
+  "lang": "python",
+  "description": "Bibliothèque de snippets globale ou par projet : recherche, étiquettes, copie en un clic, export Markdown, accès depuis la palette.",
+  "permissions": [
+    "clipboard",
+    "projects.read",
+    "ui"
+  ],
+  "tags": [
+    "productivité",
+    "code",
+    "snippets"
+  ],
+  "entry": "main.py"
+}

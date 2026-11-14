@@ -1,0 +1,14 @@
+{
+  "name": "Catppuccin Macchiato",
+  "description": "Pastels sur fond sombre, inspiré de Catppuccin.",
+  "colors": {
+    "base": "#24273a",
+    "text": "#cad3f5",
+    "blue": "#8aadf4",
+    "mauve": "#c6a0f6",
+    "green": "#a6da95",
+    "red": "#ed8796",
+    "yellow": "#eed49f",
+    "primary": "#c6a0f6"
+  }
+}

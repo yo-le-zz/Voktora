@@ -1,0 +1,20 @@
+{
+  "id": "github-dark",
+  "name": "GitHub Dark",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Gris GitHub sobre.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#0d1117",
+    "#e6edf3",
+    "#58a6ff",
+    "#bc8cff",
+    "#3fb950",
+    "#f85149",
+    "#d29922"
+  ]
+}

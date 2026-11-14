@@ -1,0 +1,14 @@
+{
+  "name": "Gruvbox Light",
+  "description": "Papier crème, inspiré de Gruvbox (clair).",
+  "colors": {
+    "base": "#fbf1c7",
+    "text": "#3c3836",
+    "blue": "#076678",
+    "mauve": "#8f3f71",
+    "green": "#79740e",
+    "red": "#9d0006",
+    "yellow": "#b57614",
+    "primary": "#af3a03"
+  }
+}

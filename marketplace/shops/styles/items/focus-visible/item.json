@@ -1,0 +1,10 @@
+{
+  "id": "focus-visible",
+  "name": "Focus visible",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Contour net sur l'élément qui a le focus (accessibilité clavier).",
+  "tags": [
+    "style"
+  ]
+}

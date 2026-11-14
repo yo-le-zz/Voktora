@@ -1,0 +1,14 @@
+{
+  "name": "Forêt",
+  "description": "Verts profonds et mousse.",
+  "colors": {
+    "base": "#14201a",
+    "text": "#d6e5d8",
+    "blue": "#6fb3b8",
+    "mauve": "#b48ead",
+    "green": "#8fcf7a",
+    "red": "#d9776b",
+    "yellow": "#d9c26b",
+    "primary": "#8fcf7a"
+  }
+}

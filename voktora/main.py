@@ -27,6 +27,10 @@ if os.environ.get("VOKTORA_JS_WORKER") == "1":       # processus d'un plugin Jav
     _mod.run()
     raise SystemExit(0)
 
+if os.environ.get("VOKTORA_DEVMON_VIEWER"):          # seconde fenêtre du moniteur développeur (voir devmon/), processus détaché
+    from devmon import viewer as _viewer
+    raise SystemExit(_viewer.run(os.environ["VOKTORA_DEVMON_VIEWER"]))
+
 import core
 import linux_env
 from PySide6.QtCore import Qt
@@ -57,6 +61,16 @@ def main() -> None:
     app.setApplicationVersion(core.APP_VERSION)
     app.setDesktopFileName("voktora")   # relie la fenêtre à voktora.desktop (icône sous Wayland : GNOME, KDE…)
     app.setStyle("Fusion")
+
+    # Moniteur développeur global (--dev[=mode], VOKTORA_DEV, ou préférence) : démarré tôt pour voir aussi les plantages du démarrage
+    from devmon import core as _dm_core
+    from devmon import launcher as _dm_launcher
+    _dm_level = _dm_launcher.parse_dev_arg(sys.argv)
+    if _dm_level is None and _dm_core.read_prefs().get("autostart"):
+        _dm_level = _dm_core.valid_level(_dm_core.read_prefs().get("mode"))
+    if _dm_level:
+        import devmon
+        devmon.open_monitor(_dm_level, app, open_window=_dm_core.read_prefs().get("window", True))
 
     # Icônes vectorielles à la place des emojis (absents de nombreux Linux)
     import icons
@@ -102,7 +116,11 @@ def main() -> None:
     win = MainWindow()
     win.show()
 
-    sys.exit(app.exec())
+    code = app.exec()
+    from devmon import emitter as _dm_emitter
+    if _dm_emitter.current():
+        _dm_emitter.current().stop(code)
+    sys.exit(code)
 
 
 if __name__ == "__main__":

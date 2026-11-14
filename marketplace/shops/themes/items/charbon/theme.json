@@ -1,0 +1,14 @@
+{
+  "name": "Charbon",
+  "description": "Gris neutre, accent orange.",
+  "colors": {
+    "base": "#1e1e1e",
+    "text": "#d4d4d4",
+    "blue": "#569cd6",
+    "mauve": "#c586c0",
+    "green": "#6a9955",
+    "red": "#f44747",
+    "yellow": "#dcdcaa",
+    "primary": "#ce9178"
+  }
+}

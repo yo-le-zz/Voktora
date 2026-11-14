@@ -5,8 +5,9 @@ Principe volontairement prudent :
   1. `check()` interroge l'API GitHub (https uniquement), au plus une fois par 24 h en tâche de fond ;
   2. `download(release)` télécharge la ressource adaptée à la plateforme dans un dossier de préparation, vérifie sa somme
      SHA-256 (ressource « <fichier>.sha256 » ou champ `digest` de GitHub ; sans somme → refus) puis la laisse en place ;
-  3. Voktora ne remplace JAMAIS son propre exécutable en marche : il indique où se trouve le fichier vérifié et comment
-     l'installer. L'application ne se met donc pas à jour « dans votre dos ».
+  3. (1.1.3) sur demande de l'utilisateur seulement, `update_install` écrit un script détaché qui ferme Voktora,
+     installe le fichier vérifié (selon la distribution et l'architecture), puis rouvre Voktora ; tout est journalisé.
+     Rien ne se met à jour « dans votre dos ».
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import sys
+import sys  # noqa: F401 — les tests ajustent `self_update.sys.platform`
 import time
 import urllib.request
 from dataclasses import dataclass, field
@@ -88,20 +89,17 @@ def check() -> Release | None:
     return release if release and is_newer(release.version) else None
 
 
-def platform_keywords() -> list[str]:
-    if sys.platform == "win32":
-        return ["windows", "win", ".exe", ".msi"]
-    if sys.platform == "darwin":
-        return ["macos", "mac", "darwin", ".dmg"]
-    return ["linux", ".appimage", ".tar.gz", ".rpm", ".deb"]
-
-
 def pick_asset(release: Release) -> str | None:
-    names = [n for n in release.assets if not n.endswith((".sha256", ".sig", ".asc"))]
-    for keyword in platform_keywords():
+    """Le fichier adapté à CE système et à CETTE architecture (paquet de la distribution d'abord)."""
+    import update_install as ui
+    names = [n for n in release.assets if not n.endswith((".sha256", ".sig", ".asc")) and ui.arch_matches(n)]
+    for kind in ui.preferred_kinds():
         for name in names:
-            if keyword in name.lower():
-                return name
+            try:
+                if ui.kind_of(name) == kind:
+                    return name
+            except ui.InstallError:
+                continue
     return None
 
 

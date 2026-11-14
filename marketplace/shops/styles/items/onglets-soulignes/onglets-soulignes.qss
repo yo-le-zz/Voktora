@@ -1,0 +1,4 @@
+QTabBar::tab { background: transparent; border: none; border-bottom: 2px solid transparent; padding: 6px 12px; }
+QTabBar::tab:selected { border-bottom: 2px solid palette(highlight); }
+QTabBar::tab:hover:!selected { border-bottom: 2px solid palette(mid); }
+QTabWidget::pane { border: none; border-top: 1px solid palette(mid); }

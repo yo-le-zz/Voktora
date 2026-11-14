@@ -1,0 +1,14 @@
+{
+  "name": "Nightfox",
+  "description": "Bleus froids et rouille, inspiré de Nightfox.",
+  "colors": {
+    "base": "#192330",
+    "text": "#cdcecf",
+    "blue": "#719cd6",
+    "mauve": "#9d79d6",
+    "green": "#81b29a",
+    "red": "#c94f6d",
+    "yellow": "#dbc074",
+    "primary": "#719cd6"
+  }
+}

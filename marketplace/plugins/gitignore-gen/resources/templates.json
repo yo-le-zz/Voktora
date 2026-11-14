@@ -1,0 +1,246 @@
+{
+ "templates": {
+  "Python": [
+   "__pycache__/",
+   "*.py[cod]",
+   "*.egg-info/",
+   ".eggs/",
+   "build/",
+   "dist/",
+   ".venv/",
+   "venv/",
+   ".pytest_cache/",
+   ".mypy_cache/",
+   ".ruff_cache/",
+   ".coverage",
+   "htmlcov/",
+   ".tox/",
+   ".ipynb_checkpoints/"
+  ],
+  "Node.js": [
+   "node_modules/",
+   "npm-debug.log*",
+   "yarn-error.log*",
+   "pnpm-debug.log*",
+   ".npm/",
+   ".next/",
+   ".nuxt/",
+   "dist/",
+   "coverage/",
+   ".parcel-cache/",
+   ".eslintcache",
+   "*.tsbuildinfo"
+  ],
+  "Rust": [
+   "target/",
+   "**/*.rs.bk"
+  ],
+  "Go": [
+   "*.exe",
+   "*.test",
+   "*.out",
+   "vendor/",
+   "bin/"
+  ],
+  "Java": [
+   "*.class",
+   "*.jar",
+   "*.war",
+   "target/",
+   "build/",
+   ".gradle/",
+   "out/",
+   "hs_err_pid*"
+  ],
+  "Kotlin / Android": [
+   "*.apk",
+   "*.aab",
+   "build/",
+   ".gradle/",
+   "local.properties",
+   "captures/",
+   ".externalNativeBuild/",
+   ".cxx/"
+  ],
+  "C / C++": [
+   "*.o",
+   "*.obj",
+   "*.a",
+   "*.lib",
+   "*.so",
+   "*.dll",
+   "*.dylib",
+   "*.exe",
+   "build/",
+   "cmake-build-*/",
+   "CMakeCache.txt",
+   "CMakeFiles/",
+   "compile_commands.json"
+  ],
+  ".NET / C#": [
+   "bin/",
+   "obj/",
+   "*.user",
+   "*.suo",
+   ".vs/",
+   "*.nupkg",
+   "TestResults/"
+  ],
+  "PHP": [
+   "vendor/",
+   ".phpunit.result.cache",
+   "composer.phar"
+  ],
+  "Ruby": [
+   "*.gem",
+   ".bundle/",
+   "vendor/bundle/",
+   "log/",
+   "tmp/",
+   "coverage/"
+  ],
+  "Swift": [
+   ".build/",
+   "*.xcodeproj/xcuserdata/",
+   "DerivedData/",
+   "Pods/"
+  ],
+  "Dart / Flutter": [
+   ".dart_tool/",
+   ".packages",
+   "build/",
+   ".flutter-plugins",
+   ".flutter-plugins-dependencies"
+  ],
+  "Unity": [
+   "[Ll]ibrary/",
+   "[Tt]emp/",
+   "[Oo]bj/",
+   "[Bb]uild/",
+   "[Ll]ogs/",
+   "UserSettings/",
+   "*.csproj",
+   "*.sln"
+  ],
+  "Terraform": [
+   ".terraform/",
+   "*.tfstate",
+   "*.tfstate.*",
+   "crash.log",
+   "*.tfvars"
+  ],
+  "Docker": [
+   ".dockerignore.local",
+   "docker-compose.override.yml"
+  ],
+  "Environnement": [
+   ".env",
+   ".env.*",
+   "!.env.example",
+   "*.pem",
+   "*.key",
+   "secrets.*"
+  ],
+  "Linux": [
+   "*~",
+   ".directory",
+   ".Trash-*",
+   ".nfs*"
+  ],
+  "macOS": [
+   ".DS_Store",
+   "._*",
+   ".AppleDouble",
+   ".Spotlight-V100",
+   ".Trashes"
+  ],
+  "Windows": [
+   "Thumbs.db",
+   "ehthumbs.db",
+   "Desktop.ini",
+   "$RECYCLE.BIN/",
+   "*.lnk"
+  ],
+  "VS Code": [
+   ".vscode/*",
+   "!.vscode/settings.json",
+   "!.vscode/tasks.json",
+   "!.vscode/launch.json",
+   "!.vscode/extensions.json",
+   "*.code-workspace"
+  ],
+  "JetBrains": [
+   ".idea/",
+   "*.iml",
+   "*.iws",
+   "out/"
+  ],
+  "Vim / Emacs": [
+   "*.swp",
+   "*.swo",
+   "*~",
+   "\\#*\\#",
+   ".#*",
+   ".emacs.desktop"
+  ],
+  "Journaux": [
+   "*.log",
+   "logs/"
+  ]
+ },
+ "detect": {
+  "Python": [
+   "pyproject.toml",
+   "requirements.txt",
+   "setup.py",
+   "Pipfile"
+  ],
+  "Node.js": [
+   "package.json"
+  ],
+  "Rust": [
+   "Cargo.toml"
+  ],
+  "Go": [
+   "go.mod"
+  ],
+  "Java": [
+   "pom.xml",
+   "build.gradle"
+  ],
+  "Kotlin / Android": [
+   "build.gradle.kts",
+   "AndroidManifest.xml"
+  ],
+  "C / C++": [
+   "CMakeLists.txt",
+   "Makefile"
+  ],
+  ".NET / C#": [
+   "*.csproj",
+   "*.sln"
+  ],
+  "PHP": [
+   "composer.json"
+  ],
+  "Ruby": [
+   "Gemfile"
+  ],
+  "Swift": [
+   "Package.swift"
+  ],
+  "Dart / Flutter": [
+   "pubspec.yaml"
+  ],
+  "Terraform": [
+   "main.tf"
+  ],
+  "Docker": [
+   "Dockerfile",
+   "docker-compose.yml"
+  ],
+  "Environnement": [
+   ".env"
+  ]
+ }
+}

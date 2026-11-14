@@ -1,0 +1,10 @@
+{
+  "id": "sans-bordures",
+  "name": "Sans bordures",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Supprime la plupart des cadres : rendu épuré.",
+  "tags": [
+    "style"
+  ]
+}

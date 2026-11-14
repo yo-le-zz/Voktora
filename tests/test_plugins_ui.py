@@ -1,5 +1,6 @@
 """Plugins dans la vraie fenêtre : les 8 plugins du marketplace chargés, utilisés puis retirés proprement."""
 
+import json
 import os
 import shutil
 import sys
@@ -20,7 +21,10 @@ from ui_main import MainWindow  # noqa: E402
 
 _app = QApplication.instance() or QApplication(sys.argv)
 MARKET_DIR = Path(__file__).resolve().parent.parent / "marketplace"
-ALL_IDS = sorted(p.name for p in (MARKET_DIR / "plugins").iterdir() if p.is_dir())
+# Les plugins Rust se compilent (plusieurs minutes) : ils ont leur propre test (test_plugin_loc_counter_rs.py).
+ALL_ENTRIES = json.loads((MARKET_DIR / "index.json").read_text(encoding="utf-8"))["plugins"]
+ALL_IDS = sorted(p["id"] for p in ALL_ENTRIES if p.get("lang") != "rust")
+# (on part de l'index : un dossier orphelin laissé dans un dépôt ne doit pas faire échouer les tests)
 
 
 @pytest.fixture
@@ -74,11 +78,11 @@ class TestRealPlugins:
 
         titles = [tabs.tabText(i) for i in range(tabs.count())]
         assert {"Notes", "TODO", "Git Insights"} <= {t.strip() for t in titles}
-        assert tabs.count() == base_tabs + 3 + 5   # + 1 onglet par plugin avancé (1.1.2)
+        assert tabs.count() == base_tabs + 3 + 5 + 1   # + 1 onglet par plugin avancé (1.1.2) + snippet-vault (1.1.3)
         menus = _menu_titles(window)
         assert "Plugins" in menus and menus.index("Plugins") < len(menus) - 1     # avant « Aide »
         plugins_menu = next(a.menu() for a in window.menuBar().actions() if a.text() == "Plugins")
-        assert {a.text() for a in plugins_menu.actions()} == {"UI Tweaks", "Focus Timer", "Zen Mode"}
+        assert {a.text() for a in plugins_menu.actions()} == {"UI Tweaks", "Focus Timer", "Zen Mode", "Project Counter"}
         assert window._ui_host._toolbar is not None and window._ui_host._toolbar.isVisibleTo(window)
         assert window._ui_host.context_actions(["/x"])[0][0] == "Copier le chemin"
         assert window.statusBar().children().__len__() > base_status
@@ -110,7 +114,7 @@ class TestRealPlugins:
         assert _wait_for(lambda: todo._tree.topLevelItemCount() == 2)
 
         git = next(w for i, w in window._ui_host._tab_widgets if i.id == "git-insights")
-        assert _wait_for(lambda: "pas un dépôt Git" in git._text.toPlainText() or "Branche" in git._text.toPlainText())
+        assert _wait_for(lambda: "pas un dépôt" in git._message.text() or git._cards["branch"].value.text() not in ("", "—"))
 
         window._show_welcome()
         assert "Sélectionnez" in notes._title.text()
@@ -201,7 +205,7 @@ class TestPluginsDialog:
         from ui_dialogs import PluginsDialog
         dlg = PluginsDialog(window)
         dlg._tabs.setCurrentIndex(1)
-        assert _wait_for(lambda: dlg._market_tree.topLevelItemCount() == len(ALL_IDS))
+        assert _wait_for(lambda: dlg._market_tree.topLevelItemCount() == len(ALL_ENTRIES))
         dlg._search.setText("pomodoro")
         assert dlg._market_tree.topLevelItemCount() == 1
         assert dlg._btn_install.text() == "Installer" and dlg._btn_install.isEnabled()

@@ -1,0 +1,20 @@
+{
+  "id": "horizon",
+  "name": "Horizon",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Crépuscule rose et orangé.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#1c1e26",
+    "#d5d8da",
+    "#26bbd9",
+    "#b877db",
+    "#29d398",
+    "#e95678",
+    "#fab795"
+  ]
+}

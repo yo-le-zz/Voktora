@@ -1,0 +1,20 @@
+{
+  "id": "ayu-mirage",
+  "name": "Ayu Mirage",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Ayu à contraste adouci.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#1f2430",
+    "#cccac2",
+    "#73d0ff",
+    "#dfbfff",
+    "#d5ff80",
+    "#f28779",
+    "#ffd173"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "id": "solarized-light",
+  "name": "Solarized Light",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Solarized sur fond clair.",
+  "tags": [
+    "thème",
+    "clair"
+  ],
+  "colors": [
+    "#fdf6e3",
+    "#586e75",
+    "#268bd2",
+    "#6c71c4",
+    "#859900",
+    "#dc322f",
+    "#b58900"
+  ]
+}

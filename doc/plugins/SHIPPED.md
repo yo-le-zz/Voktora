@@ -36,3 +36,19 @@ les données sensibles à ce sujet vont dans `resources/*.json|txt`. Vérificati
 
 Pour ajouter un bloc à Workflow Forge ou un analyseur à Code Inspector : créez le module, enregistrez-le dans le catalogue
 correspondant, ajoutez un test, puis relancez `validate --run`.
+
+## Nouveautés 1.1.3
+
+Améliorés (v1.1.0, options, tests) : **todo-scanner**, **git-insights**, **focus-timer**, **project-counter**, **zen-mode**, **quick-notes**.
+
+| Nouveau plugin | Langage | Rôle |
+|---|---|---|
+| gitignore-gen | Python | 22 modèles `.gitignore`, détection du projet, fusion sans doublons |
+| license-picker | Python | MIT/BSD/ISC/Unlicense (texte complet), Apache/GPL/MPL (lien officiel), en-têtes SPDX |
+| changelog-builder | Python | Conventional Commits → CHANGELOG.md, proposition SemVer |
+| snippet-vault | Python | coffre d'extraits (global ou par projet), recherche, export/import Markdown |
+| color-lab | Python | conversion de couleurs, contraste WCAG, correction, palettes |
+| text-case-js | JavaScript | camelCase/snake_case/tri… sur le presse-papiers |
+| json-clipboard-js | JavaScript | formater/minifier/trier du JSON |
+| generators-js | JavaScript | UUID, lorem ipsum, couleurs (non cryptographique) |
+| loc-counter-rs | Rust | comptage de lignes par langage (cargo requis, natif sans bac à sable) |

@@ -1,0 +1,14 @@
+{
+  "name": "Gruvbox Dark",
+  "description": "Tons chauds contrastés, inspiré de Gruvbox.",
+  "colors": {
+    "base": "#282828",
+    "text": "#ebdbb2",
+    "blue": "#83a598",
+    "mauve": "#d3869b",
+    "green": "#b8bb26",
+    "red": "#fb4934",
+    "yellow": "#fabd2f",
+    "primary": "#fe8019"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "id": "tableau-zebre",
+  "name": "Tableaux zébrés",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Lignes alternées dans les listes et tableaux.",
+  "tags": [
+    "style"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "id": "gruvbox-light",
+  "name": "Gruvbox Light",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Papier crème, inspiré de Gruvbox (clair).",
+  "tags": [
+    "thème",
+    "clair"
+  ],
+  "colors": [
+    "#fbf1c7",
+    "#3c3836",
+    "#076678",
+    "#8f3f71",
+    "#79740e",
+    "#9d0006",
+    "#b57614"
+  ]
+}

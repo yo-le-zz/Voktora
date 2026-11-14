@@ -1,0 +1,20 @@
+{
+  "id": "monokai",
+  "name": "Monokai",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Fond sombre, vert et rose électriques, inspiré de Monokai.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#272822",
+    "#f8f8f2",
+    "#66d9ef",
+    "#ae81ff",
+    "#a6e22e",
+    "#f92672",
+    "#e6db74"
+  ]
+}

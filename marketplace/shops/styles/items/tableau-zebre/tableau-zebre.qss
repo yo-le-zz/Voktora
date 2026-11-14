@@ -1,0 +1,2 @@
+QTreeView, QListView, QTableView { alternate-background-color: palette(alternate-base); }
+QHeaderView::section { padding: 4px 8px; border: none; border-bottom: 1px solid palette(mid); }

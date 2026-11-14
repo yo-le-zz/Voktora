@@ -83,6 +83,40 @@
       "api": 5,
       "author": "yolezz",
       "dependencies": {},
+      "description": "Génère un changelog depuis les commits Git (Conventional Commits) entre deux références, propose la prochaine version SemVer et l'insère dans CHANGELOG.md.",
+      "entry": "main.py",
+      "files": {
+        "core.py": "0523674a6e3fe6fc7023f10d1e67a67f86583977ec3b15ea83d50ae40e672557",
+        "main.py": "10131f7d548a3667ff6dbbead83b09272f5382cc6bbbe09892d93b342603b5d8",
+        "plugin.json": "b22ef8dbaca3fc266d5f7c06d252652f94d43df002efd2004da1340a22a965af"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "changelog-builder",
+      "lang": "python",
+      "min_voktora": "",
+      "name": "Changelog Builder",
+      "path": "plugins/changelog-builder",
+      "permissions": [
+        "clipboard",
+        "files",
+        "files.write",
+        "projects.read",
+        "shell",
+        "ui"
+      ],
+      "requires": [],
+      "tags": [
+        "git",
+        "changelog",
+        "release"
+      ],
+      "tier": "official",
+      "version": "1.0.0"
+    },
+    {
+      "api": 5,
+      "author": "yolezz",
+      "dependencies": {},
       "description": "Comprend un projet : architecture, dépendances, graphe d'appels avec niveau de certitude, ponts Python × Rust, qualité, exports JSON/HTML/SVG/Markdown/PDF.",
       "entry": "main.py",
       "files": {
@@ -151,6 +185,36 @@
         "architecture",
         "rust",
         "python"
+      ],
+      "tier": "official",
+      "version": "1.0.0"
+    },
+    {
+      "api": 5,
+      "author": "yolezz",
+      "dependencies": {},
+      "description": "Convertit HEX/RGB/HSL, vérifie les contrastes WCAG (AA/AAA), corrige une couleur illisible et propose des palettes (complémentaire, triade, nuances).",
+      "entry": "main.py",
+      "files": {
+        "core.py": "f3aa4fee51ac5c7406e848d11de42dce60478a59b89b6d86474c01b487b58315",
+        "main.py": "c928442f13e462cab6405311cb801d02e9d9978dbb754e21b0e10e8e0f81bdb0",
+        "plugin.json": "190a6a0cb7ca9dc73638064b9408886a910ac257990244972425fad32431fb50"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "color-lab",
+      "lang": "python",
+      "min_voktora": "",
+      "name": "Color Lab",
+      "path": "plugins/color-lab",
+      "permissions": [
+        "clipboard",
+        "ui"
+      ],
+      "requires": [],
+      "tags": [
+        "couleurs",
+        "accessibilité",
+        "design"
       ],
       "tier": "official",
       "version": "1.0.0"
@@ -239,14 +303,15 @@
       "version": "1.0.0"
     },
     {
-      "api": 2,
+      "api": 5,
       "author": "yolezz",
       "dependencies": {},
-      "description": "Minuteur Pomodoro dans la barre d'état (25 min de travail, 5 min de pause).",
+      "description": "Pomodoro dans la barre d'état : durées réglables, longue pause, passer/réinitialiser, statistiques sur 7 jours.",
       "entry": "main.py",
       "files": {
-        "main.py": "6f3f44610a9d835d095bd7999fa7e877ea79f6e7440c0d2c3a18f6f4ea9f838f",
-        "plugin.json": "d4015f1971787337c2dbd5fbbf6724af08798bafcdab5892ae307f25c9953278"
+        "main.py": "308aa9f250f5298c38800015222f8c4e4155674ad4108bf04c987406f2b3f307",
+        "plugin.json": "68676a9c234457a4a0139f5c124189452ee5e204776fa525dbe241cf3c2bf172",
+        "pomodoro.py": "37f7f03d418952649b708f0b1820caf661a01369ded43112b9b47450e3901654"
       },
       "homepage": "https://github.com/yo-le-zz/Voktora",
       "id": "focus-timer",
@@ -259,21 +324,53 @@
       ],
       "requires": [],
       "tags": [
-        "productivité",
-        "pomodoro"
+        "focus",
+        "pomodoro",
+        "productivité"
+      ],
+      "tier": "official",
+      "version": "1.1.0"
+    },
+    {
+      "api": 5,
+      "author": "yolezz",
+      "dependencies": {},
+      "description": "UUID v4, lorem ipsum, horodatages et couleurs de test, copiés en un clic (plugin JavaScript ; valeurs non cryptographiques).",
+      "entry": "main.js",
+      "files": {
+        "lib/gen.js": "6c1443e4d86984df5fd9577849269e31200a10650ea73ea2df83da4738207764",
+        "main.js": "92f8923af1978a59c8475ff903c27f876f054fab6de3a277380ebd5e944aea9d",
+        "plugin.json": "3497040f3346dbf3d017946bdc3b3a3efef576638fe32d5cd5866f0cedc58519"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "generators-js",
+      "lang": "js",
+      "min_voktora": "",
+      "name": "Generators (JS)",
+      "path": "plugins/generators-js",
+      "permissions": [
+        "clipboard",
+        "ui"
+      ],
+      "requires": [],
+      "tags": [
+        "générateur",
+        "outil",
+        "javascript"
       ],
       "tier": "official",
       "version": "1.0.0"
     },
     {
-      "api": 2,
+      "api": 5,
       "author": "yolezz",
       "dependencies": {},
-      "description": "Statistiques Git du projet : branche, nombre de commits, dernier commit, principaux auteurs.",
+      "description": "Tableau de bord Git du projet : état, retard/avance, auteurs, activité hebdomadaire, fichiers actifs, derniers commits, copie en Markdown.",
       "entry": "main.py",
       "files": {
-        "main.py": "4f87c75d1edf1d00ae358aec8504b5abe5fd4e6aa5ef5efcb73a3ebc0823aaa2",
-        "plugin.json": "2b9b0126fa4d8c7cd03002348643c073f48feee4f1c5d76aed11e2f46b4277c3"
+        "insights.py": "f98529033cd19d9dfc9122921b8d3ea7b0eaa34f749934ac28d99923e8a02cb8",
+        "main.py": "2efd43864da5f71e5aea4444aa941abcba626f67b43cf76b72d69127db9244a4",
+        "plugin.json": "36a5ffc1cd057f53da938e7abc1c963639f92ba3bfc24b81374856ce2fa9f6f3"
       },
       "homepage": "https://github.com/yo-le-zz/Voktora",
       "id": "git-insights",
@@ -282,6 +379,7 @@
       "name": "Git Insights",
       "path": "plugins/git-insights",
       "permissions": [
+        "clipboard",
         "shell",
         "ui"
       ],
@@ -291,17 +389,148 @@
         "statistiques"
       ],
       "tier": "official",
+      "version": "1.1.0"
+    },
+    {
+      "api": 5,
+      "author": "yolezz",
+      "dependencies": {},
+      "description": "Génère ou complète le .gitignore du projet : 20 modèles (langages, éditeurs, systèmes), détection automatique, fusion sans doublons.",
+      "entry": "main.py",
+      "files": {
+        "core.py": "f475bb4e2740ac6d4c5d3534370f67dc87781157d2db571c8cd8b7c9fcaa7508",
+        "main.py": "87a72fd36a9f01f34642fdb3e3aef3092b0e10245e67aecd00185778b9395ee1",
+        "plugin.json": "62bcbaa411ad25c1011e86c249f7ca2dda0940f3183a5596ad93d8a99ec93c28",
+        "resources/templates.json": "facb4e68a54990ced6ee918aa16fbb5d3313d92da6f9285805eb20a71ee62f36"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "gitignore-gen",
+      "lang": "python",
+      "min_voktora": "",
+      "name": "Gitignore Generator",
+      "path": "plugins/gitignore-gen",
+      "permissions": [
+        "files",
+        "files.write",
+        "projects.read",
+        "ui"
+      ],
+      "requires": [],
+      "tags": [
+        "git",
+        "outil",
+        "gitignore"
+      ],
+      "tier": "official",
       "version": "1.0.0"
     },
     {
-      "api": 2,
+      "api": 5,
       "author": "yolezz",
       "dependencies": {},
-      "description": "Compteur de projets dans la barre d'état, et entrée « Copier le chemin » dans le menu clic droit.",
+      "description": "Formate, minifie, trie les clés et valide le JSON du presse-papiers, avec ligne et colonne de l'erreur (plugin JavaScript).",
+      "entry": "main.js",
+      "files": {
+        "lib/jsonfmt.js": "91aab77da6ba729312c2eef714c0780d5887be4d696bc6c597295b6517f27253",
+        "main.js": "b554f9625346eb527c8cc72be1581a30ccdb021dc82fd43bdc995b357fd2225f",
+        "plugin.json": "7e387903506b9c41f887c735241c0d6874d00fac93e0bfca230f87d3f7a1924a"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "json-clipboard-js",
+      "lang": "js",
+      "min_voktora": "",
+      "name": "Json Clipboard (JS)",
+      "path": "plugins/json-clipboard-js",
+      "permissions": [
+        "clipboard",
+        "ui"
+      ],
+      "requires": [],
+      "tags": [
+        "json",
+        "outil",
+        "javascript"
+      ],
+      "tier": "official",
+      "version": "1.0.0"
+    },
+    {
+      "api": 5,
+      "author": "yolezz",
+      "dependencies": {},
+      "description": "Écrit le fichier LICENSE du projet (MIT, BSD, ISC, Unlicense) avec année et titulaire, génère les en-têtes SPDX, et pointe vers les textes officiels Apache/GPL/MPL.",
       "entry": "main.py",
       "files": {
-        "main.py": "d16d993fb8e94c89a0335611a52e5fe71a319a4948909b27d4ce7de68559187a",
-        "plugin.json": "e2f26582354bc2c4daa02410e3785c743adb3df3fca0699795689e7c99be412f"
+        "core.py": "9a7c7f8afc8702fd795466ba7d643f097aa42f9e228c8b85981a6ad303b10880",
+        "main.py": "507f52a68c6b7efc62ef8455f0f7313247f14fe4efea6058bf01255ba8c8dc22",
+        "plugin.json": "4e0c924c55b1c636f1bd570c273f31bfc389fdfd9ded7c44e4947d692c6de266",
+        "resources/licenses.json": "6df434686d21200d1693450172d09add5114a3b6ded2395df7c64cc9a570ded9"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "license-picker",
+      "lang": "python",
+      "min_voktora": "",
+      "name": "License Picker",
+      "path": "plugins/license-picker",
+      "permissions": [
+        "clipboard",
+        "files",
+        "files.write",
+        "projects.read",
+        "ui"
+      ],
+      "requires": [],
+      "tags": [
+        "licence",
+        "outil",
+        "légal"
+      ],
+      "tier": "official",
+      "version": "1.0.0"
+    },
+    {
+      "api": 5,
+      "author": "yolezz",
+      "dependencies": {},
+      "description": "Compte les lignes de code, de commentaires et vides par langage (plugin natif Rust, rapide).",
+      "entry": "Cargo.toml",
+      "files": {
+        "Cargo.toml": "4f175f2f9c00ce3b9b73402b0a1af29e9bbd4c3f902fc4bfe5ee9990cef93060",
+        "README.md": "75da482d79c05b7d79d69be3fe54f88c9f433268d7157ae507cd99bc71a2de4e",
+        "plugin.json": "d08e265fa71a1d053ed5346693827150dd30251acf9232deaabbea1e5bb62d25",
+        "src/count.rs": "c03e1e03515a06069bc6cbce14acc71381dec1b69cd910652f6f824c2640a3f6",
+        "src/lib.rs": "6d509cae7783351773c8a981efc9e422736dd8ef36276ff08eca4b2e54f2f84a"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "loc-counter-rs",
+      "lang": "rust",
+      "min_voktora": "",
+      "name": "LOC Counter (Rust)",
+      "path": "plugins/loc-counter-rs",
+      "permissions": [
+        "native",
+        "projects.read",
+        "ui"
+      ],
+      "requires": [],
+      "tags": [
+        "code",
+        "statistiques",
+        "rust"
+      ],
+      "tier": "official",
+      "version": "1.0.0"
+    },
+    {
+      "api": 5,
+      "author": "yolezz",
+      "dependencies": {},
+      "description": "Compteur de projets dans la barre d'état (réglable), résumé par catégorie/statut, et actions « Copier le chemin / le nom / la commande cd » dans le menu clic droit.",
+      "entry": "main.py",
+      "files": {
+        "main.py": "2c81c911d3bc6497a18af657f5828b928c1f13552b1206d291edfc8951dc8c5d",
+        "plugin.json": "26c6d02724ff07d46fbcbb29d7cd0c56439eb5e0c0fc5be19585ec8e00c79359",
+        "summary.py": "ab4361d1a562237a6251a6e00a0add41d651455d9cd7f2a17a2e0525bc21cf3d"
       },
       "homepage": "https://github.com/yo-le-zz/Voktora",
       "id": "project-counter",
@@ -319,7 +548,7 @@
         "projets"
       ],
       "tier": "official",
-      "version": "1.0.0"
+      "version": "1.1.0"
     },
     {
       "api": 5,
@@ -400,14 +629,15 @@
       "version": "1.0.0"
     },
     {
-      "api": 2,
+      "api": 5,
       "author": "yolezz",
       "dependencies": {},
-      "description": "Un bloc-notes par projet, dans un onglet dédié, sauvegardé automatiquement.",
+      "description": "Un bloc-notes par projet : sauvegarde automatique, compteur de mots, copie en Markdown, taille du texte réglable.",
       "entry": "main.py",
       "files": {
-        "main.py": "b4584d017dd6b03ed1c8e992210c5fab5cfe07616efb97b8e17432bad1ad9402",
-        "plugin.json": "01cd49e9bdbb5a65b1309dc5183f9b5806deed8b28a55f4225e79492208f84db"
+        "main.py": "23ca0d90229e572691e9b0594d45787f09bc89b65a28d3d6118c10e919c135ea",
+        "notes.py": "d951e664d1f6147c4fd0a38ca032c7edc844f992aa69a24d5118a27c516cab78",
+        "plugin.json": "fcf5ebe653fb49905b6f91a942cab5f10cf2793c8b81fdab937322c16f3086e5"
       },
       "homepage": "https://github.com/yo-le-zz/Voktora",
       "id": "quick-notes",
@@ -416,13 +646,44 @@
       "name": "Quick Notes",
       "path": "plugins/quick-notes",
       "permissions": [
-        "projects.read",
+        "clipboard",
         "ui"
       ],
       "requires": [],
       "tags": [
         "notes",
         "productivité"
+      ],
+      "tier": "official",
+      "version": "1.1.0"
+    },
+    {
+      "api": 5,
+      "author": "yolezz",
+      "dependencies": {},
+      "description": "Bibliothèque de snippets globale ou par projet : recherche, étiquettes, copie en un clic, export Markdown, accès depuis la palette.",
+      "entry": "main.py",
+      "files": {
+        "core.py": "9cdae7395a27ee1178079711440da7d11dbb08cba90964d26170cd90ee78d543",
+        "main.py": "84ee1085a0a5dd5e5cee26e8cbd3c1b3b9b04d0676a1fd5fc37b89bb7a79636b",
+        "plugin.json": "3918f589246a5107fe94603cd0f2aabd65feed2f56b46bb4581610ee4d180330"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "snippet-vault",
+      "lang": "python",
+      "min_voktora": "",
+      "name": "Snippet Vault",
+      "path": "plugins/snippet-vault",
+      "permissions": [
+        "clipboard",
+        "projects.read",
+        "ui"
+      ],
+      "requires": [],
+      "tags": [
+        "productivité",
+        "code",
+        "snippets"
       ],
       "tier": "official",
       "version": "1.0.0"
@@ -462,6 +723,36 @@
       "api": 5,
       "author": "yolezz",
       "dependencies": {},
+      "description": "Convertit le presse-papiers : camelCase, snake_case, kebab-case, slug, tri et dédoublonnage de lignes… (plugin JavaScript).",
+      "entry": "main.js",
+      "files": {
+        "lib/cases.js": "7edf2514be4afd4af66de4aa7dd268c53de3b6d390521f9c544e6fce740379b1",
+        "main.js": "58daf2039a79fbc03db148d13573018afdb338693e22ef2cbd0bd0f349b2441b",
+        "plugin.json": "bd44a9fdc44b51993b821773e1daa77863693191e7bc9e772c83061123115e2a"
+      },
+      "homepage": "https://github.com/yo-le-zz/Voktora",
+      "id": "text-case-js",
+      "lang": "js",
+      "min_voktora": "",
+      "name": "Text Case (JS)",
+      "path": "plugins/text-case-js",
+      "permissions": [
+        "clipboard",
+        "ui"
+      ],
+      "requires": [],
+      "tags": [
+        "texte",
+        "productivité",
+        "javascript"
+      ],
+      "tier": "official",
+      "version": "1.0.0"
+    },
+    {
+      "api": 5,
+      "author": "yolezz",
+      "dependencies": {},
       "description": "Créez vos thèmes avec aperçu EN DIRECT : couleurs, import/export JSON, enregistrement dans Paramètres → Thèmes.",
       "entry": "main.py",
       "files": {
@@ -489,14 +780,15 @@
       "version": "1.0.0"
     },
     {
-      "api": 2,
+      "api": 5,
       "author": "yolezz",
       "dependencies": {},
-      "description": "Liste les TODO, FIXME et HACK du projet ouvert, dans un onglet dédié.",
+      "description": "Liste les TODO, FIXME, HACK, BUG… du projet ouvert (dans les commentaires), avec filtre, recherche, options et export Markdown.",
       "entry": "main.py",
       "files": {
-        "main.py": "bd3fa16802259d3b1ba836f5afe02081161d1494296610b007065fbeb4e8d72d",
-        "plugin.json": "5d27df1f2c995b43bf9d1257decd1f823fabaaf26594f508dcde610ad739599a"
+        "main.py": "b0c1349cd04f5198fb3596b1f49304f5fc1eceb9ae064d82b55faaa3ec8fc7a0",
+        "plugin.json": "e25569a3bf9f6a2d6adf7d3b17b71c82fc00eb8e6ed9a09ebae7ccae1d5c25ea",
+        "scanner.py": "c58df73c39dd09dc06055c23490edb87c9d26c1b39e3e68deae44961a0519678"
       },
       "homepage": "https://github.com/yo-le-zz/Voktora",
       "id": "todo-scanner",
@@ -505,16 +797,17 @@
       "name": "TODO Scanner",
       "path": "plugins/todo-scanner",
       "permissions": [
-        "files",
+        "clipboard",
         "ui"
       ],
       "requires": [],
       "tags": [
         "code",
-        "qualité"
+        "qualité",
+        "tâches"
       ],
       "tier": "official",
-      "version": "1.0.0"
+      "version": "1.1.0"
     },
     {
       "api": 2,
@@ -591,14 +884,14 @@
       "version": "1.0.0"
     },
     {
-      "api": 2,
+      "api": 5,
       "author": "yolezz",
       "dependencies": {},
-      "description": "Masque la barre latérale, la barre de menus et la barre d'état pour se concentrer (Ctrl+Shift+Z).",
+      "description": "Masque barre de menus, barre d'état et liste des projets pour se concentrer (Ctrl+Shift+Z) ; éléments masqués et plein écran réglables.",
       "entry": "main.py",
       "files": {
-        "main.py": "1b95cb35e10bdc92ec0b2d52ef3251c6e16ae9ad736fd39147938a20645f7875",
-        "plugin.json": "e354fee8e92b3c697deee0c9f7a729ef1c3ef73f5971072824d5ef8b82f823b4"
+        "main.py": "ffbc4e22ec6cba4ac09821895203321a1ae3caf26f3218bdc581a7ba23c80ae5",
+        "plugin.json": "7b4cc3f1b07b16b259099f894d1dff476ec5ac556caa66ae26860be0c209751b"
       },
       "homepage": "https://github.com/yo-le-zz/Voktora",
       "id": "zen-mode",
@@ -615,7 +908,7 @@
         "concentration"
       ],
       "tier": "official",
-      "version": "1.0.0"
+      "version": "1.1.0"
     }
   ],
   "revoked": [],

@@ -1,0 +1,20 @@
+{
+  "id": "contraste-sombre",
+  "name": "Contraste élevé (sombre)",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Contrastes maximaux, accessibilité.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#000000",
+    "#ffffff",
+    "#6fc3ff",
+    "#ff9cf1",
+    "#7dff8a",
+    "#ff6b6b",
+    "#ffee58"
+  ]
+}

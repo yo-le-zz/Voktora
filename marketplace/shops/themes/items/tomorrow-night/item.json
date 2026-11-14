@@ -1,0 +1,20 @@
+{
+  "id": "tomorrow-night",
+  "name": "Tomorrow Night",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Classique des éditeurs, doux et neutre.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#1d1f21",
+    "#c5c8c6",
+    "#81a2be",
+    "#b294bb",
+    "#b5bd68",
+    "#cc6666",
+    "#f0c674"
+  ]
+}

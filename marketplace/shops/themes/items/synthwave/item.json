@@ -1,0 +1,20 @@
+{
+  "id": "synthwave",
+  "name": "Synthwave",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Violet nuit et rose fluo, esprit années 80.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#262335",
+    "#ffffff",
+    "#36f9f6",
+    "#b893ce",
+    "#72f1b8",
+    "#fe4450",
+    "#fede5d"
+  ]
+}

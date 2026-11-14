@@ -43,3 +43,9 @@ Voktora complète les couleurs manquantes.
 ## Limites connues
 Les icônes déjà affichées changent à la réouverture des fenêtres. Les objets ne sont pas encore signés
 (seulement vérifiés par empreinte depuis l'index de la source).
+
+## Contenu fourni (1.1.3)
+
+45 thèmes (dont des clairs), 8 packs d'icônes (`trait-fin`, `trait-epais`, `carre`, `duo-ton`, `plein`, `accent`, `neon`, `pointille`, ~185 icônes aux noms MDI,
+`currentColor` pris en charge : l'icône prend la couleur du thème) et 10 styles QSS (sans `url()` ni `@import`).
+Régénération : `tools/gen_shop_themes.py`, `gen_shop_icons.py`, `gen_shop_styles.py`, puis `tools/shop_tool.py build-index`.

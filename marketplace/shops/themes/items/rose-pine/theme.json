@@ -1,0 +1,14 @@
+{
+  "name": "Rosé Pine",
+  "description": "Rose poudré et pin, inspiré de Rosé Pine.",
+  "colors": {
+    "base": "#191724",
+    "text": "#e0def4",
+    "blue": "#9ccfd8",
+    "mauve": "#c4a7e7",
+    "green": "#31748f",
+    "red": "#eb6f92",
+    "yellow": "#f6c177",
+    "primary": "#ebbcba"
+  }
+}

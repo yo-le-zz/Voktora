@@ -1,0 +1,14 @@
+{
+  "name": "Monokai",
+  "description": "Fond sombre, vert et rose électriques, inspiré de Monokai.",
+  "colors": {
+    "base": "#272822",
+    "text": "#f8f8f2",
+    "blue": "#66d9ef",
+    "mauve": "#ae81ff",
+    "green": "#a6e22e",
+    "red": "#f92672",
+    "yellow": "#e6db74",
+    "primary": "#a6e22e"
+  }
+}

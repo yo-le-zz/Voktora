@@ -1,0 +1,22 @@
+{
+  "id": "gitignore-gen",
+  "name": "Gitignore Generator",
+  "author": "yolezz",
+  "homepage": "https://github.com/yo-le-zz/Voktora",
+  "version": "1.0.0",
+  "api": 5,
+  "lang": "python",
+  "description": "Génère ou complète le .gitignore du projet : 20 modèles (langages, éditeurs, systèmes), détection automatique, fusion sans doublons.",
+  "permissions": [
+    "files",
+    "files.write",
+    "projects.read",
+    "ui"
+  ],
+  "tags": [
+    "git",
+    "outil",
+    "gitignore"
+  ],
+  "entry": "main.py"
+}

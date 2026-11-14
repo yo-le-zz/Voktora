@@ -1,0 +1,20 @@
+{
+  "id": "everforest",
+  "name": "Everforest",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Verts forestiers apaisants, inspiré d'Everforest.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#2d353b",
+    "#d3c6aa",
+    "#7fbbb3",
+    "#d699b6",
+    "#a7c080",
+    "#e67e80",
+    "#dbbc7f"
+  ]
+}

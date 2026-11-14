@@ -1,0 +1,14 @@
+{
+  "name": "Palenight",
+  "description": "Violet-gris nocturne, inspiré de Material Palenight.",
+  "colors": {
+    "base": "#292d3e",
+    "text": "#a6accd",
+    "blue": "#82aaff",
+    "mauve": "#c792ea",
+    "green": "#c3e88d",
+    "red": "#f07178",
+    "yellow": "#ffcb6b",
+    "primary": "#c792ea"
+  }
+}

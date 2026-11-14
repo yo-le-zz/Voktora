@@ -1,0 +1,14 @@
+{
+  "name": "Poimandres",
+  "description": "Minimal bleu-vert sur fond encre.",
+  "colors": {
+    "base": "#1b1e28",
+    "text": "#a6accd",
+    "blue": "#89ddff",
+    "mauve": "#a6accd",
+    "green": "#5de4c7",
+    "red": "#d0679d",
+    "yellow": "#fffac2",
+    "primary": "#5de4c7"
+  }
+}

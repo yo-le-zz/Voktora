@@ -1,0 +1,10 @@
+{
+  "id": "boutons-plats",
+  "name": "Boutons plats",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Boutons sans relief, fond au survol seulement.",
+  "tags": [
+    "style"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "Synthwave",
+  "description": "Violet nuit et rose fluo, esprit années 80.",
+  "colors": {
+    "base": "#262335",
+    "text": "#ffffff",
+    "blue": "#36f9f6",
+    "mauve": "#b893ce",
+    "green": "#72f1b8",
+    "red": "#fe4450",
+    "yellow": "#fede5d",
+    "primary": "#ff7edb"
+  }
+}

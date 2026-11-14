@@ -1,0 +1,6 @@
+QPushButton { background: transparent; border: 1px solid transparent; padding: 4px 10px; }
+QPushButton:hover { background: palette(midlight); border: 1px solid palette(mid); }
+QPushButton:pressed { background: palette(mid); }
+QPushButton:disabled { color: palette(mid); }
+QToolButton { background: transparent; border: none; padding: 3px; }
+QToolButton:hover { background: palette(midlight); }

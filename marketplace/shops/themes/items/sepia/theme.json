@@ -1,0 +1,14 @@
+{
+  "name": "Sépia",
+  "description": "Fond jauni façon livre ancien.",
+  "colors": {
+    "base": "#f4ecd8",
+    "text": "#433422",
+    "blue": "#2b6a8c",
+    "mauve": "#7b4a8b",
+    "green": "#4f7a28",
+    "red": "#a1362a",
+    "yellow": "#a77310",
+    "primary": "#8b5e34"
+  }
+}

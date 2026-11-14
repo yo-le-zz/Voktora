@@ -1,0 +1,14 @@
+{
+  "name": "Catppuccin Latte",
+  "description": "Pastels doux sur fond clair, inspiré de Catppuccin.",
+  "colors": {
+    "base": "#eff1f5",
+    "text": "#4c4f69",
+    "blue": "#1e66f5",
+    "mauve": "#8839ef",
+    "green": "#40a02b",
+    "red": "#d20f39",
+    "yellow": "#df8e1d",
+    "primary": "#8839ef"
+  }
+}

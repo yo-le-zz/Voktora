@@ -1,0 +1,14 @@
+{
+  "name": "OLED Noir",
+  "description": "Noir pur : économise les écrans OLED.",
+  "colors": {
+    "base": "#000000",
+    "text": "#e6e6e6",
+    "blue": "#4aa3ff",
+    "mauve": "#b48cff",
+    "green": "#4ade80",
+    "red": "#ff5c5c",
+    "yellow": "#fbbf24",
+    "primary": "#4aa3ff"
+  }
+}

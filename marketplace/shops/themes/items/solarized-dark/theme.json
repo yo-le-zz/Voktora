@@ -1,0 +1,14 @@
+{
+  "name": "Solarized Dark",
+  "description": "Palette scientifique à faible fatigue visuelle.",
+  "colors": {
+    "base": "#002b36",
+    "text": "#93a1a1",
+    "blue": "#268bd2",
+    "mauve": "#6c71c4",
+    "green": "#859900",
+    "red": "#dc322f",
+    "yellow": "#b58900",
+    "primary": "#2aa198"
+  }
+}

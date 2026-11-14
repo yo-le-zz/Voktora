@@ -1,0 +1,14 @@
+{
+  "name": "Ayu Dark",
+  "description": "Noir bleuté et orange, inspiré d'Ayu.",
+  "colors": {
+    "base": "#0b0e14",
+    "text": "#bfbdb6",
+    "blue": "#59c2ff",
+    "mauve": "#d2a6ff",
+    "green": "#aad94c",
+    "red": "#f07178",
+    "yellow": "#e6b450",
+    "primary": "#ffb454"
+  }
+}

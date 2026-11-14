@@ -1,0 +1,14 @@
+{
+  "name": "Night Owl",
+  "description": "Bleu nuit pensé pour la nuit, inspiré de Night Owl.",
+  "colors": {
+    "base": "#011627",
+    "text": "#d6deeb",
+    "blue": "#82aaff",
+    "mauve": "#c792ea",
+    "green": "#addb67",
+    "red": "#ef5350",
+    "yellow": "#ecc48d",
+    "primary": "#7fdbca"
+  }
+}

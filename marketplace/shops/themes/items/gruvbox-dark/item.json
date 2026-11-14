@@ -1,0 +1,20 @@
+{
+  "id": "gruvbox-dark",
+  "name": "Gruvbox Dark",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Tons chauds contrastés, inspiré de Gruvbox.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#282828",
+    "#ebdbb2",
+    "#83a598",
+    "#d3869b",
+    "#b8bb26",
+    "#fb4934",
+    "#fabd2f"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "id": "kanagawa",
+  "name": "Kanagawa",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Encre japonaise et pastels fanés, inspiré de Kanagawa.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#1f1f28",
+    "#dcd7ba",
+    "#7e9cd8",
+    "#957fb8",
+    "#98bb6c",
+    "#e82424",
+    "#e6c384"
+  ]
+}

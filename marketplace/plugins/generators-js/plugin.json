@@ -1,0 +1,20 @@
+{
+  "id": "generators-js",
+  "name": "Generators (JS)",
+  "author": "yolezz",
+  "homepage": "https://github.com/yo-le-zz/Voktora",
+  "version": "1.0.0",
+  "api": 5,
+  "lang": "js",
+  "description": "UUID v4, lorem ipsum, horodatages et couleurs de test, copiés en un clic (plugin JavaScript ; valeurs non cryptographiques).",
+  "permissions": [
+    "clipboard",
+    "ui"
+  ],
+  "tags": [
+    "générateur",
+    "outil",
+    "javascript"
+  ],
+  "entry": "main.js"
+}

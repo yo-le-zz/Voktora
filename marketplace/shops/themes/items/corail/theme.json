@@ -1,0 +1,14 @@
+{
+  "name": "Corail",
+  "description": "Fond sombre chaud, accent corail.",
+  "colors": {
+    "base": "#231a1d",
+    "text": "#f1e4e1",
+    "blue": "#6db7c9",
+    "mauve": "#c49be0",
+    "green": "#8fcb8a",
+    "red": "#ff6f61",
+    "yellow": "#f2c46d",
+    "primary": "#ff6f61"
+  }
+}

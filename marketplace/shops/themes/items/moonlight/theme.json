@@ -1,0 +1,14 @@
+{
+  "name": "Moonlight",
+  "description": "Indigo lunaire, inspiré de Moonlight.",
+  "colors": {
+    "base": "#222436",
+    "text": "#c8d3f5",
+    "blue": "#82aaff",
+    "mauve": "#c099ff",
+    "green": "#c3e88d",
+    "red": "#ff757f",
+    "yellow": "#ffc777",
+    "primary": "#82aaff"
+  }
+}

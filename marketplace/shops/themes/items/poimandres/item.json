@@ -1,0 +1,20 @@
+{
+  "id": "poimandres",
+  "name": "Poimandres",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Minimal bleu-vert sur fond encre.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#1b1e28",
+    "#a6accd",
+    "#89ddff",
+    "#a6accd",
+    "#5de4c7",
+    "#d0679d",
+    "#fffac2"
+  ]
+}

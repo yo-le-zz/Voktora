@@ -1,0 +1,21 @@
+{
+  "id": "loc-counter-rs",
+  "name": "LOC Counter (Rust)",
+  "author": "yolezz",
+  "homepage": "https://github.com/yo-le-zz/Voktora",
+  "version": "1.0.0",
+  "api": 5,
+  "lang": "rust",
+  "description": "Compte les lignes de code, de commentaires et vides par langage (plugin natif Rust, rapide).",
+  "permissions": [
+    "native",
+    "projects.read",
+    "ui"
+  ],
+  "tags": [
+    "code",
+    "statistiques",
+    "rust"
+  ],
+  "entry": "Cargo.toml"
+}

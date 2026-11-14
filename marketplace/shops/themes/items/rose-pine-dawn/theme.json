@@ -1,0 +1,14 @@
+{
+  "name": "Rosé Pine Dawn",
+  "description": "Rosé Pine clair.",
+  "colors": {
+    "base": "#faf4ed",
+    "text": "#575279",
+    "blue": "#56949f",
+    "mauve": "#907aa9",
+    "green": "#286983",
+    "red": "#b4637a",
+    "yellow": "#ea9d34",
+    "primary": "#d7827e"
+  }
+}
