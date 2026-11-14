@@ -1,12 +1,20 @@
 {
   "id": "git-insights",
   "name": "Git Insights",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "yolezz",
-  "description": "Statistiques Git du projet : branche, nombre de commits, dernier commit, principaux auteurs.",
-  "api": 2,
+  "description": "Tableau de bord Git du projet : état, retard/avance, auteurs, activité hebdomadaire, fichiers actifs, derniers commits, copie en Markdown.",
+  "api": 5,
   "entry": "main.py",
-  "permissions": ["ui", "shell"],
-  "tags": ["git", "statistiques"],
-  "homepage": "https://github.com/yo-le-zz/Voktora"
+  "permissions": [
+    "clipboard",
+    "shell",
+    "ui"
+  ],
+  "tags": [
+    "git",
+    "statistiques"
+  ],
+  "homepage": "https://github.com/yo-le-zz/Voktora",
+  "lang": "python"
 }

@@ -8,7 +8,7 @@
 
 par [**yolezz**](https://github.com/yo-le-zz)
 
-[![Version](https://img.shields.io/badge/version-1.1.2-89b4fa?style=flat-square)](https://github.com/yo-le-zz/Voktora/releases)
+[![Version](https://img.shields.io/badge/version-1.1.3-89b4fa?style=flat-square)](https://github.com/yo-le-zz/Voktora/releases)
 [![Python](https://img.shields.io/badge/python-3.13+-cba6f7?style=flat-square)](https://python.org)
 [![PySide6](https://img.shields.io/badge/PySide6-6.x-a6e3a1?style=flat-square)](https://pypi.org/project/PySide6/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-fab387?style=flat-square)](#installation)
@@ -30,10 +30,10 @@ Voktora est un gestionnaire de projets de développement avec interface graphiqu
 
 | Plateforme | Téléchargement | Commande |
 |-----------|---------------|---------|
-| 🐧 Linux (Debian/Ubuntu) | `voktora_1.1.2_amd64.deb` | `sudo apt install ./voktora_*.deb` |
-| 🐧 Linux (Fedora/RHEL/openSUSE) | `voktora-1.1.2-1.x86_64.rpm` | `sudo dnf install ./voktora-*.rpm` |
-| 🐧 Linux (Arch, Omarchy, EndeavourOS, Manjaro) | `voktora-1.1.2-1-x86_64.pkg.tar.zst` | `sudo pacman -U ./voktora-*.pkg.tar.zst` |
-| 🪟 Windows 10/11 x64 | `Voktora_1.1.2_x64.msi` | Double-cliquer |
+| 🐧 Linux (Debian/Ubuntu) | `voktora_1.1.3_amd64.deb` | `sudo apt install ./voktora_*.deb` |
+| 🐧 Linux (Fedora/RHEL/openSUSE) | `voktora-1.1.3-1.x86_64.rpm` | `sudo dnf install ./voktora-*.rpm` |
+| 🐧 Linux (Arch, Omarchy, EndeavourOS, Manjaro) | `voktora-1.1.3-1-x86_64.pkg.tar.zst` | `sudo pacman -U ./voktora-*.pkg.tar.zst` |
+| 🪟 Windows 10/11 x64 | `Voktora_1.1.3_x64.msi` | Double-cliquer |
 
 → [Guide d'installation complet](doc/INSTALL.md)
 
@@ -68,6 +68,7 @@ Voktora est un gestionnaire de projets de développement avec interface graphiqu
 | [INSTALL.md](doc/INSTALL.md) | Installation .deb, .rpm, .msi, depuis les sources |
 | [BUILD.md](doc/BUILD.md) | Compilation Nuitka, packaging .deb / .rpm / .msi |
 | [PLUGINS.md](doc/PLUGINS.md) | Développer des plugins (API v2) |
+| [DEVMONITOR.md](doc/DEVMONITOR.md) | Moniteur développeur global (fenêtre détachée, 4 modes) |
 | [marketplace/README.md](marketplace/README.md) | Proposer un plugin : fork → sous-module → Pull Request |
 | [VAULT.md](doc/VAULT.md) | Vault & sécurité |
 | [HOOKS.md](doc/HOOKS.md) | Système de hooks |

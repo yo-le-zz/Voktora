@@ -1,0 +1,20 @@
+{
+  "id": "oceanic",
+  "name": "Oceanic",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Bleu océan, inspiré d'Oceanic Next.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#1b2b34",
+    "#d8dee9",
+    "#6699cc",
+    "#c594c5",
+    "#99c794",
+    "#ec5f67",
+    "#fac863"
+  ]
+}

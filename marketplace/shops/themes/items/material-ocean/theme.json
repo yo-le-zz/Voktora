@@ -1,0 +1,14 @@
+{
+  "name": "Material Ocean",
+  "description": "Bleu-gris profond, inspiré de Material Theme.",
+  "colors": {
+    "base": "#0f111a",
+    "text": "#a6accd",
+    "blue": "#82aaff",
+    "mauve": "#c792ea",
+    "green": "#c3e88d",
+    "red": "#f07178",
+    "yellow": "#ffcb6b",
+    "primary": "#82aaff"
+  }
+}

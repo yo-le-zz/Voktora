@@ -1,0 +1,14 @@
+{
+  "name": "Kanagawa",
+  "description": "Encre japonaise et pastels fanés, inspiré de Kanagawa.",
+  "colors": {
+    "base": "#1f1f28",
+    "text": "#dcd7ba",
+    "blue": "#7e9cd8",
+    "mauve": "#957fb8",
+    "green": "#98bb6c",
+    "red": "#e82424",
+    "yellow": "#e6c384",
+    "primary": "#7e9cd8"
+  }
+}

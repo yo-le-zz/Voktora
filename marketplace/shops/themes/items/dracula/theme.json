@@ -1,0 +1,14 @@
+{
+  "name": "Dracula",
+  "description": "Violet profond, accents vifs, inspiré de Dracula.",
+  "colors": {
+    "base": "#282a36",
+    "text": "#f8f8f2",
+    "blue": "#8be9fd",
+    "mauve": "#bd93f9",
+    "green": "#50fa7b",
+    "red": "#ff5555",
+    "yellow": "#f1fa8c",
+    "primary": "#bd93f9"
+  }
+}

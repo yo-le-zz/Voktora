@@ -1,0 +1,14 @@
+{
+  "name": "Minuit",
+  "description": "Bleu marine très sombre.",
+  "colors": {
+    "base": "#0a1128",
+    "text": "#dbe4ff",
+    "blue": "#5b8def",
+    "mauve": "#9d7bff",
+    "green": "#46d19a",
+    "red": "#ff6b81",
+    "yellow": "#ffd166",
+    "primary": "#5b8def"
+  }
+}

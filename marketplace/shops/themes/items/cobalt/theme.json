@@ -1,0 +1,14 @@
+{
+  "name": "Cobalt",
+  "description": "Bleu cobalt saturé, inspiré de Cobalt.",
+  "colors": {
+    "base": "#193549",
+    "text": "#ffffff",
+    "blue": "#0088ff",
+    "mauve": "#9a5feb",
+    "green": "#3ad900",
+    "red": "#ff628c",
+    "yellow": "#ffc600",
+    "primary": "#ffc600"
+  }
+}

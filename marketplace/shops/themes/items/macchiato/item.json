@@ -1,0 +1,20 @@
+{
+  "id": "macchiato",
+  "name": "Catppuccin Macchiato",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Pastels sur fond sombre, inspiré de Catppuccin.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#24273a",
+    "#cad3f5",
+    "#8aadf4",
+    "#c6a0f6",
+    "#a6da95",
+    "#ed8796",
+    "#eed49f"
+  ]
+}

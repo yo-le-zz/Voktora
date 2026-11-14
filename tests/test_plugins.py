@@ -281,7 +281,7 @@ class TestMarket:
         progress: list[tuple] = []
         folder = market.install(entry, on_progress=lambda d, t, n: progress.append((d, t, n)))
         assert (folder / "main.py").is_file() and (folder / ".source.json").is_file()
-        assert progress[-1][0] == progress[-1][1] == 2
+        assert progress[-1][0] == progress[-1][1] == 3          # main.py, summary.py + plugin.json
         plugins.load_all()
         assert plugins.find("project-counter").origin == "market" and market.status(entry) == "installed"
         # version supérieure dans l'index -> « update »

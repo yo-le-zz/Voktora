@@ -1,0 +1,10 @@
+{
+  "id": "barres-fines",
+  "name": "Barres fines",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Barres de défilement minces et discrètes.",
+  "tags": [
+    "style"
+  ]
+}

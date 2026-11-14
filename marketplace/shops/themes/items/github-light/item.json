@@ -1,0 +1,20 @@
+{
+  "id": "github-light",
+  "name": "GitHub Light",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Blanc GitHub, très lisible.",
+  "tags": [
+    "thème",
+    "clair"
+  ],
+  "colors": [
+    "#ffffff",
+    "#1f2328",
+    "#0969da",
+    "#8250df",
+    "#1a7f37",
+    "#cf222e",
+    "#9a6700"
+  ]
+}

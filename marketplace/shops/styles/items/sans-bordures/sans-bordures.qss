@@ -1,0 +1,4 @@
+QLineEdit, QComboBox, QSpinBox, QTextEdit, QPlainTextEdit, QListView, QTreeView, QTableView { border: none; }
+QGroupBox { border: none; margin-top: 14px; }
+QFrame[frameShape="4"], QFrame[frameShape="5"] { color: palette(midlight); }
+QStatusBar { border: none; }

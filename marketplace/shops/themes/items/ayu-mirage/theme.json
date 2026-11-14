@@ -1,0 +1,14 @@
+{
+  "name": "Ayu Mirage",
+  "description": "Ayu à contraste adouci.",
+  "colors": {
+    "base": "#1f2430",
+    "text": "#cccac2",
+    "blue": "#73d0ff",
+    "mauve": "#dfbfff",
+    "green": "#d5ff80",
+    "red": "#f28779",
+    "yellow": "#ffd173",
+    "primary": "#ffcc66"
+  }
+}

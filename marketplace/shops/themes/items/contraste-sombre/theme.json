@@ -1,0 +1,14 @@
+{
+  "name": "Contraste élevé (sombre)",
+  "description": "Contrastes maximaux, accessibilité.",
+  "colors": {
+    "base": "#000000",
+    "text": "#ffffff",
+    "blue": "#6fc3ff",
+    "mauve": "#ff9cf1",
+    "green": "#7dff8a",
+    "red": "#ff6b6b",
+    "yellow": "#ffee58",
+    "primary": "#ffee58"
+  }
+}

@@ -3,6 +3,121 @@
   "kind": "themes",
   "items": [
     {
+      "id": "ayu-dark",
+      "name": "Ayu Dark",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Noir bleuté et orange, inspiré d'Ayu.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#0b0e14",
+        "#bfbdb6",
+        "#59c2ff",
+        "#d2a6ff",
+        "#aad94c",
+        "#f07178",
+        "#e6b450"
+      ],
+      "files": {
+        "theme.json": "9e6622f1e6358aa0540c471bf98b322ec1a4c5e44cd3c89a201e9cd3f64073cd"
+      }
+    },
+    {
+      "id": "ayu-light",
+      "name": "Ayu Light",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Ayu clair, lumineux.",
+      "tags": [
+        "thème",
+        "clair"
+      ],
+      "colors": [
+        "#fafafa",
+        "#5c6166",
+        "#399ee6",
+        "#a37acc",
+        "#86b300",
+        "#f07171",
+        "#f2ae49"
+      ],
+      "files": {
+        "theme.json": "cdee41589e3a9da737603d728df83f69a5594455fb573881eab42ad357ce4113"
+      }
+    },
+    {
+      "id": "ayu-mirage",
+      "name": "Ayu Mirage",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Ayu à contraste adouci.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#1f2430",
+        "#cccac2",
+        "#73d0ff",
+        "#dfbfff",
+        "#d5ff80",
+        "#f28779",
+        "#ffd173"
+      ],
+      "files": {
+        "theme.json": "5f682d8d848beec6001263f9ffb0cade67c06e737e98db19dc8b783e02240585"
+      }
+    },
+    {
+      "id": "charbon",
+      "name": "Charbon",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Gris neutre, accent orange.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#1e1e1e",
+        "#d4d4d4",
+        "#569cd6",
+        "#c586c0",
+        "#6a9955",
+        "#f44747",
+        "#dcdcaa"
+      ],
+      "files": {
+        "theme.json": "42e7fecbf3bfea4b0c282515e45eca82e9b14bba4378eea74cbe53f08aa644a2"
+      }
+    },
+    {
+      "id": "cobalt",
+      "name": "Cobalt",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Bleu cobalt saturé, inspiré de Cobalt.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#193549",
+        "#ffffff",
+        "#0088ff",
+        "#9a5feb",
+        "#3ad900",
+        "#ff628c",
+        "#ffc600"
+      ],
+      "files": {
+        "theme.json": "951ff13999ac7d102e3f0f0e917507dd30424414b6b58bb6afeab5161937539b"
+      }
+    },
+    {
       "id": "coffee",
       "name": "Coffee",
       "version": "1.0.0",
@@ -25,6 +140,420 @@
       }
     },
     {
+      "id": "contraste-clair",
+      "name": "Contraste élevé (clair)",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Contrastes maximaux sur fond blanc.",
+      "tags": [
+        "thème",
+        "clair"
+      ],
+      "colors": [
+        "#ffffff",
+        "#000000",
+        "#0033cc",
+        "#6a0dad",
+        "#006400",
+        "#b00000",
+        "#7a5200"
+      ],
+      "files": {
+        "theme.json": "06b30c004aa393340b9cdfbdd68a3f578db9e738f08ea7e500c87d2c356c6778"
+      }
+    },
+    {
+      "id": "contraste-sombre",
+      "name": "Contraste élevé (sombre)",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Contrastes maximaux, accessibilité.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#000000",
+        "#ffffff",
+        "#6fc3ff",
+        "#ff9cf1",
+        "#7dff8a",
+        "#ff6b6b",
+        "#ffee58"
+      ],
+      "files": {
+        "theme.json": "5b2285f49fc80d0adc4fabd2d3a3653cdd8a8925b80304734036ca6d757b94b3"
+      }
+    },
+    {
+      "id": "corail",
+      "name": "Corail",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Fond sombre chaud, accent corail.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#231a1d",
+        "#f1e4e1",
+        "#6db7c9",
+        "#c49be0",
+        "#8fcb8a",
+        "#ff6f61",
+        "#f2c46d"
+      ],
+      "files": {
+        "theme.json": "74a158f9a834dbd9a13efb3154206187fcd68a73108acee756047a353ac4b6fd"
+      }
+    },
+    {
+      "id": "dracula",
+      "name": "Dracula",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Violet profond, accents vifs, inspiré de Dracula.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#282a36",
+        "#f8f8f2",
+        "#8be9fd",
+        "#bd93f9",
+        "#50fa7b",
+        "#ff5555",
+        "#f1fa8c"
+      ],
+      "files": {
+        "theme.json": "e4c9974e641bc9c2aef9c1ce4f78188cea0dab81f824ad3cd1b8aea6317603dc"
+      }
+    },
+    {
+      "id": "everforest",
+      "name": "Everforest",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Verts forestiers apaisants, inspiré d'Everforest.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#2d353b",
+        "#d3c6aa",
+        "#7fbbb3",
+        "#d699b6",
+        "#a7c080",
+        "#e67e80",
+        "#dbbc7f"
+      ],
+      "files": {
+        "theme.json": "9150db754dca88ddf71144c0d318125be0304b17f81e15ab61b6309ad3522979"
+      }
+    },
+    {
+      "id": "foret",
+      "name": "Forêt",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Verts profonds et mousse.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#14201a",
+        "#d6e5d8",
+        "#6fb3b8",
+        "#b48ead",
+        "#8fcf7a",
+        "#d9776b",
+        "#d9c26b"
+      ],
+      "files": {
+        "theme.json": "0f93b1495b1cf0d697678728d6544c483ff73f07286bf593d1e5da4d271cec89"
+      }
+    },
+    {
+      "id": "frappe",
+      "name": "Catppuccin Frappé",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Pastels sur gris-bleu moyen, inspiré de Catppuccin.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#303446",
+        "#c6d0f5",
+        "#8caaee",
+        "#ca9ee6",
+        "#a6d189",
+        "#e78284",
+        "#e5c890"
+      ],
+      "files": {
+        "theme.json": "508c821dae1f16dde0f3b9893d018d3d04e501e0e1802a1f06563d4da535e0c4"
+      }
+    },
+    {
+      "id": "github-dark",
+      "name": "GitHub Dark",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Gris GitHub sobre.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#0d1117",
+        "#e6edf3",
+        "#58a6ff",
+        "#bc8cff",
+        "#3fb950",
+        "#f85149",
+        "#d29922"
+      ],
+      "files": {
+        "theme.json": "9d24b58d7aec4a01475ed187077a9995cb5fb5863567185143cd67b26bf35ac8"
+      }
+    },
+    {
+      "id": "github-light",
+      "name": "GitHub Light",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Blanc GitHub, très lisible.",
+      "tags": [
+        "thème",
+        "clair"
+      ],
+      "colors": [
+        "#ffffff",
+        "#1f2328",
+        "#0969da",
+        "#8250df",
+        "#1a7f37",
+        "#cf222e",
+        "#9a6700"
+      ],
+      "files": {
+        "theme.json": "c8647ec6ec0e8aa37d94d197c0a543016a20d4f52ec6247e000f17aa94ce93f9"
+      }
+    },
+    {
+      "id": "gruvbox-dark",
+      "name": "Gruvbox Dark",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Tons chauds contrastés, inspiré de Gruvbox.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#282828",
+        "#ebdbb2",
+        "#83a598",
+        "#d3869b",
+        "#b8bb26",
+        "#fb4934",
+        "#fabd2f"
+      ],
+      "files": {
+        "theme.json": "bba884ce2935b2bdb9c1e2a3622a3456989b012db249001efc8a75a5b6dcb78f"
+      }
+    },
+    {
+      "id": "gruvbox-light",
+      "name": "Gruvbox Light",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Papier crème, inspiré de Gruvbox (clair).",
+      "tags": [
+        "thème",
+        "clair"
+      ],
+      "colors": [
+        "#fbf1c7",
+        "#3c3836",
+        "#076678",
+        "#8f3f71",
+        "#79740e",
+        "#9d0006",
+        "#b57614"
+      ],
+      "files": {
+        "theme.json": "c7432fa91d86ff03bfdcbff44f73dbbdd9e2b22dec2f0945ebb95b67f4915f0a"
+      }
+    },
+    {
+      "id": "horizon",
+      "name": "Horizon",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Crépuscule rose et orangé.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#1c1e26",
+        "#d5d8da",
+        "#26bbd9",
+        "#b877db",
+        "#29d398",
+        "#e95678",
+        "#fab795"
+      ],
+      "files": {
+        "theme.json": "47cbcbbf765e50427ab3133f1d585f50e5fb487b136bd7200949f81cc7d149f1"
+      }
+    },
+    {
+      "id": "kanagawa",
+      "name": "Kanagawa",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Encre japonaise et pastels fanés, inspiré de Kanagawa.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#1f1f28",
+        "#dcd7ba",
+        "#7e9cd8",
+        "#957fb8",
+        "#98bb6c",
+        "#e82424",
+        "#e6c384"
+      ],
+      "files": {
+        "theme.json": "c56d04e805cf01f56b02fe65ea8011ca6987b7f37048107cc62201385bfb9d67"
+      }
+    },
+    {
+      "id": "latte",
+      "name": "Catppuccin Latte",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Pastels doux sur fond clair, inspiré de Catppuccin.",
+      "tags": [
+        "thème",
+        "clair"
+      ],
+      "colors": [
+        "#eff1f5",
+        "#4c4f69",
+        "#1e66f5",
+        "#8839ef",
+        "#40a02b",
+        "#d20f39",
+        "#df8e1d"
+      ],
+      "files": {
+        "theme.json": "c31076394b6fd0a501c103de8f5c5e52721e2528c216bda0f4a30456668828de"
+      }
+    },
+    {
+      "id": "lavande",
+      "name": "Lavande",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Violets doux, lumineux.",
+      "tags": [
+        "thème",
+        "clair"
+      ],
+      "colors": [
+        "#f5f2fb",
+        "#322b4a",
+        "#4668c5",
+        "#7b4fd0",
+        "#3d8b5f",
+        "#c0434f",
+        "#a97a1e"
+      ],
+      "files": {
+        "theme.json": "dd7ecc725616a7deb9c0e6d0a3862ce1274806dc99adb9a0d7309f0fa8f7594c"
+      }
+    },
+    {
+      "id": "macchiato",
+      "name": "Catppuccin Macchiato",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Pastels sur fond sombre, inspiré de Catppuccin.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#24273a",
+        "#cad3f5",
+        "#8aadf4",
+        "#c6a0f6",
+        "#a6da95",
+        "#ed8796",
+        "#eed49f"
+      ],
+      "files": {
+        "theme.json": "d1f204bb84d1140575f54c405e2ac3b19fbd9eb9abbe483f60f5cdbaf157805e"
+      }
+    },
+    {
+      "id": "material-ocean",
+      "name": "Material Ocean",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Bleu-gris profond, inspiré de Material Theme.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#0f111a",
+        "#a6accd",
+        "#82aaff",
+        "#c792ea",
+        "#c3e88d",
+        "#f07178",
+        "#ffcb6b"
+      ],
+      "files": {
+        "theme.json": "a5791755b0b783d27dd33c0e8c6f83776101324e3acd154a83e7e2886ddde077"
+      }
+    },
+    {
+      "id": "menthe-glacee",
+      "name": "Menthe glacée",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Clair, vert d'eau et bleu pâle.",
+      "tags": [
+        "thème",
+        "clair"
+      ],
+      "colors": [
+        "#effaf6",
+        "#1f3a33",
+        "#2b7a9e",
+        "#6b5bb0",
+        "#2f8f5b",
+        "#c0473d",
+        "#a1761c"
+      ],
+      "files": {
+        "theme.json": "b6a6fcd33c3508ff19564ed4596c525422b4222d9d48cac2d293bd570003ca57"
+      }
+    },
+    {
       "id": "mint",
       "name": "Mint",
       "version": "1.0.0",
@@ -44,6 +573,75 @@
       ],
       "files": {
         "theme.json": "da24cbf4d4801acc72b8cd6ff54d92ecef65ad0181d23af020930af5dad0b218"
+      }
+    },
+    {
+      "id": "minuit",
+      "name": "Minuit",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Bleu marine très sombre.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#0a1128",
+        "#dbe4ff",
+        "#5b8def",
+        "#9d7bff",
+        "#46d19a",
+        "#ff6b81",
+        "#ffd166"
+      ],
+      "files": {
+        "theme.json": "487ddca04d5b8fb2c79f6c407ba6c13f80a52bc4146954cf005b3fe8e38f1903"
+      }
+    },
+    {
+      "id": "monokai",
+      "name": "Monokai",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Fond sombre, vert et rose électriques, inspiré de Monokai.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#272822",
+        "#f8f8f2",
+        "#66d9ef",
+        "#ae81ff",
+        "#a6e22e",
+        "#f92672",
+        "#e6db74"
+      ],
+      "files": {
+        "theme.json": "10bc350516c24a1594289ba192371ad4f63f3e88b51dd02ff31f5802617e47fa"
+      }
+    },
+    {
+      "id": "moonlight",
+      "name": "Moonlight",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Indigo lunaire, inspiré de Moonlight.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#222436",
+        "#c8d3f5",
+        "#82aaff",
+        "#c099ff",
+        "#c3e88d",
+        "#ff757f",
+        "#ffc777"
+      ],
+      "files": {
+        "theme.json": "e5b1821510ee811c634ae0fddfe2f19ec1ebae871ee567b77d5654ad849e1ad2"
       }
     },
     {
@@ -91,6 +689,52 @@
       }
     },
     {
+      "id": "night-owl",
+      "name": "Night Owl",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Bleu nuit pensé pour la nuit, inspiré de Night Owl.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#011627",
+        "#d6deeb",
+        "#82aaff",
+        "#c792ea",
+        "#addb67",
+        "#ef5350",
+        "#ecc48d"
+      ],
+      "files": {
+        "theme.json": "0878e7a357d4aed27e22e1d96be37517a361a2452ba27e8e56bf4df17a9a40f2"
+      }
+    },
+    {
+      "id": "nightfox",
+      "name": "Nightfox",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Bleus froids et rouille, inspiré de Nightfox.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#192330",
+        "#cdcecf",
+        "#719cd6",
+        "#9d79d6",
+        "#81b29a",
+        "#c94f6d",
+        "#dbc074"
+      ],
+      "files": {
+        "theme.json": "2a43f85c742aab9d8a241cc9cc47e014bcaf9121fc2e037609840c820b1fa6d0"
+      }
+    },
+    {
       "id": "nord-frost",
       "name": "Nord Frost",
       "version": "1.0.0",
@@ -113,6 +757,236 @@
       }
     },
     {
+      "id": "oceanic",
+      "name": "Oceanic",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Bleu océan, inspiré d'Oceanic Next.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#1b2b34",
+        "#d8dee9",
+        "#6699cc",
+        "#c594c5",
+        "#99c794",
+        "#ec5f67",
+        "#fac863"
+      ],
+      "files": {
+        "theme.json": "67c795abd8910e103a402944058ff9bf1390c8201f5af919dcac426f435bca60"
+      }
+    },
+    {
+      "id": "oled-black",
+      "name": "OLED Noir",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Noir pur : économise les écrans OLED.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#000000",
+        "#e6e6e6",
+        "#4aa3ff",
+        "#b48cff",
+        "#4ade80",
+        "#ff5c5c",
+        "#fbbf24"
+      ],
+      "files": {
+        "theme.json": "17f9fec1fb57510b727d5faf724a91fbfe398e0ffa416167dd7d04d2586b6f72"
+      }
+    },
+    {
+      "id": "one-dark",
+      "name": "One Dark",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Gris-bleu sobre, inspiré d'Atom One Dark.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#282c34",
+        "#abb2bf",
+        "#61afef",
+        "#c678dd",
+        "#98c379",
+        "#e06c75",
+        "#e5c07b"
+      ],
+      "files": {
+        "theme.json": "8eadfaed7de4c912e281ac4aa214000de47ac2168bd488734c0eb33e5f061818"
+      }
+    },
+    {
+      "id": "palenight",
+      "name": "Palenight",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Violet-gris nocturne, inspiré de Material Palenight.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#292d3e",
+        "#a6accd",
+        "#82aaff",
+        "#c792ea",
+        "#c3e88d",
+        "#f07178",
+        "#ffcb6b"
+      ],
+      "files": {
+        "theme.json": "f7725203bb25fbb56058ef11e25e3db8a6b5bcc20c0d83a3c71f4e0d1297a965"
+      }
+    },
+    {
+      "id": "papier",
+      "name": "Papier",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Blanc cassé encre noire, pour lire longtemps.",
+      "tags": [
+        "thème",
+        "clair"
+      ],
+      "colors": [
+        "#f7f5f0",
+        "#2b2b2b",
+        "#2f6fb2",
+        "#7a4fa0",
+        "#3a7d44",
+        "#b3392f",
+        "#a8741a"
+      ],
+      "files": {
+        "theme.json": "f3e776b7fcf47ac2804f2898b80a0d116030b7167fdc2769d439fa0b1551abf2"
+      }
+    },
+    {
+      "id": "poimandres",
+      "name": "Poimandres",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Minimal bleu-vert sur fond encre.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#1b1e28",
+        "#a6accd",
+        "#89ddff",
+        "#a6accd",
+        "#5de4c7",
+        "#d0679d",
+        "#fffac2"
+      ],
+      "files": {
+        "theme.json": "33f186497ad7f3dae4f0ad1c6ae566b884f64dd300b398e971004079ac03391b"
+      }
+    },
+    {
+      "id": "rose-pine",
+      "name": "Rosé Pine",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Rose poudré et pin, inspiré de Rosé Pine.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#191724",
+        "#e0def4",
+        "#9ccfd8",
+        "#c4a7e7",
+        "#31748f",
+        "#eb6f92",
+        "#f6c177"
+      ],
+      "files": {
+        "theme.json": "ead71e8fd0c2efe5e51659c029d4fe2e88dd08361b139d358fbe3f39a8e549e5"
+      }
+    },
+    {
+      "id": "rose-pine-dawn",
+      "name": "Rosé Pine Dawn",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Rosé Pine clair.",
+      "tags": [
+        "thème",
+        "clair"
+      ],
+      "colors": [
+        "#faf4ed",
+        "#575279",
+        "#56949f",
+        "#907aa9",
+        "#286983",
+        "#b4637a",
+        "#ea9d34"
+      ],
+      "files": {
+        "theme.json": "80575c4673a63fd9763ceeb957c090ddead25f4c6bc7e8d239a3173bcbebe874"
+      }
+    },
+    {
+      "id": "sakura",
+      "name": "Sakura",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Roses de cerisier sur fond clair.",
+      "tags": [
+        "thème",
+        "clair"
+      ],
+      "colors": [
+        "#fff5f7",
+        "#4a3340",
+        "#4d7ea8",
+        "#a05a9e",
+        "#5a8f5a",
+        "#c2415d",
+        "#b9822b"
+      ],
+      "files": {
+        "theme.json": "8693ec8656d390de96eb74dc4e18b0462f169e3c437cd84fdb7e340ff2e408e8"
+      }
+    },
+    {
+      "id": "sepia",
+      "name": "Sépia",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Fond jauni façon livre ancien.",
+      "tags": [
+        "thème",
+        "clair"
+      ],
+      "colors": [
+        "#f4ecd8",
+        "#433422",
+        "#2b6a8c",
+        "#7b4a8b",
+        "#4f7a28",
+        "#a1362a",
+        "#a77310"
+      ],
+      "files": {
+        "theme.json": "827ab95a902b93218444a88fee0c7b845e03a2c27d4de674a7c7807f9c43a136"
+      }
+    },
+    {
       "id": "solar-dawn",
       "name": "Solar Dawn",
       "version": "1.0.0",
@@ -132,6 +1006,167 @@
       ],
       "files": {
         "theme.json": "73f62813584208c1948f800401748fddf47e2043f63f084af713a4bf879e7a13"
+      }
+    },
+    {
+      "id": "solarized-dark",
+      "name": "Solarized Dark",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Palette scientifique à faible fatigue visuelle.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#002b36",
+        "#93a1a1",
+        "#268bd2",
+        "#6c71c4",
+        "#859900",
+        "#dc322f",
+        "#b58900"
+      ],
+      "files": {
+        "theme.json": "9c19904de718f443a2081c248e613293c902a0c4b3eddd376415afa07e6da1d6"
+      }
+    },
+    {
+      "id": "solarized-light",
+      "name": "Solarized Light",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Solarized sur fond clair.",
+      "tags": [
+        "thème",
+        "clair"
+      ],
+      "colors": [
+        "#fdf6e3",
+        "#586e75",
+        "#268bd2",
+        "#6c71c4",
+        "#859900",
+        "#dc322f",
+        "#b58900"
+      ],
+      "files": {
+        "theme.json": "e346751dc353f3ffba98032f5022b4cae829320d6a067c6dafd9b0fbf7cdade5"
+      }
+    },
+    {
+      "id": "synthwave",
+      "name": "Synthwave",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Violet nuit et rose fluo, esprit années 80.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#262335",
+        "#ffffff",
+        "#36f9f6",
+        "#b893ce",
+        "#72f1b8",
+        "#fe4450",
+        "#fede5d"
+      ],
+      "files": {
+        "theme.json": "c03d26042bab1f43d305a9a2ea223b711ab651acf07e9443e3b6a0b1a1f6fca8"
+      }
+    },
+    {
+      "id": "tokyo-night",
+      "name": "Tokyo Night",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Bleu nuit et néons discrets, inspiré de Tokyo Night.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#1a1b26",
+        "#c0caf5",
+        "#7aa2f7",
+        "#bb9af7",
+        "#9ece6a",
+        "#f7768e",
+        "#e0af68"
+      ],
+      "files": {
+        "theme.json": "af932cf5154c776eab294fa027fb44cd35dbf1b1391bee75141b3af109730c46"
+      }
+    },
+    {
+      "id": "tokyo-storm",
+      "name": "Tokyo Storm",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Variante plus claire de Tokyo Night.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#24283b",
+        "#c0caf5",
+        "#7aa2f7",
+        "#bb9af7",
+        "#9ece6a",
+        "#f7768e",
+        "#e0af68"
+      ],
+      "files": {
+        "theme.json": "866297d61dd8b17cc970a6b7a2e4de9621270afaad1fd42a3c2470cf67e6a5af"
+      }
+    },
+    {
+      "id": "tomorrow-night",
+      "name": "Tomorrow Night",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Classique des éditeurs, doux et neutre.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#1d1f21",
+        "#c5c8c6",
+        "#81a2be",
+        "#b294bb",
+        "#b5bd68",
+        "#cc6666",
+        "#f0c674"
+      ],
+      "files": {
+        "theme.json": "0c839f7a7c3ffc4f12942042d6c8465d44e29e75f5a41ad029fcdaf246c54569"
+      }
+    },
+    {
+      "id": "zenburn",
+      "name": "Zenburn",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Gris chauds peu fatigants, inspiré de Zenburn.",
+      "tags": [
+        "thème",
+        "sombre"
+      ],
+      "colors": [
+        "#3f3f3f",
+        "#dcdccc",
+        "#8cd0d3",
+        "#dc8cc3",
+        "#7f9f7f",
+        "#cc9393",
+        "#f0dfaf"
+      ],
+      "files": {
+        "theme.json": "454a7231b3972274264540a58958c87538c0156846985e4cc934cc45764d9cd2"
       }
     }
   ]

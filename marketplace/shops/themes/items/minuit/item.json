@@ -1,0 +1,20 @@
+{
+  "id": "minuit",
+  "name": "Minuit",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Bleu marine très sombre.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#0a1128",
+    "#dbe4ff",
+    "#5b8def",
+    "#9d7bff",
+    "#46d19a",
+    "#ff6b81",
+    "#ffd166"
+  ]
+}

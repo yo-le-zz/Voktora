@@ -1,0 +1,14 @@
+{
+  "name": "Sakura",
+  "description": "Roses de cerisier sur fond clair.",
+  "colors": {
+    "base": "#fff5f7",
+    "text": "#4a3340",
+    "blue": "#4d7ea8",
+    "mauve": "#a05a9e",
+    "green": "#5a8f5a",
+    "red": "#c2415d",
+    "yellow": "#b9822b",
+    "primary": "#d6567a"
+  }
+}

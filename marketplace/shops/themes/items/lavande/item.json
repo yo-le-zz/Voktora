@@ -1,0 +1,20 @@
+{
+  "id": "lavande",
+  "name": "Lavande",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Violets doux, lumineux.",
+  "tags": [
+    "thème",
+    "clair"
+  ],
+  "colors": [
+    "#f5f2fb",
+    "#322b4a",
+    "#4668c5",
+    "#7b4fd0",
+    "#3d8b5f",
+    "#c0434f",
+    "#a97a1e"
+  ]
+}

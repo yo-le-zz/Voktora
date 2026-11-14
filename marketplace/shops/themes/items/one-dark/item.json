@@ -1,0 +1,20 @@
+{
+  "id": "one-dark",
+  "name": "One Dark",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Gris-bleu sobre, inspiré d'Atom One Dark.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#282c34",
+    "#abb2bf",
+    "#61afef",
+    "#c678dd",
+    "#98c379",
+    "#e06c75",
+    "#e5c07b"
+  ]
+}

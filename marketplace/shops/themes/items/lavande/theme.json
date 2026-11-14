@@ -1,0 +1,14 @@
+{
+  "name": "Lavande",
+  "description": "Violets doux, lumineux.",
+  "colors": {
+    "base": "#f5f2fb",
+    "text": "#322b4a",
+    "blue": "#4668c5",
+    "mauve": "#7b4fd0",
+    "green": "#3d8b5f",
+    "red": "#c0434f",
+    "yellow": "#a97a1e",
+    "primary": "#7b4fd0"
+  }
+}

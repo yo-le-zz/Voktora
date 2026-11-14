@@ -1,0 +1,14 @@
+{
+  "name": "Contraste élevé (clair)",
+  "description": "Contrastes maximaux sur fond blanc.",
+  "colors": {
+    "base": "#ffffff",
+    "text": "#000000",
+    "blue": "#0033cc",
+    "mauve": "#6a0dad",
+    "green": "#006400",
+    "red": "#b00000",
+    "yellow": "#7a5200",
+    "primary": "#0033cc"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "Catppuccin Frappé",
+  "description": "Pastels sur gris-bleu moyen, inspiré de Catppuccin.",
+  "colors": {
+    "base": "#303446",
+    "text": "#c6d0f5",
+    "blue": "#8caaee",
+    "mauve": "#ca9ee6",
+    "green": "#a6d189",
+    "red": "#e78284",
+    "yellow": "#e5c890",
+    "primary": "#ca9ee6"
+  }
+}

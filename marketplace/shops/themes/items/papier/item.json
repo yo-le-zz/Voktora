@@ -1,0 +1,20 @@
+{
+  "id": "papier",
+  "name": "Papier",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Blanc cassé encre noire, pour lire longtemps.",
+  "tags": [
+    "thème",
+    "clair"
+  ],
+  "colors": [
+    "#f7f5f0",
+    "#2b2b2b",
+    "#2f6fb2",
+    "#7a4fa0",
+    "#3a7d44",
+    "#b3392f",
+    "#a8741a"
+  ]
+}

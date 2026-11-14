@@ -1,0 +1,20 @@
+{
+  "id": "night-owl",
+  "name": "Night Owl",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Bleu nuit pensé pour la nuit, inspiré de Night Owl.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#011627",
+    "#d6deeb",
+    "#82aaff",
+    "#c792ea",
+    "#addb67",
+    "#ef5350",
+    "#ecc48d"
+  ]
+}

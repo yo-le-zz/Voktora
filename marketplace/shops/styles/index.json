@@ -16,6 +16,32 @@
       }
     },
     {
+      "id": "barres-fines",
+      "name": "Barres fines",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Barres de défilement minces et discrètes.",
+      "tags": [
+        "style"
+      ],
+      "files": {
+        "barres-fines.qss": "58c9621ae2b5cd7fab0e81fe9680f572b0c9cd12c01f0305f7097aea22b99c99"
+      }
+    },
+    {
+      "id": "boutons-plats",
+      "name": "Boutons plats",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Boutons sans relief, fond au survol seulement.",
+      "tags": [
+        "style"
+      ],
+      "files": {
+        "boutons-plats.qss": "bb694a15b0b0739fd9bc2d74bbd48f89379e53721311ee125ab255c0974f3e98"
+      }
+    },
+    {
       "id": "compact",
       "name": "Compact",
       "version": "1.0.0",
@@ -26,6 +52,123 @@
       ],
       "files": {
         "style.qss": "f8d0c73bc1c358a8cef9c0bf6a0b13aae156abe26d3f4e00c792a0cdbcc5993f"
+      }
+    },
+    {
+      "id": "dense",
+      "name": "Dense",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Très compact : un maximum d'informations à l'écran.",
+      "tags": [
+        "style"
+      ],
+      "files": {
+        "dense.qss": "42d9fcef4a06ac3dfb44ffe94feb04af971d8ff171ff83b8dad15996bd6bfa06"
+      }
+    },
+    {
+      "id": "focus-visible",
+      "name": "Focus visible",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Contour net sur l'élément qui a le focus (accessibilité clavier).",
+      "tags": [
+        "style"
+      ],
+      "files": {
+        "focus-visible.qss": "a97e061c7fafa4d01a41d17138adbf1d819a29589712661bde4812e6b5bd3702"
+      }
+    },
+    {
+      "id": "lisible",
+      "name": "Lisible",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Police plus grande et interlignes confortables.",
+      "tags": [
+        "style"
+      ],
+      "files": {
+        "lisible.qss": "759de10fc2bde06e92a4b5880e5efeaeb649598c07dc2473c2c35b09f6e79a47"
+      }
+    },
+    {
+      "id": "menus-aeres",
+      "name": "Menus aérés",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Menus et listes déroulantes plus confortables.",
+      "tags": [
+        "style"
+      ],
+      "files": {
+        "menus-aeres.qss": "41f18e171c7e9d41d0c6c2241e4dc286e65c3563bfc7ec30a8c24142d599f35f"
+      }
+    },
+    {
+      "id": "onglets-soulignes",
+      "name": "Onglets soulignés",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Onglets sans cadre, l'actif est souligné.",
+      "tags": [
+        "style"
+      ],
+      "files": {
+        "onglets-soulignes.qss": "e91d391d018301e541bd2eb7ba52d22c0b099f4f365cafb96bc009aac9b5c8e2"
+      }
+    },
+    {
+      "id": "sans-bordures",
+      "name": "Sans bordures",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Supprime la plupart des cadres : rendu épuré.",
+      "tags": [
+        "style"
+      ],
+      "files": {
+        "sans-bordures.qss": "43d075c6568e44a134b24dacbfb91cc86cf512d59424c1ea92cbd834089317bd"
+      }
+    },
+    {
+      "id": "spacieux",
+      "name": "Spacieux",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Marges généreuses : interface plus aérée.",
+      "tags": [
+        "style"
+      ],
+      "files": {
+        "spacieux.qss": "216d7f4d725c5400501e4ec0cfa7196c83e47ab8389fdd57e0c9dd9c12b210ec"
+      }
+    },
+    {
+      "id": "tableau-zebre",
+      "name": "Tableaux zébrés",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Lignes alternées dans les listes et tableaux.",
+      "tags": [
+        "style"
+      ],
+      "files": {
+        "tableau-zebre.qss": "7d49034a0a7bc841b401093fdf3dc60a177f381943020051f714544c0663415b"
+      }
+    },
+    {
+      "id": "tres-arrondi",
+      "name": "Très arrondi",
+      "version": "1.0.0",
+      "author": "yolezz",
+      "description": "Grands rayons sur boutons, champs et listes.",
+      "tags": [
+        "style"
+      ],
+      "files": {
+        "tres-arrondi.qss": "8989e6e75ddb8381c64818d9816d8ee173343e1ce915b5194a63f6c0072a1afe"
       }
     }
   ]

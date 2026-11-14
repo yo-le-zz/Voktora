@@ -1,0 +1,20 @@
+{
+  "id": "color-lab",
+  "name": "Color Lab",
+  "author": "yolezz",
+  "homepage": "https://github.com/yo-le-zz/Voktora",
+  "version": "1.0.0",
+  "api": 5,
+  "lang": "python",
+  "description": "Convertit HEX/RGB/HSL, vérifie les contrastes WCAG (AA/AAA), corrige une couleur illisible et propose des palettes (complémentaire, triade, nuances).",
+  "permissions": [
+    "clipboard",
+    "ui"
+  ],
+  "tags": [
+    "couleurs",
+    "accessibilité",
+    "design"
+  ],
+  "entry": "main.py"
+}

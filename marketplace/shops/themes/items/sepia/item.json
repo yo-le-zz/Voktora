@@ -1,0 +1,20 @@
+{
+  "id": "sepia",
+  "name": "Sépia",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Fond jauni façon livre ancien.",
+  "tags": [
+    "thème",
+    "clair"
+  ],
+  "colors": [
+    "#f4ecd8",
+    "#433422",
+    "#2b6a8c",
+    "#7b4a8b",
+    "#4f7a28",
+    "#a1362a",
+    "#a77310"
+  ]
+}

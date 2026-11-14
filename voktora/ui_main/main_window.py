@@ -529,6 +529,9 @@ class MainWindow(QMainWindow):
         act_devc = QAction(icons.icon("mdi:console"), "Console développeur (plugins)...", self)
         act_devc.triggered.connect(self.act_dev_console)
         menu_prefs.addAction(act_devc)
+        act_devm = QAction(icons.icon("mdi:monitor-eye"), "Moniteur développeur global (fenêtre séparée)...", self)
+        act_devm.triggered.connect(self.act_dev_monitor)
+        menu_prefs.addAction(act_devm)
         act_upd = QAction(icons.icon("mdi:update"), "Rechercher une mise à jour de Voktora...", self)
         act_upd.triggered.connect(lambda: self.act_check_update(manual=True))
         menu_prefs.addAction(act_upd)
@@ -1298,6 +1301,10 @@ class MainWindow(QMainWindow):
         from ui_dialogs import DevConsoleDialog
         DevConsoleDialog(self).exec()
 
+    def act_dev_monitor(self) -> None:
+        from ui_dialogs.dev_monitor_dialog import DevMonitorDialog
+        DevMonitorDialog(self).exec()
+
     def act_check_update(self, manual: bool = False) -> None:
         """Vérifie les versions GitHub (tags vX.Y.Z) ; téléchargement vérifié par SHA-256, jamais d'auto-remplacement."""
         import self_update
@@ -1328,12 +1335,37 @@ class MainWindow(QMainWindow):
         except Exception as exc:  # noqa: BLE001
             QMessageBox.warning(self, "Mise à jour", str(exc))
             return
-        QMessageBox.information(self, "Mise à jour prête", f"Fichier vérifié (SHA-256) :\n{path}\n\n"
-                                "Fermez Voktora puis installez-le (Voktora ne remplace pas son propre programme en marche).")
+        self._offer_install(path)
+
+    def _offer_install(self, path) -> None:
+        """Fichier vérifié : installation en arrière-plan par un script détaché (Voktora se ferme puis se rouvre)."""
+        import update_install
+        from PySide6.QtWidgets import QApplication, QMessageBox
+        answer = QMessageBox.question(
+            self, "Mise à jour prête",
+            f"Fichier vérifié (SHA-256) :\n{path}\n\nInstaller maintenant ? Voktora va se fermer, installer la mise à jour "
+            "en arrière-plan (un mot de passe administrateur peut être demandé) puis se rouvrir.\n"
+            "En cas d'échec, l'ancienne version est rouverte et le journal est dans le dossier « updates ».")
+        if answer != QMessageBox.Yes:
+            return
+        try:
+            script = update_install.prepare(path, Path(path).parent, version=core.APP_VERSION)
+            update_install.launch(script)
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "Mise à jour", f"Installation impossible : {exc}\n\nFichier : {path}")
+            return
+        QApplication.quit()
 
     def act_shops(self) -> None:
-        from ui_dialogs import ShopDialog
-        ShopDialog(self).exec()
+        try:
+            from ui_dialogs import ShopDialog
+            dialog = ShopDialog(self)
+        except Exception as exc:  # noqa: BLE001 — jamais de clic muet : on montre l'erreur
+            import traceback
+            QMessageBox.critical(self, "Boutiques d'apparence",
+                                 f"Impossible d'ouvrir les boutiques :\n{exc}\n\n{traceback.format_exc()[-800:]}")
+            return
+        dialog.exec()
 
     def act_plugins(self) -> None:
         from ui_dialogs import PluginsDialog

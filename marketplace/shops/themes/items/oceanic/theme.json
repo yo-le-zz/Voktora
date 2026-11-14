@@ -1,0 +1,14 @@
+{
+  "name": "Oceanic",
+  "description": "Bleu océan, inspiré d'Oceanic Next.",
+  "colors": {
+    "base": "#1b2b34",
+    "text": "#d8dee9",
+    "blue": "#6699cc",
+    "mauve": "#c594c5",
+    "green": "#99c794",
+    "red": "#ec5f67",
+    "yellow": "#fac863",
+    "primary": "#6699cc"
+  }
+}

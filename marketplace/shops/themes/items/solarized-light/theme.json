@@ -1,0 +1,14 @@
+{
+  "name": "Solarized Light",
+  "description": "Solarized sur fond clair.",
+  "colors": {
+    "base": "#fdf6e3",
+    "text": "#586e75",
+    "blue": "#268bd2",
+    "mauve": "#6c71c4",
+    "green": "#859900",
+    "red": "#dc322f",
+    "yellow": "#b58900",
+    "primary": "#2aa198"
+  }
+}

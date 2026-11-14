@@ -1,0 +1,20 @@
+{
+  "id": "nightfox",
+  "name": "Nightfox",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Bleus froids et rouille, inspiré de Nightfox.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#192330",
+    "#cdcecf",
+    "#719cd6",
+    "#9d79d6",
+    "#81b29a",
+    "#c94f6d",
+    "#dbc074"
+  ]
+}

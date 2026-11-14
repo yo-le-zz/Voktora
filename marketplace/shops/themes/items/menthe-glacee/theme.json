@@ -1,0 +1,14 @@
+{
+  "name": "Menthe glacée",
+  "description": "Clair, vert d'eau et bleu pâle.",
+  "colors": {
+    "base": "#effaf6",
+    "text": "#1f3a33",
+    "blue": "#2b7a9e",
+    "mauve": "#6b5bb0",
+    "green": "#2f8f5b",
+    "red": "#c0473d",
+    "yellow": "#a1761c",
+    "primary": "#2f8f5b"
+  }
+}

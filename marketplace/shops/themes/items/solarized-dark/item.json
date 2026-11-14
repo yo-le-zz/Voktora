@@ -1,0 +1,20 @@
+{
+  "id": "solarized-dark",
+  "name": "Solarized Dark",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Palette scientifique à faible fatigue visuelle.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#002b36",
+    "#93a1a1",
+    "#268bd2",
+    "#6c71c4",
+    "#859900",
+    "#dc322f",
+    "#b58900"
+  ]
+}

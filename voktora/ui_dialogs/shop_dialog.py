@@ -114,10 +114,14 @@ class _ShopTab(QWidget):
         self.list.clear()
         local = {m["id"]: m for m in shops.installed(self.kind)}
         ids = list(dict.fromkeys([*local, *self._catalog]))
-        for item_id in sorted(ids, key=lambda i: (local.get(i) or {}).get("name", self._catalog[i].name).lower()):
+        def label(i: str) -> str:
+            meta_i, remote_i = local.get(i), self._catalog.get(i)
+            return str((meta_i or {}).get("name") or (remote_i.name if remote_i else i))
+
+        for item_id in sorted(ids, key=lambda i: label(i).lower()):
             meta = local.get(item_id)
             remote_item = self._catalog.get(item_id)
-            name = (meta or {}).get("name") or remote_item.name
+            name = label(item_id)
             colors = (meta or {}).get("colors") or (remote_item.colors if remote_item else [])
             state = ""
             if meta and remote_item and _newer(remote_item.version, str(meta.get("version", "0"))):
@@ -184,7 +188,7 @@ class _ShopTab(QWidget):
         pix.fill(Qt.transparent)
         painter = QPainter(pix)
         for i, f in enumerate(files[:10]):
-            QIcon(str(f)).paint(painter, i * 32, 4, 28, 28)
+            QIcon(icons._SvgEngine(f, None)).paint(painter, i * 32, 4, 28, 28)
         painter.end()
         self.preview.setPixmap(pix)
 

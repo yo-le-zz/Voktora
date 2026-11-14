@@ -1,0 +1,20 @@
+{
+  "id": "tokyo-storm",
+  "name": "Tokyo Storm",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Variante plus claire de Tokyo Night.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#24283b",
+    "#c0caf5",
+    "#7aa2f7",
+    "#bb9af7",
+    "#9ece6a",
+    "#f7768e",
+    "#e0af68"
+  ]
+}

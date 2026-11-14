@@ -1,0 +1,20 @@
+{
+  "id": "sakura",
+  "name": "Sakura",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Roses de cerisier sur fond clair.",
+  "tags": [
+    "thème",
+    "clair"
+  ],
+  "colors": [
+    "#fff5f7",
+    "#4a3340",
+    "#4d7ea8",
+    "#a05a9e",
+    "#5a8f5a",
+    "#c2415d",
+    "#b9822b"
+  ]
+}

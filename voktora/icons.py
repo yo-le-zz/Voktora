@@ -126,6 +126,49 @@ class _GlyphEngine(QIconEngine):
         return pixmap
 
 
+class _SvgEngine(QIconEngine):
+    """Icône d'un pack de la boutique : `currentColor` devient la couleur du texte du thème (ou la teinte demandée)."""
+
+    def __init__(self, path: Path, color: str | None):
+        super().__init__()
+        self._path, self._color = path, color
+        try:
+            self._text = path.read_text(encoding="utf-8")
+        except OSError:
+            self._text = ""
+        self._renderers: dict[tuple[str, bool], object] = {}
+
+    def clone(self) -> QIconEngine:
+        return _SvgEngine(self._path, self._color)
+
+    def _renderer(self, mode: QIcon.Mode):
+        from PySide6.QtCore import QByteArray
+        from PySide6.QtSvg import QSvgRenderer
+        color = self._color or _DEFAULT_COLOR
+        key = (color, False)
+        renderer = self._renderers.get(key)
+        if renderer is None:
+            renderer = self._renderers[key] = QSvgRenderer(QByteArray(self._text.replace("currentColor", color).encode("utf-8")))
+        return renderer
+
+    def paint(self, painter: QPainter, rect: QRect, mode: QIcon.Mode, state: QIcon.State) -> None:
+        if not self._text:
+            return
+        painter.save()
+        if mode == QIcon.Mode.Disabled:
+            painter.setOpacity(0.35)
+        self._renderer(mode).render(painter, rect)
+        painter.restore()
+
+    def pixmap(self, size: QSize, mode: QIcon.Mode, state: QIcon.State) -> QPixmap:
+        pixmap = QPixmap(size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        self.paint(painter, QRect(QPoint(0, 0), size), mode, state)
+        painter.end()
+        return pixmap
+
+
 def resolve_id(value: str | None) -> str | None:
     """Identifiant « mdi:… » pour un identifiant d'icône ou un emoji ; None si rien d'affichable."""
     if not value or not isinstance(value, str):
@@ -154,10 +197,10 @@ def icon(value: str | None, color: str | None = None) -> QIcon:
         return QIcon()
     svg = _pack_svg(icon_id)
     if svg is not None:                                  # pack d'icônes de la boutique
-        key = (icon_id, f"svg:{svg}:{color or ''}")
+        key = (icon_id, f"svg:{svg}:{color or ''}:{_DEFAULT_COLOR}")
         cached = _cache.get(key)
         if cached is None:
-            cached = _cache[key] = QIcon(str(svg))
+            cached = _cache[key] = QIcon(_SvgEngine(Path(svg), color))
         return cached
     char = _charmap.get(icon_id[len(catalog.PREFIX):]) or _charmap.get(catalog.FALLBACK_ICON[len(catalog.PREFIX):])
     if not char:

@@ -1,0 +1,20 @@
+{
+  "id": "frappe",
+  "name": "Catppuccin Frappé",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Pastels sur gris-bleu moyen, inspiré de Catppuccin.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#303446",
+    "#c6d0f5",
+    "#8caaee",
+    "#ca9ee6",
+    "#a6d189",
+    "#e78284",
+    "#e5c890"
+  ]
+}

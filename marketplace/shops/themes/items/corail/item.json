@@ -1,0 +1,20 @@
+{
+  "id": "corail",
+  "name": "Corail",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Fond sombre chaud, accent corail.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#231a1d",
+    "#f1e4e1",
+    "#6db7c9",
+    "#c49be0",
+    "#8fcb8a",
+    "#ff6f61",
+    "#f2c46d"
+  ]
+}

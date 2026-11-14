@@ -1,0 +1,14 @@
+{
+  "name": "Tomorrow Night",
+  "description": "Classique des éditeurs, doux et neutre.",
+  "colors": {
+    "base": "#1d1f21",
+    "text": "#c5c8c6",
+    "blue": "#81a2be",
+    "mauve": "#b294bb",
+    "green": "#b5bd68",
+    "red": "#cc6666",
+    "yellow": "#f0c674",
+    "primary": "#81a2be"
+  }
+}

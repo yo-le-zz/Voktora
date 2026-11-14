@@ -1,0 +1,20 @@
+{
+  "id": "dracula",
+  "name": "Dracula",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Violet profond, accents vifs, inspiré de Dracula.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#282a36",
+    "#f8f8f2",
+    "#8be9fd",
+    "#bd93f9",
+    "#50fa7b",
+    "#ff5555",
+    "#f1fa8c"
+  ]
+}

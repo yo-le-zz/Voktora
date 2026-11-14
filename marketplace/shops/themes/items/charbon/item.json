@@ -1,0 +1,20 @@
+{
+  "id": "charbon",
+  "name": "Charbon",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Gris neutre, accent orange.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#1e1e1e",
+    "#d4d4d4",
+    "#569cd6",
+    "#c586c0",
+    "#6a9955",
+    "#f44747",
+    "#dcdcaa"
+  ]
+}

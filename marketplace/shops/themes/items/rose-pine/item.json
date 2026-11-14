@@ -1,0 +1,20 @@
+{
+  "id": "rose-pine",
+  "name": "Rosé Pine",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Rose poudré et pin, inspiré de Rosé Pine.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#191724",
+    "#e0def4",
+    "#9ccfd8",
+    "#c4a7e7",
+    "#31748f",
+    "#eb6f92",
+    "#f6c177"
+  ]
+}

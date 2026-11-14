@@ -1,0 +1,10 @@
+{
+  "id": "onglets-soulignes",
+  "name": "Onglets soulignés",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Onglets sans cadre, l'actif est souligné.",
+  "tags": [
+    "style"
+  ]
+}

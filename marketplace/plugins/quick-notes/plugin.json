@@ -1,12 +1,19 @@
 {
   "id": "quick-notes",
   "name": "Quick Notes",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "yolezz",
-  "description": "Un bloc-notes par projet, dans un onglet dédié, sauvegardé automatiquement.",
-  "api": 2,
+  "description": "Un bloc-notes par projet : sauvegarde automatique, compteur de mots, copie en Markdown, taille du texte réglable.",
+  "api": 5,
   "entry": "main.py",
-  "permissions": ["ui", "projects.read"],
-  "tags": ["notes", "productivité"],
-  "homepage": "https://github.com/yo-le-zz/Voktora"
+  "permissions": [
+    "clipboard",
+    "ui"
+  ],
+  "tags": [
+    "notes",
+    "productivité"
+  ],
+  "homepage": "https://github.com/yo-le-zz/Voktora",
+  "lang": "python"
 }

@@ -5,6 +5,45 @@ Format : [Semantic Versioning](https://semver.org/) — `MAJEUR.MINEUR.CORRECTIF
 
 ---
 
+## [1.1.3] — 2026-11-14
+
+### 🛰️ Moniteur développeur global (nouveau)
+- **Seconde fenêtre dans un processus DÉTACHÉ** : elle ne bloque pas Voktora et reste ouverte si Voktora plante. Elle suit en direct
+  un journal JSON Lines (`<données>/devmon/session-*.jsonl`) : exceptions non gérées (fil principal, threads, « unraisable »),
+  plantages natifs (`faulthandler`), journaux Python et messages Qt, clics, menus, raccourcis, fenêtres, hooks de plugins,
+  écritures de configuration, blocages de l'interface (avec la pile du fil principal), battement de cœur → état *en marche / figé / arrêté / plantage probable*.
+- **4 modes**, modifiables en direct depuis la fenêtre : `crash`, `normal`, `verbose`, `trace`.
+- Activation : `voktora --dev[=mode]`, variable `VOKTORA_DEV`, ou Préférences › « Moniteur développeur global… » (option de démarrage automatique).
+- Confidentialité : jamais le texte saisi ni le contenu des champs, secrets masqués, fenêtres de coffre/mot de passe ignorées, 10 sessions conservées, 25 Mo max par session.
+- Voir `doc/DEVMONITOR.md`.
+
+### 🎨 Boutiques : 45 thèmes, 8 packs d'icônes, 10 styles
+- Packs d'icônes SVG (~185 icônes aux noms MDI, `currentColor` pris en charge) ; styles QSS sans `url()` ni `@import`.
+- **Correctif** : la fenêtre des boutiques ne s'ouvrait pas (« je clique, rien ne se passe ») — une valeur par défaut évaluée trop tôt levait une `KeyError`
+  quand un objet installé n'était pas encore dans le catalogue. Test de non-régression ajouté.
+
+### 🧩 Plugins
+- **Améliorés (1.1.0, avec tests et interface plus lisible)** : todo-scanner, git-insights, focus-timer, project-counter, zen-mode, quick-notes.
+- **Nouveaux** : gitignore-gen, license-picker, changelog-builder, snippet-vault, color-lab (Python) ; text-case-js, json-clipboard-js, generators-js (JavaScript) ;
+  loc-counter-rs (Rust, nécessite cargo).
+
+### 🔄 Mise à jour automatique
+- Nouveau script d'installation (`update_install.py`) : détecte l'architecture et la famille de distribution, choisit le bon fichier (deb/rpm/pacman/AppImage/tar/msi/exe),
+  arrête Voktora (TERM puis KILL), installe en arrière-plan avec 2 tentatives, journal `update.log`, notification, relance de l'ancienne version en cas d'échec.
+
+### 🌐 Site
+- Page d'accueil beaucoup plus sobre : commandes d'installation (à copier) et un court paragraphe, polices système, clair/sombre automatique.
+
+### 🔧 Divers
+- Tests rendus indépendants des dossiers résiduels du dépôt (le catalogue `index.json` fait foi) ; verrou sur l'écriture de `config.json`.
+
+### ⚠️ Limites connues
+- Le script de mise à jour Windows (PowerShell) n'a pas été testé sous Windows. Les plugins Rust sont natifs (pas de bac à sable) et exigent cargo.
+- Les packs d'icônes ne couvrent que ~185 noms MDI. Les générateurs aléatoires JS ne sont pas cryptographiques.
+- Moniteur : le masquage des secrets est « au mieux » ; un plantage natif très précoce (avant l'activation) n'est pas capté.
+
+---
+
 ## [1.1.2] — 2026-11-13
 
 ### 🧩 Cinq plugins avancés (marketplace officiel, API 5)

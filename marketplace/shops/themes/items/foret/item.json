@@ -1,0 +1,20 @@
+{
+  "id": "foret",
+  "name": "Forêt",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Verts profonds et mousse.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#14201a",
+    "#d6e5d8",
+    "#6fb3b8",
+    "#b48ead",
+    "#8fcf7a",
+    "#d9776b",
+    "#d9c26b"
+  ]
+}

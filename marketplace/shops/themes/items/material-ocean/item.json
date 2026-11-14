@@ -1,0 +1,20 @@
+{
+  "id": "material-ocean",
+  "name": "Material Ocean",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Bleu-gris profond, inspiré de Material Theme.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#0f111a",
+    "#a6accd",
+    "#82aaff",
+    "#c792ea",
+    "#c3e88d",
+    "#f07178",
+    "#ffcb6b"
+  ]
+}

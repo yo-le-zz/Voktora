@@ -1,12 +1,20 @@
 {
   "id": "todo-scanner",
   "name": "TODO Scanner",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "yolezz",
-  "description": "Liste les TODO, FIXME et HACK du projet ouvert, dans un onglet dédié.",
-  "api": 2,
+  "description": "Liste les TODO, FIXME, HACK, BUG… du projet ouvert (dans les commentaires), avec filtre, recherche, options et export Markdown.",
+  "api": 5,
   "entry": "main.py",
-  "permissions": ["ui", "files"],
-  "tags": ["code", "qualité"],
-  "homepage": "https://github.com/yo-le-zz/Voktora"
+  "permissions": [
+    "clipboard",
+    "ui"
+  ],
+  "tags": [
+    "code",
+    "qualité",
+    "tâches"
+  ],
+  "homepage": "https://github.com/yo-le-zz/Voktora",
+  "lang": "python"
 }

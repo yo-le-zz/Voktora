@@ -29,7 +29,8 @@ def served(isolated_data_dir, monkeypatch):
 def test_catalogs_and_neon_moved_out_of_plugins(served):
     themes, errors = shops.fetch_catalog("themes")
     assert not errors and {"neon-night", "coffee", "mint"} <= {t.id for t in themes}
-    assert not (MARKET / "plugins" / "neon-themes").exists()
+    index = json.loads((MARKET / "index.json").read_text(encoding="utf-8"))
+    assert "neon-themes" not in json.dumps(index)      # un ancien dossier traîne parfois dans un dépôt : on teste le catalogue
     assert shops.fetch_catalog("icons")[0] and shops.fetch_catalog("styles")[0]
 
 
@@ -119,3 +120,15 @@ def test_shop_dialog_opens(served):
     assert dlg.tabs.count() == 3
     dlg.shop_tabs["themes"].populate(shops.fetch_catalog("themes")[0])
     assert dlg.shop_tabs["themes"].list.count() >= 6
+
+
+def test_shop_dialog_opens_with_installed_items(served):
+    """Régression 1.1.3 : avec un objet installé, la boutique plantait à l'ouverture (clic sans effet)."""
+    from PySide6.QtWidgets import QApplication
+    from ui_dialogs import ShopDialog
+    QApplication.instance() or QApplication([])
+    icons.load()
+    shops.install(next(t for t in shops.fetch_catalog("themes")[0] if t.id == "neon-night"))
+    dlg = ShopDialog()                       # le catalogue distant n'est pas encore chargé : seuls les installés s'affichent
+    assert dlg.shop_tabs["themes"].list.count() == 1
+    assert "neon-night" in dlg.shop_tabs["themes"].list.item(0).data(256)

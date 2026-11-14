@@ -1,0 +1,20 @@
+{
+  "id": "latte",
+  "name": "Catppuccin Latte",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Pastels doux sur fond clair, inspiré de Catppuccin.",
+  "tags": [
+    "thème",
+    "clair"
+  ],
+  "colors": [
+    "#eff1f5",
+    "#4c4f69",
+    "#1e66f5",
+    "#8839ef",
+    "#40a02b",
+    "#d20f39",
+    "#df8e1d"
+  ]
+}

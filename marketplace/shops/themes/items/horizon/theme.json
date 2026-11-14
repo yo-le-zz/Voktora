@@ -1,0 +1,14 @@
+{
+  "name": "Horizon",
+  "description": "Crépuscule rose et orangé.",
+  "colors": {
+    "base": "#1c1e26",
+    "text": "#d5d8da",
+    "blue": "#26bbd9",
+    "mauve": "#b877db",
+    "green": "#29d398",
+    "red": "#e95678",
+    "yellow": "#fab795",
+    "primary": "#e95678"
+  }
+}

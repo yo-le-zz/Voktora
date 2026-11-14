@@ -1,0 +1,20 @@
+{
+  "id": "moonlight",
+  "name": "Moonlight",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Indigo lunaire, inspiré de Moonlight.",
+  "tags": [
+    "thème",
+    "sombre"
+  ],
+  "colors": [
+    "#222436",
+    "#c8d3f5",
+    "#82aaff",
+    "#c099ff",
+    "#c3e88d",
+    "#ff757f",
+    "#ffc777"
+  ]
+}

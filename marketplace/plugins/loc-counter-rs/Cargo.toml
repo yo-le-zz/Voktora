@@ -1,0 +1,12 @@
+[package]
+name = "loc-counter-rs"
+version = "1.0.0"
+edition = "2021"
+description = "Compte les lignes de code d'un projet par langage (plugin Rust pour Voktora)"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+voktora-plugin = { path = "../voktora-sdk" }
+serde_json = "1"

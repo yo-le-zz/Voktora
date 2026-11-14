@@ -1,0 +1,14 @@
+{
+  "name": "One Dark",
+  "description": "Gris-bleu sobre, inspiré d'Atom One Dark.",
+  "colors": {
+    "base": "#282c34",
+    "text": "#abb2bf",
+    "blue": "#61afef",
+    "mauve": "#c678dd",
+    "green": "#98c379",
+    "red": "#e06c75",
+    "yellow": "#e5c07b",
+    "primary": "#61afef"
+  }
+}

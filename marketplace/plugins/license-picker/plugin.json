@@ -1,0 +1,23 @@
+{
+  "id": "license-picker",
+  "name": "License Picker",
+  "author": "yolezz",
+  "homepage": "https://github.com/yo-le-zz/Voktora",
+  "version": "1.0.0",
+  "api": 5,
+  "lang": "python",
+  "description": "Écrit le fichier LICENSE du projet (MIT, BSD, ISC, Unlicense) avec année et titulaire, génère les en-têtes SPDX, et pointe vers les textes officiels Apache/GPL/MPL.",
+  "permissions": [
+    "clipboard",
+    "files",
+    "files.write",
+    "projects.read",
+    "ui"
+  ],
+  "tags": [
+    "licence",
+    "outil",
+    "légal"
+  ],
+  "entry": "main.py"
+}

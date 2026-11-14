@@ -1,0 +1,20 @@
+{
+  "id": "contraste-clair",
+  "name": "Contraste élevé (clair)",
+  "version": "1.0.0",
+  "author": "yolezz",
+  "description": "Contrastes maximaux sur fond blanc.",
+  "tags": [
+    "thème",
+    "clair"
+  ],
+  "colors": [
+    "#ffffff",
+    "#000000",
+    "#0033cc",
+    "#6a0dad",
+    "#006400",
+    "#b00000",
+    "#7a5200"
+  ]
+}
