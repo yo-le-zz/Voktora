@@ -162,6 +162,19 @@ jobs:
       - name: Installer les dependances (uv.lock + Nuitka)
         run: uv sync --frozen --group build
 
+      # Cache de Nuitka et de ccache : les compilations suivantes ne recompilent que ce qui a changé
+      - name: Cache de compilation
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/Nuitka
+            ~/Library/Caches/Nuitka
+            ~/AppData/Local/Nuitka
+            ~/.ccache
+            ~/Library/Caches/ccache
+          key: nuitka-${{ matrix.platform }}-${{ hashFiles('uv.lock') }}
+          restore-keys: nuitka-${{ matrix.platform }}-
+
       # -- Linux ----------------------------------------------------------------
       - name: Dependances systeme Linux
         if: matrix.platform == 'linux'
@@ -172,7 +185,7 @@ jobs:
             libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
             libxcb-xkb1 libxkbcommon-x11-0 libgl1 libglib2.0-0 \
             libegl1 libopengl0 libxcb-cursor0 \
-            patchelf dpkg-dev rpm zstd
+            patchelf dpkg-dev rpm zstd ccache
 
       - name: Build Linux (.deb) - compile Voktora avec Nuitka
         if: matrix.platform == 'linux'
@@ -208,6 +221,10 @@ jobs:
         run: uv run --frozen --group build python "Installers/MSI installer/build_msi.py" "$env:VERSION"
 
       # -- macOS (Intel x86_64) ---------------------------------------------------
+      - name: ccache (compilation C de Nuitka plus rapide)
+        if: matrix.platform == 'macos'
+        run: brew install ccache
+
       - name: Build macOS (.dmg, x86_64)
         if: matrix.platform == 'macos'
         env:

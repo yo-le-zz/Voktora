@@ -55,7 +55,7 @@ voktora_compile() {
     echo ">>> Compilation Nuitka (LTO, sans docstrings ni asserts)..."
     "${UV[@]}" --group build python -m nuitka \
       --standalone \
-      --lto=yes \
+      --lto="${VOKTORA_LTO:-yes}" \
       --python-flag=no_docstrings \
       --python-flag=no_asserts \
       --noinclude-unittest-mode=nofollow \
