@@ -5,6 +5,14 @@ Format : [Semantic Versioning](https://semver.org/) — `MAJEUR.MINEUR.CORRECTIF
 
 ---
 
+## [1.1.6] — 2026-11-16
+
+### 🛠️ Corrections
+- **Build macOS** : l'icône PNG est convertie en `.icns` avec `sips`/`iconutil` (plus d'erreur « Need to install 'imageio' »).
+- **Compilation plus rapide** : pas de LTO sur macOS par défaut (`VOKTORA_LTO=yes` pour l'activer), ccache, cache de Nuitka entre les runs CI.
+- **`build.sh`** (Linux/macOS) : compilation locale rapide — `./build.sh` (rapide), `run`, `release` (LTO), `dev` (sans compiler), `clean`.
+- Tests : le test du plugin retiré `project-counter` est supprimé (il échouait à l'import).
+
 ## [1.1.5] — 2026-11-16
 
 ### 🧪 Mode live

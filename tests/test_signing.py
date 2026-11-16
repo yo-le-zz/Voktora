@@ -56,3 +56,11 @@ def test_fetch_index_requires_valid_signature_when_keys_configured(isolated_data
     del served["index.json.sig"]
     with pytest.raises(market.MarketError, match="authentique"):
         market.fetch_index("https://x", use_cache_on_error=False)
+
+
+def test_macos_icon_and_local_build_script():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    dmg = (root / "Installers/macOS installer/build_dmg.sh").read_text(encoding="utf-8")
+    assert "make_icns.sh" in dmg and "--macos-app-icon=\"$ICNS\"" in dmg and "Voktora.png\"" not in dmg.split("make_icns.sh")[1].split("\n")[0] + ""
+    assert (root / "build.sh").is_file() and "--lto=" in (root / "build.sh").read_text(encoding="utf-8")
