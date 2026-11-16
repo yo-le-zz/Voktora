@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QBrush, QColor, QFont, QKeySequence, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsItem,
@@ -14,9 +14,9 @@ from PySide6.QtWidgets import (
     QGraphicsView,
 )
 
-from ..core import blocks
+from ..core import blocks, schema
 
-W, H = 176, 58
+W, H = 210, 68
 PORT_R = 6
 COLORS = {"Flux": "#4f6bed", "Données": "#2e9e6b", "Système": "#c7561e", "Scripts": "#9b59b6", "Réseau": "#3b82a0", "Projet": "#b5651d"}
 
@@ -57,6 +57,8 @@ class NodeItem(QGraphicsRectItem):
         self.setPos(float(data.get("x", 0)), float(data.get("y", 0)))
         self.title = QGraphicsSimpleTextItem(self)
         self.sub = QGraphicsSimpleTextItem(self)
+        self.summ = QGraphicsSimpleTextItem(self)
+        self._moved = False
         self.refresh_text()
         self.inport = PortItem(self, "in", False) if data["type"] != "start" else None
         if self.inport:
@@ -74,23 +76,41 @@ class NodeItem(QGraphicsRectItem):
                 f.setPointSize(7)
                 t.setFont(f)
                 t.setPos(W - 8 - t.boundingRect().width(), H * (i + 1) / (len(ports) + 1) - 7)
-        self.setToolTip(f"{data['id']} — {b.title if b else data['type']}\n{b.doc if b else ''}")
 
     def refresh_text(self) -> None:
+        """Titre, type et résumé lisible des valeurs (« HTTP GET https://… »)."""
         b = blocks.REGISTRY.get(self.data["type"])
-        for item, text, size in ((self.title, str(self.data.get("label") or self.data["id"])[:22], 9), (self.sub, b.title if b else "?", 8)):
+        summary = schema.summary(self.data)
+        for item, text, size, bold, color in ((self.title, str(self.data.get("label") or self.data["id"])[:26], 9, True, "#ffffff"),
+                                               (self.sub, b.title if b else "?", 7, False, "#e6e6e6"),
+                                               (self.summ, summary if len(summary) <= 32 else summary[:31] + "…", 8, False, "#ffffff")):
             item.setText(text)
-            item.setBrush(QBrush(Qt.white))
+            item.setBrush(QBrush(QColor(color)))
             f = QFont()
             f.setPointSize(size)
-            f.setBold(item is self.title)
+            f.setBold(bold)
             item.setFont(f)
-        self.title.setPos(12, 8)
-        self.sub.setPos(12, 30)
+        self.title.setPos(12, 5)
+        self.sub.setPos(12, 23)
+        self.summ.setPos(12, 40)
+        self.setToolTip(f"{self.data['id']} — {b.title if b else self.data['type']}\n{summary}\n\n{schema.describe(self.data['type'])}\nDouble-clic : modifier les valeurs.")
+
+    def mouseDoubleClickEvent(self, ev):  # noqa: N802
+        if self.scene():
+            self.scene().node_activated.emit(self.data["id"])
+        ev.accept()
+
+    def mouseReleaseEvent(self, ev):  # noqa: N802
+        super().mouseReleaseEvent(ev)
+        if self._moved:
+            self._moved = False
+            if self.scene():
+                self.scene().node_moved.emit()
 
     def itemChange(self, change, value):  # noqa: N802
         if change == QGraphicsItem.ItemPositionHasChanged:
             self.data["x"], self.data["y"] = round(value.x()), round(value.y())
+            self._moved = True
             for e in self.edges:
                 e.update_path()
         return super().itemChange(change, value)
@@ -133,6 +153,9 @@ class EdgeItem(QGraphicsPathItem):
 class FlowScene(QGraphicsScene):
     changed_model = Signal()
     node_selected = Signal(str)
+    node_activated = Signal(str)       # double-clic : édition rapide
+    node_moved = Signal()
+    action = Signal(str)               # copy | paste | duplicate | undo | redo
 
     def __init__(self):
         super().__init__()
@@ -152,6 +175,26 @@ class FlowScene(QGraphicsScene):
         for e in wf["edges"]:
             self._add_edge(e)
         self.setSceneRect(self.itemsBoundingRect().adjusted(-200, -200, 400, 400))
+
+    def reload(self, select=()) -> None:
+        """Reconstruit la scène depuis le modèle (après annuler, coller…) en conservant la sélection."""
+        self.blockSignals(True)
+        self.load(self.wf)
+        self.blockSignals(False)
+        self.select_ids(select)
+
+    def select_ids(self, ids) -> None:
+        for i, it in self.items_by_id.items():
+            it.setSelected(i in ids)
+
+    def refresh_node(self, node_id: str) -> None:
+        it = self.items_by_id.get(node_id)
+        if it:
+            it.refresh_text()
+            it.update()
+
+    def selected_ids(self) -> list[str]:
+        return [i.data["id"] for i in self.selectedItems() if isinstance(i, NodeItem)]
 
     def _add_item(self, data: dict) -> NodeItem:
         it = NodeItem(data)
@@ -271,6 +314,16 @@ class FlowView(QGraphicsView):
     def keyPressEvent(self, ev):  # noqa: N802
         if ev.key() in (Qt.Key_Delete, Qt.Key_Backspace):
             self.scene().remove_selected()
+        elif ev.matches(QKeySequence.Copy):
+            self.scene().action.emit("copy")
+        elif ev.matches(QKeySequence.Paste):
+            self.scene().action.emit("paste")
+        elif ev.matches(QKeySequence.Undo):
+            self.scene().action.emit("undo")
+        elif ev.matches(QKeySequence.Redo) or (ev.key() == Qt.Key_Y and ev.modifiers() & Qt.ControlModifier):
+            self.scene().action.emit("redo")
+        elif ev.key() == Qt.Key_D and ev.modifiers() & Qt.ControlModifier:
+            self.scene().action.emit("duplicate")
         else:
             super().keyPressEvent(ev)
 

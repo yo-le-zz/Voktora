@@ -103,13 +103,11 @@ Réservé au mainteneur (CODEOWNERS) : même flux, mais le code est dans `market
 
 | Plugin | Ce qu'il montre |
 |---|---|
-| `ui-tweaks` | modifier l'interface par feuille de style (compact, arrondis, police) |
 | `quick-notes` | onglet de projet avec réglages persistants |
 | `focus-timer` | widget de barre d'état, raccourci clavier |
 | `todo-scanner` | onglet + analyse en arrière-plan (`run_async`) |
 | `git-insights` | `api.run` (commandes git) dans un onglet |
 | `zen-mode` | bouton de barre d'outils, accès à la fenêtre (`main_window`) |
-| `project-counter` | barre d'état, menu clic droit, événements |
 
 
 ## Boutiques d'apparence (1.1.1)

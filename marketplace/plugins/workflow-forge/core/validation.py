@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from . import blocks, cron
-from . import expr as ex
+from . import blocks, cron, schema
 
 TRIGGER_KINDS = ("manual", "on_start", "on_open", "file_change", "git_head", "github_poll", "http_in", "interval", "cron")
 
@@ -34,23 +33,11 @@ def validate(wf: dict) -> dict:
         for q in b.params:
             if q.required and str(params.get(q.name, q.default)).strip() == "":
                 errors.append(f"Bloc « {n['id']} » : paramètre « {q.name} » requis.")
-            if q.kind == "expr" and q.name in params:
-                try:
-                    ex.parse_expression(str(params[q.name]))
-                except ex.ExprError as exc:
-                    errors.append(f"Bloc « {n['id']} » : expression « {q.name} » invalide ({exc}).")
-            if q.kind == "int" and q.name in params:
-                try:
-                    int(params[q.name])
-                except (TypeError, ValueError):
-                    errors.append(f"Bloc « {n['id']} » : « {q.name} » doit être un nombre entier.")
-        for e in (params or {}).values():
-            if isinstance(e, str) and "{{" in e:
-                for frag in ex.TEMPLATE.findall(e):
-                    try:
-                        ex.parse_expression(frag)
-                    except ex.ExprError as exc:
-                        errors.append(f"Bloc « {n['id']} » : modèle {{{{{frag.strip()}}}}} invalide ({exc}).")
+                continue
+            issue = schema.validate_param(b.type, q, params.get(q.name, q.default))
+            if issue:
+                text = f"Bloc « {n['id']} » : « {schema.param_label(q)} » — {issue.message}"
+                (errors if issue.is_error else warnings).append(text)
     out: dict[str, list] = {i: [] for i in nodes}
     seen_ports = set()
     for e in wf.get("edges", []):

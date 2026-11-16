@@ -19,6 +19,15 @@ from .store import LocalStore, SyncPathError
 
 LOCK_TTL = 120.0
 MAX_JSON = 1 << 20
+MAX_PACK_BODY = 24 << 20          # paquet de configuration (12 Mo de fichiers en base64 + JSON)
+
+
+class HandlerError(Exception):
+    """Refus explicite d'un gestionnaire étendu (config / rôles) : code HTTP + message affichable."""
+
+    def __init__(self, status: int, message: str):
+        super().__init__(message)
+        self.status = status
 
 
 class Session:
@@ -56,8 +65,9 @@ class Session:
 
 class SyncServer:
     def __init__(self, settings: SyncSettings, store: LocalStore, status_fn=None, request_fn=None,
-                 busy_fn=None):
+                 busy_fn=None, extra=None):
         self.settings, self.store = settings, store
+        self.extra = extra                       # gestionnaires « config » et « rôles » (le service), absents = ancien comportement
         self.status_fn = status_fn or (lambda: {})
         self.request_fn = request_fn or (lambda device: False)
         self.busy_fn = busy_fn or (lambda: False)          # ce PC synchronise-t-il lui-même ?
@@ -134,6 +144,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._ctx = (self.headers["X-Voktora-Nonce"] + self._path).encode()
             self._device = device
             self._dispatch(method, route, query)
+        except HandlerError as exc:
+            self._fail(exc.status, str(exc))
         except SyncPathError as exc:
             self._fail(400, str(exc))
         except KeyError as exc:
@@ -155,9 +167,9 @@ class _Handler(BaseHTTPRequestHandler):
     def _read_exact(self, n: int) -> bytes:
         return self.rfile.read(n)
 
-    def _body_json(self) -> dict:
+    def _body_json(self, limit: int = MAX_JSON) -> dict:
         length = int(self.headers.get("Content-Length", "0"))
-        if length > MAX_JSON:
+        if length > limit:
             raise ValueError("requête trop grande")
         raw = self.rfile.read(length)
         data = secure.decrypt_bytes(self._enc, self._ctx, raw) if raw else b"{}"
@@ -175,16 +187,24 @@ class _Handler(BaseHTTPRequestHandler):
     def _dispatch(self, method: str, route: str, query: dict) -> None:
         o, store, dev = self.owner, self.owner.store, self._device
         if route == "/hello":
-            return self._json({"id": o.settings.device_id, "name": o.settings["device_name"],
-                               "primary_id": o.settings["primary_id"], "status": o.status_fn(),
-                               "busy": o.busy_fn() or o.session.held_by_other(dev),
-                               "port": o.port, "time": time.time(), "version": 3,
-                               "features": ["delta", "zip"]})
+            info = {"id": o.settings.device_id, "name": o.settings["device_name"],
+                    "primary_id": o.settings["primary_id"], "status": o.status_fn(),
+                    "busy": o.busy_fn() or o.session.held_by_other(dev),
+                    "port": o.port, "time": time.time(), "version": 3,
+                    "features": ["delta", "zip"]}
+            if o.extra:                                    # 1.1.4 : un ancien pair ignore ces champs
+                info["features"] += ["config", "roles", "control"]
+                info["config"], info["group"] = o.extra.hello_config(), o.extra.group_dict()
+            return self._json(info)
+        if route.startswith(("/config/", "/roles/")):
+            return self._extended(method, route)
         if route == "/keepalive":
             return self._json({"ok": o.session.touch(dev)})
         if route == "/request-sync":
             return self._json({"accepted": bool(o.request_fn(dev))})
         if route == "/lock":
+            if o.extra:
+                o.extra.check_lock(dev, self._body_json())         # pause / configuration différente → refus explicite
             if o.busy_fn() or not o.session.acquire(dev):
                 return self._fail(423, "ce PC est déjà occupé par une synchronisation")
             return self._json({"ok": True})
@@ -251,6 +271,23 @@ class _Handler(BaseHTTPRequestHandler):
         if route == "/commit" and method == "POST":
             store.commit(self._body_json()["space"])
             return self._json({"ok": True})
+        return self._fail(404, "route inconnue")
+
+    def _extended(self, method: str, route: str) -> None:
+        extra = self.owner.extra
+        if extra is None:
+            return self._fail(404, "route inconnue")
+        dev = self._device
+        if method == "GET" and route == "/config/rev":
+            return self._json(extra.hello_config())
+        if method == "GET" and route == "/config/pack":
+            return self._json(extra.pack_for(dev))
+        if method == "GET" and route == "/roles/state":
+            return self._json({"group": extra.group_dict()})
+        handlers = {"/config/push": extra.on_config_push, "/config/request": extra.on_config_request,
+                    "/roles/propose": extra.on_roles_propose, "/roles/accept": extra.on_roles_accept}
+        if method == "POST" and route in handlers:
+            return self._json(handlers[route](dev, self._body_json(MAX_PACK_BODY)))
         return self._fail(404, "route inconnue")
 
     def _manifest(self, space: str) -> None:

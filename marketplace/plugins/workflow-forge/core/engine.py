@@ -8,7 +8,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from . import blocks
+from . import blocks, schema
 from . import expr as ex
 from .validation import validate
 
@@ -50,7 +50,8 @@ class Run:
         retries = max(0, min(int(opts.get("retries", 0)), 10))
         timeout = float(opts.get("timeout", 0) or 0)
         ctx.node_id = node["id"]
-        params = {q.name: node.get("params", {}).get(q.name, q.default) for q in b.params}
+        raw = schema.legacy_params(node["type"], node.get("params", {}))
+        params = {q.name: raw.get(q.name, q.default) for q in b.params}
         last = None
         for attempt in range(1, retries + 2):
             if ctx.cancel.is_set():
@@ -59,7 +60,7 @@ class Run:
                 rendered = {k: (v if next((q.kind for q in b.params if q.name == k), "") in ("expr", "code") else ctx.render(v)) for k, v in params.items()}
                 if self.dry and b.side_effect:
                     ctx.log(f"(test à blanc) « {b.title} » non exécuté")
-                    return {"out": {"dry_run": True, "skipped": True}, "attempts": attempt}
+                    return {"out": {**dict.fromkeys(b.outputs), "dry_run": True, "skipped": True}, "attempts": attempt}
                 res = self._with_timeout(b.run, ctx, rendered, timeout)
                 res["attempts"] = attempt
                 return res

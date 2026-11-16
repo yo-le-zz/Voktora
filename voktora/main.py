@@ -100,7 +100,9 @@ def main() -> None:
     prompt_at_startup()
 
     # Thème
+    import accessibility
     import theme_manager
+    accessibility.apply_font(app)
     theme_manager.apply_theme_to_app(app)
 
     # Fenêtre principale

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import faulthandler
-import json
 import logging
 import os
 import sys
@@ -26,10 +25,13 @@ def current() -> Emitter | None:
 
 
 class Emitter:
-    def __init__(self, level: str = "normal", session: Path | None = None):
+    def __init__(self, level: str = "normal", session: Path | None = None, secret: bytes | None = None):
         self.level = core.valid_level(level)
         self.session = Path(session) if session else core.new_session()
-        self.writer = core.Writer(self.session)
+        self.secret = secret if secret is not None else os.urandom(32)     # partagé avec le moniteur par un tube anonyme
+        self.codec = core.Codec(self.secret)
+        self.writer = core.Writer(self.session, codec=self.codec)
+        self._ctl_counter = 0
         self._stop = threading.Event()
         self._tick = time.monotonic()
         self._frozen = False
@@ -282,6 +284,8 @@ class Emitter:
         if not isinstance(obj, QWidget):
             return
         kind = event.type()
+        if kind == QEvent.Type.Show and self.enabled("verbose") and not obj.property("_devmon") and not self._private(obj):
+            self._watch_widget(obj)
         if kind == QEvent.Type.MouseButtonRelease and self.enabled("verbose"):
             if self._private(obj):
                 return
@@ -300,8 +304,34 @@ class Emitter:
                 self.emit("window", f"Fenêtre ouverte : {type(obj).__name__} « {obj.windowTitle()} »", need="normal", src="ui")
         elif kind == QEvent.Type.Hide and obj.isWindow() and self.enabled("verbose") and not self._private(obj):
             self.emit("window", f"Fenêtre fermée : {type(obj).__name__} « {obj.windowTitle()} »", need="verbose", src="ui")
+        elif kind == QEvent.Type.KeyPress and self.enabled("verbose") and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            from PySide6.QtWidgets import QMenu
+            if isinstance(obj, QMenu) and obj.activeAction() and not self._private(obj):
+                self.emit("menu", f"Entrée sur « {obj.activeAction().text().replace('&', '')} »", need="verbose", src="ui")
+        elif kind == QEvent.Type.WindowActivate and obj.isWindow() and self.enabled("verbose") and not self._private(obj):
+            self.emit("window", f"Fenêtre active : {type(obj).__name__} « {obj.windowTitle()} »", need="verbose", src="ui")
         elif kind == QEvent.Type.FocusIn and self.enabled("trace") and not self._private(obj):
             self.emit("focus", f"Focus : {type(obj).__name__}", need="trace", src="ui")
+
+    def _watch_widget(self, obj) -> None:
+        """Branche (une seule fois) les signaux utiles d'un widget : changement d'onglet, menu ouvert/action, choix dans une liste."""
+        if obj.property("_devmon"):
+            return
+        from PySide6.QtWidgets import QComboBox, QMenu, QTabBar, QTabWidget
+        obj.setProperty("_devmon", True)
+        if isinstance(obj, QTabBar):
+            obj.currentChanged.connect(lambda i, w=obj: self.emit(
+                "tab", f"Onglet « {w.tabText(i)} » ({type(w.parentWidget()).__name__ if w.parentWidget() else 'QTabBar'})", need="verbose", src="ui"))
+        elif isinstance(obj, QTabWidget):
+            obj.currentChanged.connect(lambda i, w=obj: self.emit("tab", f"Onglet « {w.tabText(i)} »", need="verbose", src="ui"))
+        elif isinstance(obj, QMenu):
+            self.emit("menu", f"Menu ouvert : « {obj.title().replace('&', '') or type(obj).__name__} »", need="verbose", src="ui")
+            obj.triggered.connect(lambda a: self.emit("menu", f"Action : « {a.text().replace('&', '')} »", need="verbose", src="ui"))
+            obj.aboutToShow.connect(lambda m=obj: self.emit("menu", f"Menu ouvert : « {m.title().replace('&', '') or 'contextuel'} »",
+                                                            need="verbose", src="ui"))
+        elif isinstance(obj, QComboBox):
+            obj.activated.connect(lambda i, w=obj: self.emit(
+                "choice", f"Choix n°{i} dans {type(w).__name__}{('#' + w.objectName()) if w.objectName() else ''}", need="verbose", src="ui"))
 
     # ── battement de cœur, blocages, commande ───────────────────────────────────
     def _heartbeat(self) -> None:
@@ -319,10 +349,14 @@ class Emitter:
                 mtime = control.stat().st_mtime
                 if mtime != last_mtime:
                     last_mtime = mtime
-                    wanted = json.loads(control.read_text(encoding="utf-8")).get("mode")
-                    if wanted:
-                        self.set_level(wanted)
-            except (OSError, ValueError):
+                    cmd = core.read_control(self.session, self.codec, self._ctl_counter)   # authentifiée + anti-rejeu
+                    if cmd:
+                        self._ctl_counter = cmd[1]
+                        self.set_level(cmd[0])
+                    else:
+                        self.emit("security", "Commande de contrôle rejetée (non authentifiée ou rejouée)", sev="warning", need="crash",
+                                  src="devmon")
+            except OSError:
                 pass
             self._beat_count = getattr(self, "_beat_count", 0) + 1
             if self._beat_count % 2 == 0:
@@ -343,7 +377,7 @@ def _rss_mb() -> int | None:
     return None
 
 
-def start(level: str, app=None) -> Emitter:
-    em = Emitter(level)
+def start(level: str, app=None, secret: bytes | None = None) -> Emitter:
+    em = Emitter(level, secret=secret)
     em.start(app)
     return em

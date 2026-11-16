@@ -5,6 +5,49 @@ Format : [Semantic Versioning](https://semver.org/) — `MAJEUR.MINEUR.CORRECTIF
 
 ---
 
+## [1.1.4] — 2026-11-16
+
+### 🔎 Marketplaces : recherche intelligente, « Tout installer », aperçus
+- **Barre de recherche commune** (plugins, thèmes, icônes, styles) conçue pour des milliers d'éléments : `mot`, `"expression exacte"`, `-exclure`, `tag:sombre`/`#sombre`, `lang:rust`, `auteur:…`, `perm:network`, `is:installed|new|update|active|community`, `sort:name|recent`, tolérance aux fautes de frappe, complétion et puces de filtres. 5 000 éléments en < 1 s (testé). Voir `voktora/catalog_search.py`.
+- **Tout installer** (sur le filtre en cours) dans le marketplace de plugins (confirmation avec permissions cumulées, plugins communautaires et natifs signalés) et dans chaque boutique (échecs isolés, vérification SHA-256 de chaque fichier).
+- **Aperçu des icônes et des styles même NON installés** (fichiers téléchargés, vérifiés par empreinte, mis en cache, jamais exécutés) ; les styles s'affichent sur une maquette de widgets.
+
+### 🔄 Synchronisation
+- **Push config** : toute la configuration non sensible (réglages, thèmes/icônes/styles installés, liste de plugins + options, profils, hooks…) est poussée chiffrée ; aperçu des différences, sauvegarde et application atomique avec retour arrière côté pair.
+- **Obligatoire pour synchroniser** : la sync des projets est bloquée tant que les configurations divergent (message + boutons de résolution) → aucun conflit silencieux.
+- **Mode dirigé** : un PC « chef » est la source de vérité (époque croissante contre le split-brain, abdication, proposition/accord) ; mode égalitaire conservé.
+- **Pause / Reprendre / Stop** dans la fenêtre de sync (nouvel onglet « Groupe & config ») et dans l'API du service ; Stop ne laisse aucun fichier partiel.
+- La synchronisation fonctionne avec **plus de deux PC** (envoi de config à tous, rôles par PC).
+
+### 🛰️ Moniteur développeur
+- **Canal sécurisé** : secret partagé aléatoire (32 octets) transmis au moniteur par un tube anonyme ; journal **chiffré AES-256-GCM et chaîné** (ligne modifiée, supprimée, déplacée ou forgée = rejetée et signalée), commandes de contrôle authentifiées et anti-rejeu, fichiers 0600 / dossier 0700.
+- Il voit maintenant les **changements d'onglet, ouvertures de menus, actions de menu, choix dans les listes, fenêtre active**.
+
+### 🧩 Plugins
+- **Workflow Forge 1.2.0** : panneau de propriétés par bloc (texte, nombre, MENU, chemin, variable, durée, expression, paires clé/valeur), résumé lisible dans le bloc, double-clic, annuler/rétablir, dupliquer, copier/coller, réordonner, recherche dans la palette, 6 modèles.
+- **Retirés** (doublons) : quick-note, ui-tweaks, project-counter, json-clipboard-js, generators-js.
+
+### 🧰 Anciens reports, maintenant faits
+- **Archivage de projets** (ZIP vérifié SHA-256, suppression optionnelle du dossier après relecture, restauration).
+- **Notifications de bureau** (sync, mises à jour, plugins, tâches, plantages ; heures « ne pas déranger », historique).
+- **Raccourcis clavier personnalisables** avec import/export JSON validés ; **import de thèmes en lot** (dossier ou ZIP).
+- **Accessibilité** : taille du texte, contraste renforcé, focus épais, réduction des animations, noms accessibles des boutons-icônes, audit.
+- **Suggestions IA** : message de commit (Conventional Commits) et explication du diff — Voktora ne commit ni ne pousse jamais ; diff borné, secrets masqués, fichiers sensibles ignorés, avertissement si le fournisseur n'est pas local.
+- **Index du marketplace signé (Ed25519)** : `tools/sign_index.py keygen|sign|verify` ; exigé dès qu'une clé est dans `TRUSTED_KEYS` (`voktora/signing.py`).
+
+### 🌐 Site et correctifs
+- Site multi-pages (accueil, téléchargement, fonctions, plugins avec recherche, docs, changelog), animations sobres, thème clair/sombre.
+- **CI** : `.gitignore` ignorait `lib/` et donc les bibliothèques JS des plugins → fichiers absents du dépôt → échecs. Règle de ré-inclusion ajoutée.
+
+### ⚠️ Limites connues
+- Les aperçus de styles sont approximatifs (le thème actif n'est pas appliqué à la maquette).
+- Signature : aucune clé n'est livrée ; la protection s'active quand vous ajoutez votre clé publique et signez l'index en CI.
+- Canal du moniteur : un processus du MÊME utilisateur capable de lire la mémoire de Voktora peut obtenir le secret.
+- Non testé de bout en bout : push de config entre deux vrais PC, mode dirigé en réseau réel, notifications sous Windows/macOS, script de mise à jour Windows.
+- Le glisser pour réordonner de Workflow Forge ne gère que les suites simples ; les déclencheurs restent en JSON.
+
+---
+
 ## [1.1.3] — 2026-11-14
 
 ### 🛰️ Moniteur développeur global (nouveau)

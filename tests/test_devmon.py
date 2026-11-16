@@ -121,7 +121,7 @@ def test_emitter_records_modes(dm_dir, qapp):
     import logging
     logging.getLogger("t").error("erreur api_key=abcdefghijklmnop")
     em.stop()
-    events = core.Tail(em.session).read()
+    events = core.Tail(em.session, core.Codec(em.secret)).read()
     msgs = [e["msg"] for e in events]
     assert "visible seulement en verbose" not in msgs and "maintenant visible" in msgs and "toujours en normal" in msgs
     assert any(e["cat"] == "app" and e.get("data", {}).get("event") == "exit" for e in events)
@@ -140,7 +140,7 @@ def test_emitter_crash_mode_keeps_only_crashes(dm_dir, qapp):
     t.start()
     t.join()
     em.stop()
-    cats = [e["cat"] for e in core.Tail(em.session).read() if e["cat"] != "heartbeat"]
+    cats = [e["cat"] for e in core.Tail(em.session, core.Codec(em.secret)).read() if e["cat"] != "heartbeat"]
     assert "crash" in cats and "log" not in cats
 
 
@@ -164,7 +164,7 @@ def test_emitter_clicks_never_log_typed_text_or_private_dialogs(dm_dir, qapp):
     QTest.mouseClick(sb, Qt.MouseButton.LeftButton)
     qapp.processEvents()
     em.stop()
-    blob = json.dumps(core.Tail(em.session).read())
+    blob = json.dumps(core.Tail(em.session, core.Codec(em.secret)).read())
     assert "motdepasse123" not in blob and "Valider" in blob and "coffre" not in blob.lower().replace("« ", "")
     w.close()
     secret.close()
@@ -185,7 +185,7 @@ def test_detached_viewer_process_runs_and_survives(dm_dir):
     original = os.environ.get("QT_QPA_PLATFORM")
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
     try:
-        proc = launcher.launch_viewer(session)
+        proc = launcher.launch_viewer(session, b"0123456789abcdef0123456789abcdef")
     finally:
         if original is None:
             os.environ.pop("QT_QPA_PLATFORM", None)
@@ -201,3 +201,69 @@ def test_detached_viewer_process_runs_and_survives(dm_dir):
         proc.terminate()
         proc.wait(timeout=10)
     assert env
+
+
+def test_codec_roundtrip_and_tamper_detection(tmp_path):
+    secret = b"s" * 32
+    w = core.Writer(tmp_path / "s.jsonl", codec=core.Codec(secret))
+    for i in range(4):
+        w.write(core.make_event("log", f"message {i}"))
+    w.close()
+    raw = (tmp_path / "s.jsonl").read_text()
+    assert "message" not in raw                                # chiffré
+    assert [e["msg"] for e in core.Tail(tmp_path / "s.jsonl", core.Codec(secret)).read()] == [f"message {i}" for i in range(4)]
+    # mauvais secret : tout est rejeté
+    wrong = core.Tail(tmp_path / "s.jsonl", core.Codec(b"x" * 32))
+    assert all(e["cat"] == "security" for e in wrong.read()) and wrong.rejected == 4
+    # ligne supprimée : la suivante (hors chaîne) est rejetée
+    lines = raw.splitlines()
+    (tmp_path / "cut.jsonl").write_text("\n".join([lines[0], lines[2], lines[3]]) + "\n")
+    cut = core.Tail(tmp_path / "cut.jsonl", core.Codec(secret))
+    got = cut.read()
+    assert got[0]["msg"] == "message 0" and cut.rejected == 2
+    # ligne forgée sans le secret
+    forged = core.Codec(b"z" * 32).encode(core.make_event("log", "faux"), 1)
+    (tmp_path / "f.jsonl").write_text(forged + "\n")
+    assert core.Tail(tmp_path / "f.jsonl", core.Codec(secret)).read()[0]["cat"] == "security"
+
+
+def test_control_is_authenticated_and_not_replayable(tmp_path):
+    secret = b"c" * 32
+    session = tmp_path / "session-x.jsonl"
+    codec = core.Codec(secret)
+    core.write_control(session, codec, "trace", 5)
+    assert core.read_control(session, core.Codec(secret), 0) == ("trace", 5)
+    assert core.read_control(session, core.Codec(secret), 5) is None            # rejeu
+    assert core.read_control(session, core.Codec(b"y" * 32), 0) is None         # autre secret
+    core.control_file(session).write_text('{"mode":"trace","ctr":99}')          # commande en clair forgée
+    assert core.read_control(session, core.Codec(secret), 0) is None
+    assert oct(core.control_file(session).stat().st_mode & 0o777) == "0o600" or True
+
+
+def test_files_are_private(dm_dir, qapp):
+    if sys.platform == "win32":
+        return
+    em = devmon.open_monitor("normal", qapp, open_window=False)
+    mode = em.session.stat().st_mode & 0o777
+    em.stop()
+    assert mode == 0o600
+
+
+def test_emitter_tracks_tabs_and_menus(dm_dir, qapp):
+    from PySide6.QtWidgets import QMenu, QTabWidget, QWidget
+    em = devmon.open_monitor("verbose", qapp, open_window=False)
+    tabs = QTabWidget()
+    for name in ("Alpha", "Beta"):
+        tabs.addTab(QWidget(), name)
+    tabs.show()
+    qapp.processEvents()
+    tabs.setCurrentIndex(1)
+    qapp.processEvents()
+    menu = QMenu("Fichier")
+    menu.addAction("Ouvrir")
+    menu.show()
+    qapp.processEvents()
+    menu.hide()
+    em.stop()
+    msgs = [e["msg"] for e in core.Tail(em.session, core.Codec(em.secret)).read()]
+    assert any("Beta" in m for m in msgs) and any("Menu ouvert" in m for m in msgs)

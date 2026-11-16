@@ -57,6 +57,14 @@ DEFAULTS: dict = {
     "delta": True,                 # transfert par blocs des gros fichiers déjà présents
     "compress": True,              # compression des fichiers compressibles
     "full_check_hours": 12,              # "auto" | "eco" (PC peu puissant) | "normal" | "fast"
+    # 1.1.4 : configuration, chef, pause
+    "config_gate": True,                 # blocage tant que la révision de configuration diverge de celle du groupe
+    "follower_conflicts": "confirm",     # mode dirigé : conflits locaux d'un suiveur → "confirm" (demander) | "queue" (mettre en file)
+    "group": {},                         # GroupState (mode, chef, époque) — voir roles.py
+    "config_ref": {},                    # configuration de référence du groupe (révision, séquence, auteur)
+    "applied_rev": "",                   # dernière configuration du groupe appliquée ici
+    "applied_local_rev": "",
+    "pause_hold": 300,                   # s : au-delà, une passe en pause se suspend et libère l'autre PC
 }
 SECRET_KEYS = {"peers", "invites"}
 
@@ -141,7 +149,10 @@ class SyncSettings:
         import hashlib
         import json
         keys = ("categories", "exclude", "only_projects", "max_file_mb", "include_git", "include_regenerable", "primary_id")
-        return hashlib.sha1(json.dumps({k: self.data.get(k) for k in keys}, sort_keys=True).encode()).hexdigest()
+        material = {k: self.data.get(k) for k in keys}
+        group = self.data.get("group") or {}
+        material["group"] = [group.get("mode", ""), group.get("leader_id", "")]
+        return hashlib.sha1(json.dumps(material, sort_keys=True).encode()).hexdigest()
 
     def category(self, name: str) -> bool:
         return bool(self.data["categories"].get(name, False))

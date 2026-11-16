@@ -37,7 +37,17 @@ def export_text(events: list[dict]) -> str:
     return "\n".join(format_event(e) for e in events if e.get("cat") != "heartbeat") + "\n"
 
 
-def run(session_path: str) -> int:
+def read_secret(stream=None) -> bytes | None:
+    """Lit le secret partagé (hexadécimal) transmis par Voktora sur l'entrée standard."""
+    stream = stream if stream is not None else sys.stdin
+    try:
+        line = stream.readline().strip()
+        return bytes.fromhex(line) if line else None
+    except (OSError, ValueError):
+        return None
+
+
+def run(session_path: str, secret: bytes | None = None) -> int:
     from PySide6.QtCore import Qt, QTimer
     from PySide6.QtGui import QBrush, QColor, QFont
     from PySide6.QtWidgets import (
@@ -64,7 +74,13 @@ def run(session_path: str) -> int:
     app = QApplication.instance() or QApplication(sys.argv[:1])
     app.setApplicationName("Voktora Dev Monitor")
     app.setStyle("Fusion")
-    tail = core.Tail(session)
+    secret = secret if secret is not None else read_secret()
+    if secret is None:
+        print("Moniteur : secret partagé absent (ce moniteur doit être lancé par Voktora).", file=sys.stderr)
+        return 2
+    codec = core.Codec(secret)
+    control_codec = core.Codec(secret)
+    tail = core.Tail(session, codec)
     events: list[dict] = []
     shown: list[dict] = []
     state = {"pid": 0, "follow": True, "paused": False}
@@ -212,7 +228,8 @@ def run(session_path: str) -> int:
 
     def on_mode(_i: int) -> None:
         try:
-            core.control_file(session).write_text(json.dumps({"mode": mode_box.currentData()}), encoding="utf-8")
+            state["ctr"] = max(state.get("ctr", 0) + 1, int(time.time() * 1000))
+            core.write_control(session, control_codec, mode_box.currentData(), state["ctr"])
         except OSError:
             pass
 

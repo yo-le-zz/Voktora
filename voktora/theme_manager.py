@@ -375,12 +375,39 @@ def apply_theme_to_app(app) -> None:
         qss += "\n" + plugins.extra_stylesheet()        # styles ajoutés par les plugins (après le thème)
     except Exception:
         pass         # un plugin ne doit jamais empêcher d'appliquer le thème
+    with contextlib.suppress(Exception):
+        import accessibility
+        qss += "\n" + accessibility.stylesheet()        # accessibilité en dernier : contraste et focus l'emportent
     app.setStyleSheet(qss)
     try:
         import icons
         icons.set_default_color(theme.get("text", "#cdd6f4"))
     except Exception:
         pass         # les icônes gardent leur couleur par défaut
+
+
+def import_themes_bulk(source: Path) -> tuple[list[str], list[str]]:
+    """Importe en lot tous les thèmes .json d'un dossier ou d'un ZIP. Renvoie (importés, échecs « fichier : raison »)."""
+    import tempfile
+    import zipfile
+    done: list[str] = []
+    failed: list[str] = []
+    source = Path(source)
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = source
+        if source.suffix.lower() == ".zip":
+            folder = Path(tmp)
+            with zipfile.ZipFile(source) as z:
+                for info in z.infolist()[:500]:
+                    name = Path(info.filename).name
+                    if info.filename.endswith(".json") and not info.is_dir() and info.file_size < 1_000_000 and name:
+                        (folder / name).write_bytes(z.read(info))
+        for file in sorted(folder.glob("*.json"))[:500]:
+            try:
+                done.append(import_theme(file))
+            except (ValueError, FileExistsError, OSError) as exc:
+                failed.append(f"{file.name} : {exc}")
+    return done, failed
 
 
 def import_theme(path: Path) -> str:

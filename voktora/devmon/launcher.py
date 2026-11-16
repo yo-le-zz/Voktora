@@ -22,20 +22,28 @@ def viewer_command(session: Path, frozen: bool | None = None, main_script: str |
     return [sys.executable, script], env
 
 
-def launch_viewer(session: Path) -> subprocess.Popen | None:
-    """Ouvre la fenêtre du moniteur. Renvoie None si le lancement échoue (jamais d'exception vers l'appelant)."""
+def launch_viewer(session: Path, secret: bytes | None = None) -> subprocess.Popen | None:
+    """Ouvre la fenêtre du moniteur. Le secret partagé est transmis par l'entrée standard (tube anonyme, jamais par argument,
+    variable d'environnement ni fichier). Renvoie None si le lancement échoue (jamais d'exception vers l'appelant)."""
     argv, extra = viewer_command(session)
     env = {**os.environ, **extra}
     env.pop("VOKTORA_JS_WORKER", None)
-    kwargs: dict = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "env": env, "close_fds": True}
+    kwargs: dict = {"stdin": subprocess.PIPE if secret else subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "env": env, "close_fds": True}
     if sys.platform == "win32":
         kwargs["creationflags"] = 0x00000008 | 0x00000200 | 0x08000000      # DETACHED_PROCESS | NEW_PROCESS_GROUP | NO_WINDOW
     else:
         kwargs["start_new_session"] = True
     try:
-        return subprocess.Popen(argv, **kwargs)  # noqa: S603
+        proc = subprocess.Popen(argv, **kwargs)  # noqa: S603
     except OSError:
         return None
+    if secret and proc.stdin:
+        try:
+            proc.stdin.write(secret.hex().encode() + b"\n")
+            proc.stdin.close()
+        except OSError:
+            pass
+    return proc
 
 
 def latest_session(directory: Path | None = None) -> Path | None:

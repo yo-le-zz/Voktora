@@ -8,12 +8,14 @@ from __future__ import annotations
 import threading
 from pathlib import Path
 
+import catalog_search as cs
 import icons
 import shops
 import theme_manager
 from plugins.manifest import is_newer
-from PySide6.QtCore import QObject, QSize, Qt, Signal
+from PySide6.QtCore import QObject, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -30,6 +32,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from .catalog_search_bar import CatalogSearchBar
 
 _newer = is_newer
 
@@ -51,6 +55,7 @@ class _Bridge(QObject):
     loaded = Signal(str, list, list)            # kind, items, errors
     done = Signal(str)                          # message
     failed = Signal(str)
+    previewed = Signal(str, str, object)        # kind, id, {nom: octets} ou message d'erreur
 
 
 class _ShopTab(QWidget):
@@ -62,6 +67,10 @@ class _ShopTab(QWidget):
         hint = QLabel(shops.KINDS[kind]["hint"])
         hint.setWordWrap(True)
         v.addWidget(hint)
+        self.search = CatalogSearchBar()
+        self.search.changed.connect(lambda _t: self._render())
+        v.addWidget(self.search)
+        self._docs: list[cs.Doc] = []
         row = QHBoxLayout()
         self.list = QListWidget()
         self.list.setIconSize(QSize(160, 22))
@@ -78,6 +87,9 @@ class _ShopTab(QWidget):
         self.btn_install = QPushButton("Installer")
         self.btn_apply = QPushButton("Appliquer")
         self.btn_remove = QPushButton("Désinstaller")
+        self.btn_all = QPushButton("Tout installer")
+        self.btn_all.setToolTip("Installe tous les objets affichés par le filtre actuel qui ne sont pas encore installés (ou à mettre à jour)")
+        self.btn_all.clicked.connect(self._install_all)
         self.btn_install.clicked.connect(self._install)
         self.btn_apply.clicked.connect(self._apply)
         self.btn_remove.clicked.connect(self._remove)
@@ -87,7 +99,7 @@ class _ShopTab(QWidget):
         local.clicked.connect(self._local)
         refresh = QPushButton("Actualiser")
         refresh.clicked.connect(self.refresh)
-        for b in (self.btn_install, self.btn_apply, self.btn_remove, sources, local, refresh):
+        for b in (self.btn_install, self.btn_all, self.btn_apply, self.btn_remove, sources, local, refresh):
             buttons.addWidget(b)
         buttons.addStretch()
         v.addLayout(buttons)
@@ -110,35 +122,57 @@ class _ShopTab(QWidget):
 
     def populate(self, remote: list[shops.ShopItem]) -> None:
         self._catalog = {i.id: i for i in remote}
-        current = self.list.currentItem().data(Qt.UserRole) if self.list.currentItem() else None
-        self.list.clear()
         local = {m["id"]: m for m in shops.installed(self.kind)}
         ids = list(dict.fromkeys([*local, *self._catalog]))
-        def label(i: str) -> str:
-            meta_i, remote_i = local.get(i), self._catalog.get(i)
-            return str((meta_i or {}).get("name") or (remote_i.name if remote_i else i))
-
-        for item_id in sorted(ids, key=lambda i: label(i).lower()):
-            meta = local.get(item_id)
-            remote_item = self._catalog.get(item_id)
-            name = label(item_id)
+        docs: list[cs.Doc] = []
+        for order, item_id in enumerate(ids):
+            meta, remote_item = local.get(item_id), self._catalog.get(item_id)
+            name = str((meta or {}).get("name") or (remote_item.name if remote_item else item_id))
             colors = (meta or {}).get("colors") or (remote_item.colors if remote_item else [])
-            state = ""
+            states = set()
+            label = ""
             if meta and remote_item and _newer(remote_item.version, str(meta.get("version", "0"))):
-                state = "  ⟳ mise à jour"
+                states.add("update")
+                label = "  ⟳ mise à jour"
             elif meta:
-                state = "  ✓ installé"
+                label = "  ✓ installé"
+            states.add("installed" if meta else "new")
             if self._is_active(item_id):
-                state += "  ● actif"
-            entry = QListWidgetItem(f"{name}{state}")
-            entry.setData(Qt.UserRole, item_id)
+                states.add("active")
+                label += "  ● actif"
+            tags = (meta or {}).get("tags") or (remote_item.tags if remote_item else [])
+            desc = str((meta or {}).get("description") or (remote_item.description if remote_item else ""))
+            author = str((meta or {}).get("author") or (remote_item.author if remote_item else ""))
+            docs.append(cs.make_doc(item_id, name=name, description=desc, tags=tags, author=author, states=states, order=order,
+                                    payload=(name + label, colors)))
+        self._docs = docs
+        self.search.set_index(cs.Index(docs))
+        self._render()
+
+    def _render(self) -> None:
+        current = self.list.currentItem().data(Qt.UserRole) if self.list.currentItem() else None
+        found = self.search.index.search(self.search.text() or "sort:name") if self.search.text().strip() else sorted(
+            self._docs, key=lambda d: d.name_l)
+        self.list.blockSignals(True)
+        self.list.clear()
+        for doc in found:
+            text, colors = doc.payload
+            entry = QListWidgetItem(text)
+            entry.setData(Qt.UserRole, doc.key)
             if self.kind == shops.KIND_THEMES and colors:
                 entry.setIcon(QIcon(swatches(colors)))
             self.list.addItem(entry)
-            if item_id == current:
+            if doc.key == current:
                 self.list.setCurrentItem(entry)
+        self.list.blockSignals(False)
         if self.list.currentItem() is None and self.list.count():
             self.list.setCurrentRow(0)
+        else:
+            self._select(None, None)
+        self.search.show_count(len(found), len(self._docs))
+        todo = [d for d in found if d.states & {"new", "update"}]
+        self.btn_all.setText(f"Tout installer ({len(todo)})")
+        self.btn_all.setEnabled(bool(todo) and bool(self._catalog))
 
     def _is_active(self, item_id: str) -> bool:
         if self.kind == shops.KIND_THEMES:
@@ -179,18 +213,101 @@ class _ShopTab(QWidget):
                             f"<p style='color:#7f849c'>Source : {esc(source.get('source') or 'locale')}</p>")
         colors = source.get("colors") or []
         self.preview.setPixmap(swatches(colors, 320, 28) if colors else QPixmap())
-        if self.kind == shops.KIND_ICONS and meta is not None:
-            self._icon_grid(item_id)
+        if self.kind in (shops.KIND_ICONS, shops.KIND_STYLES):
+            self._load_preview(item_id, meta, remote)
 
-    def _icon_grid(self, item_id: str) -> None:
-        files = sorted(shops.item_dir(self.kind, item_id).rglob("*.svg"))[:24]
-        pix = QPixmap(320, 40)
+    # ── aperçu (installé ou non) ──
+    def _load_preview(self, item_id: str, meta: dict | None, remote: shops.ShopItem | None) -> None:
+        item = remote
+        if item is None and meta is not None:                       # objet local : on lit le disque
+            folder = shops.item_dir(self.kind, item_id)
+            names = {str(f.relative_to(folder)): "0" * 64 for f in sorted(folder.rglob("*")) if f.suffix in (".svg", ".qss")}
+            item = shops.ShopItem(self.kind, item_id, str(meta.get("name", item_id)), "0", "", files=names)
+        if item is None:
+            return
+        self.preview.setText("Chargement de l'aperçu…")
+        kind, bridge = self.kind, self.dialog.bridge
+
+        def work() -> None:
+            try:
+                bridge.previewed.emit(kind, item_id, shops.preview_files(item, 16))
+            except Exception as exc:  # noqa: BLE001
+                bridge.previewed.emit(kind, item_id, str(exc))
+
+        threading.Thread(target=work, daemon=True, name="voktora-shop-preview").start()
+
+    def show_preview(self, item_id: str, files) -> None:
+        current = self.list.currentItem()
+        if current is None or current.data(Qt.UserRole) != item_id:
+            return                                                   # la sélection a changé entre-temps
+        if isinstance(files, str):
+            self.preview.setText("Aperçu indisponible : " + files)
+            return
+        self.preview.setPixmap(self._render_icons(files) if self.kind == shops.KIND_ICONS else self._render_style(files))
+
+    def _render_icons(self, files: dict[str, bytes]) -> QPixmap:
+        color = self.palette().text().color().name()
+        cols, size, pad = 8, 32, 8
+        names = sorted(n for n in files if n.endswith(".svg"))[:16]
+        rows = max(1, (len(names) + cols - 1) // cols)
+        pix = QPixmap(cols * (size + pad) + pad, rows * (size + pad) + pad)
         pix.fill(Qt.transparent)
         painter = QPainter(pix)
-        for i, f in enumerate(files[:10]):
-            QIcon(icons._SvgEngine(f, None)).paint(painter, i * 32, 4, 28, 28)
+        for i, name in enumerate(names):
+            renderer = QSvgRenderer(files[name].replace(b"currentColor", color.encode()))
+            renderer.render(painter, QRectF(pad + (i % cols) * (size + pad), pad + (i // cols) * (size + pad), size, size))
         painter.end()
-        self.preview.setPixmap(pix)
+        return pix
+
+    def _render_style(self, files: dict[str, bytes]) -> QPixmap:
+        """Maquette de widgets habillée par la feuille de style (approximatif : le thème actif n'est pas appliqué)."""
+        from PySide6.QtWidgets import QCheckBox, QComboBox, QLineEdit, QTabBar
+        sheet = "\n".join(d.decode("utf-8", "replace") for n, d in sorted(files.items()) if n.endswith(".qss"))
+        mock = QWidget()
+        mock.setAttribute(Qt.WA_DontShowOnScreen, True)
+        lay = QVBoxLayout(mock)
+        tabs = QTabBar()
+        for t in ("Projets", "Notes", "Git"):
+            tabs.addTab(t)
+        lay.addWidget(tabs)
+        row = QHBoxLayout()
+        row.addWidget(QPushButton("Bouton"))
+        box = QCheckBox("Option")
+        box.setChecked(True)
+        row.addWidget(box)
+        row.addWidget(QComboBox())
+        lay.addLayout(row)
+        edit = QLineEdit("Champ de saisie")
+        lay.addWidget(edit)
+        items = QListWidget()
+        items.addItems(["Premier projet", "Deuxième projet", "Troisième projet"])
+        items.setCurrentRow(1)
+        items.setMaximumHeight(90)
+        lay.addWidget(items)
+        mock.setStyleSheet(sheet)
+        mock.resize(340, 250)
+        mock.show()
+        pix = mock.grab()
+        mock.hide()
+        mock.deleteLater()
+        return pix
+
+    # ── tout installer ──
+    def _install_all(self) -> None:
+        found = self.search.index.search(self.search.text()) if self.search.text().strip() else list(self._docs)
+        todo = [self._catalog[d.key] for d in found if d.states & {"new", "update"} and d.key in self._catalog]
+        if not todo:
+            return
+        if QMessageBox.question(self, "Tout installer", f"Installer {len(todo)} objet(s) ? Chacun est vérifié (SHA-256, contenu) avant installation.") != QMessageBox.Yes:
+            return
+        bridge = self.dialog.bridge
+
+        def work() -> None:
+            done, failed = shops.install_many(todo, lambda n, total, i: bridge.done.emit(f"Installation {n}/{total} : {i}…"))
+            bridge.done.emit(f"{len(done)} installé(s)" + (f", {len(failed)} échec(s) : " + " ; ".join(failed[:3]) if failed else "."))
+
+        self.dialog.status.setText("Installation en cours…")
+        threading.Thread(target=work, daemon=True, name="voktora-shop-all").start()
 
     # ── actions ──
     def _run(self, work, ok: str) -> None:
@@ -265,6 +382,7 @@ class ShopDialog(QDialog):
         self.bridge.loaded.connect(self._loaded)
         self.bridge.done.connect(self._done)
         self.bridge.failed.connect(lambda m: self.status.setText(f"Erreur : {m}"))
+        self.bridge.previewed.connect(lambda kind, i, f: self.shop_tabs[kind].show_preview(i, f))
         v = QVBoxLayout(self)
         self.tabs = QTabWidget()
         self.status = QLabel("")
@@ -285,5 +403,7 @@ class ShopDialog(QDialog):
 
     def _done(self, message: str) -> None:
         self.status.setText(message)
+        if message.startswith("Installation "):
+            return
         for tab in self.shop_tabs.values():
             tab.populate(list(tab._catalog.values()))

@@ -271,6 +271,46 @@ def install(item: ShopItem, on_progress: Callable[[int, int], None] | None = Non
     return _write(item, staged)
 
 
+def preview_files(item: ShopItem, limit: int = 12) -> dict[str, bytes]:
+    """Quelques fichiers d'un objet pour l'aperçu, SANS l'installer : installé → lus sur disque ; sinon téléchargés,
+    vérifiés (SHA-256 + contenu) et mis en cache. Jamais d'exécution : ce ne sont que des SVG/QSS."""
+    _check_kind(item.kind)
+    wanted = [n for n in item.files if n.endswith((".svg", ".qss"))][:limit]
+    out: dict[str, bytes] = {}
+    local = item_dir(item.kind, item.id)
+    cache = shops_dir() / ".preview" / item.kind / item.id
+    for name in wanted:
+        for folder in (local, cache):
+            path = folder / name
+            if path.is_file():
+                out[name] = path.read_bytes()
+                break
+        else:
+            data = _fetch(f"{valid_base(item.base)}/shops/{item.kind}/items/{item.id}/{name}")
+            if hashlib.sha256(data).hexdigest() != item.files[name]:
+                raise ShopError(f"{name} : l'empreinte ne correspond pas à l'index.")
+            check_content(item.kind, name, data)
+            (cache / name).parent.mkdir(parents=True, exist_ok=True)
+            (cache / name).write_bytes(data)
+            out[name] = data
+    return out
+
+
+def install_many(items: list[ShopItem], on_progress: Callable[[int, int, str], None] | None = None) -> tuple[list[str], list[str]]:
+    """« Tout installer » : continue après une erreur. Renvoie (installés, échecs « id : raison »)."""
+    done: list[str] = []
+    failed: list[str] = []
+    for n, item in enumerate(items, 1):
+        try:
+            install(item)
+            done.append(item.id)
+        except Exception as exc:  # noqa: BLE001
+            failed.append(f"{item.id} : {exc}")
+        if on_progress:
+            on_progress(n, len(items), item.id)
+    return done, failed
+
+
 def _write(item: ShopItem, staged: dict[str, bytes]) -> Path:
     with _lock:
         target = item_dir(item.kind, item.id)

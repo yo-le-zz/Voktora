@@ -79,3 +79,12 @@ Les réglages des plugins peuvent contenir des secrets propres à ces plugins : 
 - **Simuler** : calcule le plan, l'affiche, ne modifie rien. **Historique** : `sync/state/history.json` (100 dernières).
 - **`.voktoraignore`** : motifs `fnmatch` (`*.tmp`, `big/`), `#` pour commenter.
 - **Catégories ajoutées** : `ai_providers` (sans clés d'API), `accounts` (identité GitHub/forges, jamais les jetons), `themes`, `profiles`.
+
+## 1.1.4 : config, chef, pause/stop
+
+- **Push config** (onglet « Groupe & config ») : paquet versionné (`sync/configpack.py`) avec empreinte de contenu = « révision de configuration ». Jamais le coffre ni les jetons ; les plugins ne sont pas copiés (le pair les réinstalle depuis le marketplace, hash vérifié).
+- **Réception** : aperçu des différences, sauvegarde, application atomique, retour arrière en cas d'erreur (`sync/confsync.py`).
+- **Blocage** : la sync des projets refuse de démarrer tant que la révision de configuration diffère de celle du groupe.
+- **Rôles** (`sync/roles.py`, `sync/groupsync.py`) : égalitaire ou dirigé ; chef unique par époque ; un suiveur demande au lieu de pousser.
+- **Pause/Reprise/Stop** (`sync/control.py`) : points de contrôle entre fichiers ; Stop annule proprement, sans fichier partiel.
+- Limites : testé en local (unités + service) ; pas de test sur deux machines réelles.

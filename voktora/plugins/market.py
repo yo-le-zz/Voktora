@@ -286,11 +286,29 @@ def _cache_path() -> Path:
     return runtime.plugins_dir().parent / "plugins_data" / "_market_cache.json"
 
 
+def _check_signature(base: str, data: bytes) -> None:
+    """Index signé (Ed25519) : exigé dès qu'une clé de confiance est configurée (voir signing.py)."""
+    import signing
+    from core import get_app_config
+    cfg = (get_app_config().get("marketplace") or {}) if isinstance(get_app_config().get("marketplace"), dict) else {}
+    keys = signing.trusted_keys(cfg.get("trusted_keys"))
+    if not keys:
+        return
+    try:
+        sig = _fetch(f"{base}/{signing.SIG_NAME}", limit=4096)
+        signing.verify(data, sig, keys)
+    except (MarketError, signing.SignatureError) as exc:
+        if cfg.get("allow_unsigned"):
+            return
+        raise MarketError(f"Index du marketplace non authentique : {exc}") from exc
+
+
 def fetch_index(base: str | None = None, use_cache_on_error: bool = True) -> tuple[list[MarketEntry], bool]:
     """Retourne (entrées, depuis_le_cache). Hors ligne, la dernière copie connue est utilisée."""
     base = (base or base_url()).rstrip("/")
     try:
         data = _fetch(f"{base}/{INDEX_NAME}", limit=MAX_INDEX_BYTES)
+        _check_signature(base, data)
         entries = parse_index(data)
     except MarketError:
         if not use_cache_on_error:

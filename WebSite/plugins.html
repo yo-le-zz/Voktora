@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plugins — Voktora</title>
+<meta name="description" content="Plugins officiels de Voktora (Python, JavaScript, Rust), thèmes, icônes, styles, et comment écrire un plugin.">
+
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="assets/favicon-192.png">
+<link rel="stylesheet" href="css/style.css">
+<script>try{var t=localStorage.getItem("voktora-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body>
+<a class="skip" href="#contenu">Aller au contenu</a>
+<header class="site-header"><div class="wrap">
+<a class="brand" href="index.html"><img src="assets/Voktora.png" alt="" width="28" height="28"><span>Voktora</span></a>
+<nav class="nav" aria-label="Navigation principale"><a href="index.html">Accueil</a><a href="download.html">Télécharger</a><a href="features.html">Fonctions</a><a href="plugins.html" aria-current="page">Plugins</a><a href="docs.html">Docs</a><a href="changelog.html">Changelog</a><a href="https://github.com/yo-le-zz/Voktora" rel="noopener">GitHub</a></nav>
+<button class="icon-btn" id="theme-toggle" type="button" aria-label="Changer de thème"></button>
+</div></header>
+<main id="contenu">
+<div class="wrap"><div class="page-head"><h1 class="reveal">Plugins</h1>
+<p class="lead reveal">Les plugins officiels du marketplace. La liste est lue dans <code>data/plugins.json</code>, généré depuis le catalogue du dépôt.</p></div>
+<section class="block"><div class="counts reveal">
+<div><b data-count="plugins">–</b><span>plugins officiels</span></div>
+<div><b data-count="themes">–</b><span>thèmes</span></div>
+<div><b data-count="icons">–</b><span>packs d'icônes</span></div>
+<div><b data-count="styles">–</b><span>styles</span></div></div></section>
+<section class="block" aria-labelledby="liste"><h2 id="liste">Plugins officiels</h2>
+<div class="filters"><label class="sr"><span class="muted small">Rechercher</span><br><input type="search" id="plugin-search" placeholder="Nom, description, étiquette" autocomplete="off"></label>
+<div><p class="sub">Langage</p><div class="chips" id="lang-chips" role="group" aria-label="Filtrer par langage"></div></div></div>
+<div><p class="sub">Étiquette</p><div class="chips" id="tag-chips" role="group" aria-label="Filtrer par étiquette" style="margin-bottom:14px"></div></div>
+<p class="status" id="plugin-status" role="status" aria-live="polite">Chargement…</p>
+<div class="cards" id="plugin-grid"></div>
+<noscript><p>JavaScript est nécessaire pour afficher la liste. Elle est consultable dans <a href="https://github.com/yo-le-zz/Voktora/blob/main/marketplace/index.json">marketplace/index.json</a> et <a href="https://github.com/yo-le-zz/Voktora/blob/main/doc/plugins/SHIPPED.md">doc/plugins/SHIPPED.md</a>.</p></noscript>
+<p id="plugin-fallback" class="small muted">Si la liste ne s'affiche pas : <a href="https://github.com/yo-le-zz/Voktora/blob/main/doc/plugins/SHIPPED.md">doc/plugins/SHIPPED.md</a>.</p>
+</section>
+<section class="block reveal"><h2>Thèmes, icônes et styles</h2>
+<p>Trois types d'objets s'installent depuis les boutiques d'apparence : thèmes (couleurs de la fenêtre), packs d'icônes SVG (noms MDI, couleur du thème) et styles Qt (<code>.qss</code>, sans <code>url()</code> ni <code>@import</code>). Les compteurs ci-dessus viennent du catalogue. <a href="https://github.com/yo-le-zz/Voktora/blob/main/doc/SHOPS.md">doc/SHOPS.md</a></p></section>
+<section class="block reveal"><h2>Écrire un plugin</h2>
+<p>Un plugin est un dossier avec un manifeste <code>plugin.json</code> et un point d'entrée en Python, JavaScript ou Rust. Les plugins Rust exigent <code>cargo</code>.</p>
+<div class="btns"><a class="btn primary" href="https://github.com/yo-le-zz/Voktora/blob/main/doc/plugins/GETTING_STARTED.md">Démarrer</a><a class="btn" href="https://github.com/yo-le-zz/Voktora/blob/main/doc/plugins/README.md">Documentation des plugins</a><a class="btn" href="https://github.com/yo-le-zz/Voktora/blob/main/marketplace/README.md">Proposer un plugin</a></div></section></div>
+</main>
+<footer class="site-footer"><div class="wrap">
+<span>Voktora 1.1.4 · par <a href="https://github.com/yo-le-zz">yolezz</a> · licence <a href="https://github.com/yo-le-zz/Voktora/blob/main/LICENSE">MIT</a></span>
+<nav aria-label="Liens du dépôt"><a href="https://github.com/yo-le-zz/Voktora">Code source</a><a href="https://github.com/yo-le-zz/Voktora/releases/latest">Releases</a><a href="https://github.com/yo-le-zz/Voktora/issues">Signaler un problème</a></nav>
+</div></footer>
+<script src="js/main.js" defer></script><script src="js/plugins.js" defer></script>
+</body>
+</html>

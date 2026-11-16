@@ -1,7 +1,7 @@
 {
   "id": "workflow-forge",
   "name": "Workflow Forge",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "author": "yolezz",
   "description": "Éditeur visuel d'automatisations : blocs, conditions, boucles, branches parallèles, déclencheurs (fichiers, Git, cron, HTTP local), test à blanc, journaux.",
   "api": 5,

@@ -192,6 +192,6 @@ un bac à sable.
 
 ## Plugins fournis (exemples à lire)
 
-`ui-tweaks` (styles), `quick-notes` (onglet + réglages), `focus-timer` (barre d'état), `todo-scanner`
+`quick-notes` (onglet + réglages), `focus-timer` (barre d'état), `todo-scanner`
 (analyse asynchrone), `git-insights` (`api.run`), `zen-mode` (barre d'outils, `main_window`),
-`project-counter` (menu clic droit, événements) — dans `marketplace/plugins/`.
+`zen-mode` (raccourci, menus) — dans `marketplace/plugins/`.

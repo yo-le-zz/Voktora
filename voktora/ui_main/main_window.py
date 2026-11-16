@@ -113,6 +113,8 @@ class MainWindow(QMainWindow):
         self._setup_shortcuts()
         self._refresh_all()
         self._init_sync()
+        import accessibility
+        QTimer.singleShot(0, lambda: accessibility.label_icon_only(self))
 
         # Plugins : chargés juste après l'affichage de la fenêtre (ne retardent pas le démarrage).
         self._ui_host = UIHost(self)
@@ -360,17 +362,21 @@ class MainWindow(QMainWindow):
 
     def _setup_shortcuts(self) -> None:
         # F5 — Actualiser
-        QShortcut(QKeySequence("F5"), self).activated.connect(self._refresh_all)
+        import shortcuts as _sc
+
+        def reg(ident, seq, slot):
+            sc = QShortcut(QKeySequence(seq), self)
+            sc.activated.connect(slot)
+            _sc.register(ident, sc)
+        reg("refresh", "F5", self._refresh_all)
         # Ctrl+N — Nouveau projet
-        QShortcut(QKeySequence("Ctrl+N"), self).activated.connect(self.act_create)
+        reg("new_project", "Ctrl+N", self.act_create)
         # Ctrl+I — Importer un dossier ou un ZIP
-        QShortcut(QKeySequence("Ctrl+I"), self).activated.connect(self.act_import)
+        reg("import", "Ctrl+I", self.act_import)
         # Ctrl+F — Focus recherche projets
-        QShortcut(QKeySequence("Ctrl+F"), self).activated.connect(
-            self._show_project_switcher
-        )
+        reg("switch_project", "Ctrl+F", self._show_project_switcher)
         # Escape — Effacer la recherche
-        QShortcut(QKeySequence("Escape"), self).activated.connect(self._clear_search)
+        reg("clear_search", "Escape", self._clear_search)
 
     def _clear_search(self) -> None:
         self._browser.get_search_widget().clear()
@@ -490,16 +496,23 @@ class MainWindow(QMainWindow):
         act_sync.triggered.connect(self.act_sync)
         menu_tools.addAction(act_sync)
         act_ai = QAction("💬 Assistant IA…", self)
-        act_ai.setShortcut("Ctrl+Shift+A")
+        import shortcuts as _sc
+        _sc.register("ai_chat", act_ai)
         act_ai.triggered.connect(self.act_ai_chat)
         menu_tools.addAction(act_ai)
         act_fleet = QAction("📊 Vue d'ensemble des projets…", self)
         act_fleet.triggered.connect(self.act_fleet)
         menu_tools.addAction(act_fleet)
         act_palette = QAction("⌨️ Palette de commandes…", self)
-        act_palette.setShortcut("Ctrl+K")
+        _sc.register("palette", act_palette)
         act_palette.triggered.connect(self.act_palette)
         menu_tools.addAction(act_palette)
+        act_commit = QAction("✍️ Suggestion de commit (IA)…", self)
+        act_commit.triggered.connect(self.act_ai_commit)
+        menu_tools.addAction(act_commit)
+        act_archives = QAction("🗄️ Archives de projets…", self)
+        act_archives.triggered.connect(lambda: self._open_tool("ArchivesDialog"))
+        menu_tools.addAction(act_archives)
         menu_tools.addSeparator()
         menu_tools.addAction(act_terminal)
         menu_tools.addAction(act_explorer)
@@ -513,7 +526,7 @@ class MainWindow(QMainWindow):
         act_theme = QAction("🎨 Thème...", self)
         act_theme.triggered.connect(self.act_theme_settings)
         act_plugins = QAction("🧩 Plugins et marketplace...", self)
-        act_plugins.setShortcut(QKeySequence("Ctrl+Shift+P"))
+        _sc.register("plugins", act_plugins)
         act_plugins.triggered.connect(self.act_plugins)
         act_diag    = QAction("🔍 Diagnostic...", self)
         act_diag.triggered.connect(self.act_run_diagnostic)
@@ -529,6 +542,11 @@ class MainWindow(QMainWindow):
         act_devc = QAction(icons.icon("mdi:console"), "Console développeur (plugins)...", self)
         act_devc.triggered.connect(self.act_dev_console)
         menu_prefs.addAction(act_devc)
+        for _label, _cls in (("🔔 Notifications…", "NotificationsDialog"), ("⌨️ Raccourcis clavier…", "ShortcutsDialog"),
+                             ("♿ Accessibilité…", "AccessibilityDialog")):
+            _act = QAction(_label, self)
+            _act.triggered.connect(lambda _=False, c=_cls: self._open_tool(c))
+            menu_prefs.addAction(_act)
         act_devm = QAction(icons.icon("mdi:monitor-eye"), "Moniteur développeur global (fenêtre séparée)...", self)
         act_devm.triggered.connect(self.act_dev_monitor)
         menu_prefs.addAction(act_devm)
@@ -1075,7 +1093,7 @@ class MainWindow(QMainWindow):
     def _get_cached_projects(self) -> list[dict]:
         """Retourne les projets depuis le cache ou les charge si nécessaire."""
         if not self._is_cache_valid() or self._projects_cache is None:
-            self._projects_cache = list(core.list_projects())
+            self._projects_cache = [e for e in core.list_projects() if not e.get("archived")]
             import time
             self._cache_timestamp = time.time()
         return self._projects_cache
@@ -1206,6 +1224,9 @@ class MainWindow(QMainWindow):
         self._sync_events.fired.connect(lambda name, data: plugins.runtime.fire_hook(name, data=data))
         get_service().event_hook = lambda name, data: self._sync_events.fired.emit(name, data)
         self._sync_bridge.changed.connect(self._on_sync_changed)
+        import notifications
+        self._sync_watcher = notifications.SyncWatcher()
+        self._sync_bridge.changed.connect(self._sync_watcher.feed)
         QTimer.singleShot(1500, get_service().start)
 
     def _on_sync_changed(self, snap: dict) -> None:
@@ -1300,6 +1321,17 @@ class MainWindow(QMainWindow):
     def act_dev_console(self) -> None:
         from ui_dialogs import DevConsoleDialog
         DevConsoleDialog(self).exec()
+
+    def _open_tool(self, class_name: str) -> None:
+        from ui_dialogs import tools_dialogs
+        getattr(tools_dialogs, class_name)(self).exec()
+        if class_name == "ArchivesDialog":
+            self._invalidate_cache()
+            self._refresh_all()
+
+    def act_ai_commit(self) -> None:
+        from ui_dialogs.tools_dialogs import AICommitDialog
+        AICommitDialog(self, self._sel_path).exec()
 
     def act_dev_monitor(self) -> None:
         from ui_dialogs.dev_monitor_dialog import DevMonitorDialog

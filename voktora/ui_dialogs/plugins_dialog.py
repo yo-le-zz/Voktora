@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QListWidgetItem,
     QMessageBox,
     QProgressBar,
@@ -336,11 +335,10 @@ class PluginsDialog(QDialog):
 
         top = QHBoxLayout()
         top.setSpacing(8)
-        self._search = QLineEdit()
-        self._search.setPlaceholderText("Rechercher un plugin (nom, auteur, mot-clé)…")
-        self._search.setClearButtonEnabled(True)
-        self._search.setMinimumHeight(34)
-        self._search.textChanged.connect(self._fill_market)
+        from .catalog_search_bar import CatalogSearchBar
+        self._search_bar = CatalogSearchBar("Rechercher un plugin (ex. git lang:python -docker is:new)")
+        self._search = self._search_bar.edit
+        self._search_bar.changed.connect(lambda _t: self._fill_market())
         btn_refresh = QPushButton("Actualiser")
         btn_refresh.setMinimumHeight(34)
         btn_refresh.clicked.connect(self._load_market)
@@ -348,7 +346,7 @@ class PluginsDialog(QDialog):
         btn_contrib.setMinimumHeight(34)
         btn_contrib.setToolTip("Ouvre le guide de contribution (fork → Pull Request) sur GitHub")
         btn_contrib.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(CONTRIBUTE_URL)))
-        top.addWidget(self._search, stretch=1)
+        top.addWidget(self._search_bar, stretch=1)
         top.addWidget(btn_refresh)
         top.addWidget(btn_contrib)
         v.addLayout(top)
@@ -371,6 +369,10 @@ class PluginsDialog(QDialog):
         self._btn_install.setEnabled(False)
         self._btn_install.clicked.connect(self._install_selected)
         row.addStretch()
+        self._btn_all = QPushButton("Tout installer")
+        self._btn_all.setToolTip("Installe tous les plugins affichés par le filtre actuel qui ne sont pas installés (avec leurs dépendances)")
+        self._btn_all.clicked.connect(self._install_all)
+        row.addWidget(self._btn_all)
         row.addWidget(self._btn_install)
         v.addLayout(row)
         return page
@@ -413,14 +415,31 @@ class PluginsDialog(QDialog):
 
     _STATE_LABEL: ClassVar[dict[str, str]] = {"new": "", "update": "Mise à jour", "installed": "Installé"}
 
+    def _market_docs(self):
+        import catalog_search as cs
+        docs = []
+        for order, entry in enumerate(self._market_entries):
+            state = market.status(entry)
+            states = {state, "community" if entry.community else "official"}
+            docs.append(cs.make_doc(entry.id, name=entry.name, description=entry.description, tags=entry.tags, author=entry.author,
+                                    lang=entry.lang, perms=entry.permissions, states=states, order=order, payload=entry))
+        return docs
+
     def _fill_market(self) -> None:
-        needle = self._search.text().strip().casefold()
+        import catalog_search as cs
         selected = self._selected_entry()
+        index = cs.Index(self._market_docs())
+        if getattr(self, "_indexed_count", None) != len(self._market_entries):
+            self._indexed_count = len(self._market_entries)
+            self._search_bar.set_index(index)
+        found = index.search(self._search.text()) if self._search.text().strip() else sorted(index.docs, key=lambda d: d.name_l)
+        self._visible_entries = [d.payload for d in found]
+        self._search_bar.show_count(len(found), len(index.docs))
+        todo = [e for e in self._visible_entries if market.status(e) == "new" and e.compatible]
+        self._btn_all.setText(f"Tout installer ({len(todo)})")
+        self._btn_all.setEnabled(bool(todo) and not self._installing)
         self._market_tree.clear()
-        for entry in self._market_entries:
-            haystack = " ".join([entry.id, entry.name, entry.author, entry.description, *entry.tags]).casefold()
-            if needle and needle not in haystack:
-                continue
+        for entry in self._visible_entries:
             state = market.status(entry)
             label = self._STATE_LABEL[state] if entry.compatible else "Incompatible"
             origin = "Communauté" if entry.community else "Officiel"
@@ -434,6 +453,63 @@ class PluginsDialog(QDialog):
         if self._market_tree.currentItem() is None and self._market_tree.topLevelItemCount():
             self._market_tree.setCurrentItem(self._market_tree.topLevelItem(0))
         self._on_market_selected(self._market_tree.currentItem(), None)
+
+    def _install_all(self) -> None:
+        if self._installing or (self._worker is not None and self._worker.isRunning()):
+            return
+        todo = [e for e in getattr(self, "_visible_entries", []) if market.status(e) == "new" and e.compatible]
+        if not todo:
+            return
+        permissions = sorted(set().union(*[set(e.permissions) for e in todo]))
+        community = [e.name for e in todo if e.community]
+        native = [e.name for e in todo if e.lang == "rust"]
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Tout installer")
+        box.setText(f"Installer {len(todo)} plugin(s) ?")
+        box.setInformativeText(
+            "Plugins : " + ", ".join(e.name for e in todo[:12]) + ("…" if len(todo) > 12 else "")
+            + f"\n\nPermissions demandées au total :\n{_permission_lines(permissions)}"
+            + (f"\n\nCOMMUNAUTÉ (non écrits par le mainteneur) : {', '.join(community)}" if community else "")
+            + (f"\n\nCODE NATIF (Rust, non restreint) : {', '.join(native)}" if native else "") + f"\n\n{WARNING}")
+        box.addButton("Tout installer", QMessageBox.AcceptRole)
+        cancel = box.addButton("Annuler", QMessageBox.RejectRole)
+        box.setDefaultButton(cancel)
+        box.exec()
+        if box.clickedButton() is cancel:
+            return
+        self._installing = True
+        self._btn_install.setEnabled(False)
+        self._btn_all.setEnabled(False)
+        self._busy(True, f"Installation de {len(todo)} plugin(s)…")
+        entries = list(self._market_entries)
+
+        def work(ctx):
+            failed = []
+            for n, entry in enumerate(todo, 1):
+                try:
+                    if market.status(entry) == "new":
+                        market.install_with_dependencies(entry, entries, on_progress=None)
+                except Exception as exc:  # noqa: BLE001
+                    failed.append(f"{entry.name} : {exc}")
+                ctx.progress(n, len(todo), entry.name)
+            return failed
+
+        self._worker = TaskWorker(work)
+        self._worker.progress.connect(self._on_install_progress)
+        self._worker.succeeded.connect(self._on_all_installed)
+        self._worker.failed.connect(self._on_install_failed)
+        self._worker.start()
+
+    def _on_all_installed(self, failed) -> None:
+        self._installing = False
+        self._busy(False, "Installation terminée." if not failed else f"{len(failed)} échec(s) : " + " ; ".join(failed[:3]))
+        try:
+            import plugins
+            plugins.load_all()
+        except Exception:  # noqa: BLE001
+            pass
+        self._fill_market()
 
     def _refresh_market_states(self) -> None:
         if self._market_entries:

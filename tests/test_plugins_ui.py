@@ -82,9 +82,8 @@ class TestRealPlugins:
         menus = _menu_titles(window)
         assert "Plugins" in menus and menus.index("Plugins") < len(menus) - 1     # avant « Aide »
         plugins_menu = next(a.menu() for a in window.menuBar().actions() if a.text() == "Plugins")
-        assert {a.text() for a in plugins_menu.actions()} == {"UI Tweaks", "Focus Timer", "Zen Mode", "Project Counter"}
+        assert {a.text() for a in plugins_menu.actions()} == {"Focus Timer", "Zen Mode"}
         assert window._ui_host._toolbar is not None and window._ui_host._toolbar.isVisibleTo(window)
-        assert window._ui_host.context_actions(["/x"])[0][0] == "Copier le chemin"
         assert window.statusBar().children().__len__() > base_status
 
         for plugin_id in ALL_IDS:
@@ -93,7 +92,7 @@ class TestRealPlugins:
         assert tabs.count() == base_tabs
         assert _menu_titles(window) == base_menus
         assert not window._ui_host._toolbar.actions() and not window._ui_host._toolbar.isVisibleTo(window)
-        assert window._ui_host.context_actions(["/x"]) == [] and plugins.extra_themes() == {}
+        assert plugins.extra_themes() == {}
 
     def test_tabs_follow_the_selected_project(self, window, tmp_path):
         _install_all()
@@ -119,16 +118,9 @@ class TestRealPlugins:
         window._show_welcome()
         assert "Sélectionnez" in notes._title.text()
 
-    def test_counter_and_zen_mode_and_style(self, window, tmp_path):
+    def test_zen_mode_toggles_sidebar_and_menu(self, window, tmp_path):
         _install_all()
         plugins.load_all()
-        core.create_project(str(tmp_path), "One")
-        core.create_project(str(tmp_path), "Two")
-        window._invalidate_cache()
-        window._refresh_all()
-        counter = [c for c in window.statusBar().findChildren(type(window._status_lbl)) if "projet" in c.text()]
-        assert counter and counter[0].text() == "2 projets"
-
         sidebar = window._main_splitter.widget(0)
         window.show()
         zen_action = next(a for a in window._ui_host._toolbar.actions() if a.text() == "Zen")
@@ -136,21 +128,6 @@ class TestRealPlugins:
         assert not sidebar.isVisible() and not window.menuBar().isVisible()
         zen_action.trigger()
         assert sidebar.isVisible() and window.menuBar().isVisible()
-
-        plugins.set_enabled("ui-tweaks", False)
-        assert "font-size: 14px" not in plugins.extra_stylesheet()
-        plugins.PluginSettings("ui-tweaks").set("enabled", ["bigfont"])
-        plugins.set_enabled("ui-tweaks", True)
-        assert "font-size: 14px" in plugins.extra_stylesheet()
-        assert "font-size: 14px" in QApplication.instance().styleSheet()
-
-    def test_context_action_uses_clicked_project(self, window, tmp_path):
-        _install_all()
-        plugins.load_all()
-        project = core.create_project(str(tmp_path), "Ctx")
-        (_label, _icon, run) = window._ui_host.context_actions([str(project)])[0]
-        run()
-        assert QApplication.clipboard().text() == str(project)
 
     def test_crashing_ui_plugin_does_not_break_window(self, window):
         folder = plugins.plugins_dir() / "crashy"
@@ -207,7 +184,7 @@ class TestPluginsDialog:
         dlg._tabs.setCurrentIndex(1)
         assert _wait_for(lambda: dlg._market_tree.topLevelItemCount() == len(ALL_ENTRIES))
         dlg._search.setText("pomodoro")
-        assert dlg._market_tree.topLevelItemCount() == 1
+        assert _wait_for(lambda: dlg._market_tree.topLevelItemCount() == 1)       # la recherche est regroupée (120 ms)
         assert dlg._btn_install.text() == "Installer" and dlg._btn_install.isEnabled()
         assert "Permissions" in dlg._market_details.toPlainText()
 

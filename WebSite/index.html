@@ -1,121 +1,110 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Voktora</title>
-  <meta name="description" content="Voktora : gestionnaire de projets de développement pour le bureau. Vault chiffré, snapshots, hooks, plugins. Libre (MIT)."/>
-  <meta property="og:title" content="Voktora"/>
-  <meta property="og:description" content="Gestionnaire de projets de développement pour le bureau. Libre (MIT)."/>
-  <meta property="og:image" content="https://voktora.pages.dev/assets/Voktora.png"/>
-  <link rel="icon" type="image/png" href="assets/Voktora.png"/>
-  <style>
-    :root { --bg:#fff; --fg:#1c1c1e; --muted:#6b6b72; --line:#e4e4e7; --code:#f5f5f7; --link:#1c1c1e; }
-    @media (prefers-color-scheme: dark) {
-      :root { --bg:#161618; --fg:#ececee; --muted:#9a9aa3; --line:#2c2c30; --code:#1f1f23; --link:#ececee; }
-    }
-    * { box-sizing: border-box; }
-    html { -webkit-text-size-adjust: 100%; }
-    body { margin:0; background:var(--bg); color:var(--fg); line-height:1.6;
-           font:16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-    main { max-width: 640px; margin: 0 auto; padding: 72px 20px 48px; }
-    h1 { font-size: 1.5rem; font-weight: 600; margin: 0 0 4px; letter-spacing: -.01em; }
-    h2 { font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 48px 0 12px; }
-    p { margin: 0 0 12px; }
-    .muted { color: var(--muted); }
-    a { color: var(--link); text-decoration-color: var(--line); text-underline-offset: 3px; }
-    a:hover { text-decoration-color: currentColor; }
-    nav { display:flex; gap:16px; margin-top: 16px; font-size:.95rem; }
-    .install { border:1px solid var(--line); border-radius: 8px; margin-bottom: 8px; }
-    .install summary { cursor:pointer; padding: 10px 14px; list-style: none; display:flex; justify-content:space-between; }
-    .install summary::-webkit-details-marker { display:none; }
-    .install summary::after { content:"+"; color:var(--muted); }
-    .install[open] summary::after { content:"–"; }
-    .install[open] summary { border-bottom:1px solid var(--line); }
-    pre { margin:0; padding: 12px 14px; background: var(--code); overflow-x:auto; font: 13px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, monospace; border-radius: 0 0 8px 8px; position:relative; }
-    button.copy { position:absolute; top:8px; right:8px; font:12px system-ui; color:var(--muted); background:transparent; border:1px solid var(--line); border-radius:6px; padding:2px 8px; cursor:pointer; }
-    button.copy:hover { color:var(--fg); }
-    ul { padding-left: 18px; margin: 0 0 12px; }
-    li { margin: 2px 0; }
-    footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); font-size:.875rem; color: var(--muted); }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voktora — gestionnaire de projets de développement</title>
+<meta name="description" content="Voktora : gestionnaire de projets de développement pour Linux et Windows. Dépôts Git, profils, hooks, coffre chiffré, snapshots, plugins. Libre (MIT).">
+
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="assets/favicon-192.png">
+<link rel="stylesheet" href="css/style.css">
+<script>try{var t=localStorage.getItem("voktora-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
-<main>
-  <h1>Voktora <span class="muted" style="font-weight:400">1.1.3</span></h1>
-  <p class="muted">Gestionnaire de projets de développement pour le bureau (Linux, Windows).</p>
-  <nav>
-    <a href="https://github.com/yo-le-zz/Voktora/releases/latest">Télécharger</a>
-    <a href="https://github.com/yo-le-zz/Voktora/tree/main/doc">Documentation</a>
-    <a href="https://github.com/yo-le-zz/Voktora">Code source</a>
-  </nav>
+<a class="skip" href="#contenu">Aller au contenu</a>
+<header class="site-header"><div class="wrap">
+<a class="brand" href="index.html"><img src="assets/Voktora.png" alt="" width="28" height="28"><span>Voktora</span></a>
+<nav class="nav" aria-label="Navigation principale"><a href="index.html" aria-current="page">Accueil</a><a href="download.html">Télécharger</a><a href="features.html">Fonctions</a><a href="plugins.html">Plugins</a><a href="docs.html">Docs</a><a href="changelog.html">Changelog</a><a href="https://github.com/yo-le-zz/Voktora" rel="noopener">GitHub</a></nav>
+<button class="icon-btn" id="theme-toggle" type="button" aria-label="Changer de thème"></button>
+</div></header>
+<main id="contenu">
+<div class="wrap">
+<section class="hero">
+<span class="badge reveal">v1.1.4</span>
+<h1 class="reveal">Vos projets de développement, au même endroit.</h1>
+<p class="lead reveal">Gestionnaire de projets avec interface Qt : dépôts Git, profils de lancement, hooks, coffre de secrets, snapshots. Local, sans compte, libre (MIT).</p>
+<div class="btns reveal"><a class="btn primary" href="download.html">Télécharger</a><a class="btn" href="https://github.com/yo-le-zz/Voktora">Code source</a></div>
+</section>
 
-  <h2>À propos</h2>
-  <p>Voktora range vos projets au même endroit : dossiers et dépôts Git, profils d'exécution, hooks, snapshots, vault chiffré
-     pour les secrets. Une application Qt locale, sans compte ni serveur. Les plugins (Python, JavaScript ou Rust) et les
-     boutiques de thèmes, d'icônes et de styles permettent de l'adapter.</p>
+<section class="block reveal" aria-labelledby="inst">
+<h2 id="inst">Installer</h2>
+<p class="hint" id="os-detected" aria-live="polite">Choisissez votre système.</p>
+<div data-tabs="os">
+<div class="tabs" role="tablist" aria-label="Système d'exploitation"><button class="tab" role="tab" id="o-linux" data-os="linux" aria-controls="po-linux" aria-selected="true" tabindex="0">Linux</button><button class="tab" role="tab" id="o-windows" data-os="windows" aria-controls="po-windows" aria-selected="false" tabindex="-1">Windows</button><button class="tab" role="tab" id="o-sources" data-os="sources" aria-controls="po-sources" aria-selected="false" tabindex="-1">Sources</button></div>
 
-  <h2>Installer</h2>
-  <details class="install" open>
-    <summary>Debian, Ubuntu, Mint</summary>
-<pre>wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora_1.1.3_amd64.deb
-sudo apt install ./voktora_1.1.3_amd64.deb</pre>
-  </details>
-  <details class="install">
-    <summary>Fedora, RHEL, openSUSE</summary>
-<pre>wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora-1.1.3-1.x86_64.rpm
-sudo dnf install ./voktora-1.1.3-1.x86_64.rpm</pre>
-  </details>
-  <details class="install">
-    <summary>Arch, Manjaro, EndeavourOS</summary>
-<pre>wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora-1.1.3-1-x86_64.pkg.tar.zst
-sudo pacman -U ./voktora-1.1.3-1-x86_64.pkg.tar.zst</pre>
-  </details>
-  <details class="install">
-    <summary>Windows 10 / 11</summary>
-<pre>Téléchargez Voktora_1.1.3_x64.msi dans les releases puis double-cliquez dessus.
-Adresse : https://github.com/yo-le-zz/Voktora/releases/latest/download/Voktora_1.1.3_x64.msi</pre>
-  </details>
-  <details class="install">
-    <summary>Depuis les sources</summary>
-<pre>git clone https://github.com/yo-le-zz/Voktora
+<div class="panel" role="tabpanel" id="po-linux" aria-labelledby="o-linux">
+<h3 class="panel-title">Linux</h3>
+<div data-tabs="distro"><div class="tabs sub-tabs" role="tablist" aria-label="Distribution"><button class="tab" role="tab" id="t-deb" aria-controls="p-deb" aria-selected="true" tabindex="0">Debian, Ubuntu, Mint</button><button class="tab" role="tab" id="t-rpm" aria-controls="p-rpm" aria-selected="false" tabindex="-1">Fedora, openSUSE</button><button class="tab" role="tab" id="t-arch" aria-controls="p-arch" aria-selected="false" tabindex="-1">Arch, Manjaro, EndeavourOS</button></div>
+<div class="panel" role="tabpanel" id="p-deb" aria-labelledby="t-deb">
+<h4 class="panel-title">Debian, Ubuntu, Mint</h4><div class="term" data-type><div class="term-bar"><i></i><i></i><i></i><span class="t">deb — sh</span></div>
+<pre tabindex="0"><code>wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora_1.1.4_amd64.deb
+sudo apt install ./voktora_1.1.4_amd64.deb
+voktora<span class="cursor" aria-hidden="true"></span></code></pre></div><p class="hint">Le paquet résout aussi les dépendances.</p></div>
+<div class="panel" role="tabpanel" id="p-rpm" aria-labelledby="t-rpm" hidden>
+<h4 class="panel-title">Fedora, openSUSE</h4><div class="term"><div class="term-bar"><i></i><i></i><i></i><span class="t">rpm — sh</span></div>
+<pre tabindex="0"><code>wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora-1.1.4-1.x86_64.rpm
+sudo dnf install ./voktora-1.1.4-1.x86_64.rpm        <span class="c"># Fedora, RHEL</span>
+sudo zypper install ./voktora-1.1.4-1.x86_64.rpm     <span class="c"># openSUSE</span>
+voktora<span class="cursor" aria-hidden="true"></span></code></pre></div><p class="hint">Les bibliothèques Qt nécessaires sont résolues automatiquement.</p></div>
+<div class="panel" role="tabpanel" id="p-arch" aria-labelledby="t-arch" hidden>
+<h4 class="panel-title">Arch, Manjaro, EndeavourOS</h4><div class="term"><div class="term-bar"><i></i><i></i><i></i><span class="t">arch — sh</span></div>
+<pre tabindex="0"><code>wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora-1.1.4-1-x86_64.pkg.tar.zst
+sudo pacman -U ./voktora-1.1.4-1-x86_64.pkg.tar.zst
+voktora<span class="cursor" aria-hidden="true"></span></code></pre></div><p class="hint">Un PKGBUILD de référence (voktora-bin) est fourni dans le dépôt.</p></div>
+</div>
+</div>
+
+<div class="panel" role="tabpanel" id="po-windows" aria-labelledby="o-windows" hidden>
+<h3 class="panel-title">Windows 10 / 11 (x64)</h3>
+<div class="term"><div class="term-bar"><i></i><i></i><i></i><span class="t">windows — msi</span></div>
+<pre tabindex="0"><code data-copy="https://github.com/yo-le-zz/Voktora/releases/latest/download/Voktora_1.1.4_x64.msi"><span class="c"># Télécharger le .msi, puis double-cliquer dessus</span>
+https://github.com/yo-le-zz/Voktora/releases/latest/download/Voktora_1.1.4_x64.msi<span class="cursor" aria-hidden="true"></span></code></pre></div>
+<p class="hint">Le .msi n'est pas signé : Windows peut afficher un avertissement SmartScreen. N'utilisez que les releases GitHub officielles. <a href="https://github.com/yo-le-zz/Voktora/releases/latest/download/Voktora_1.1.4_x64.msi">Télécharger le .msi</a>.</p>
+</div>
+
+<div class="panel" role="tabpanel" id="po-sources" aria-labelledby="o-sources" hidden>
+<h3 class="panel-title">Depuis les sources</h3>
+<div class="term"><div class="term-bar"><i></i><i></i><i></i><span class="t">sources — sh</span></div>
+<pre tabindex="0"><code>git clone https://github.com/yo-le-zz/Voktora.git
 cd Voktora
+curl -LsSf https://astral.sh/uv/install.sh | sh   <span class="c"># uv, une seule fois</span>
 uv sync
-uv run python voktora/main.py</pre>
-  </details>
-  <p class="muted" style="font-size:.9rem; margin-top:12px">Lancement : <code>voktora</code>. Chaque release publie un fichier
-     <code>SHA256SUMS</code>. Le .msi n'est pas signé : Windows peut afficher un avertissement.</p>
+uv run python voktora/main.py<span class="cursor" aria-hidden="true"></span></code></pre></div>
+<p class="hint">Aussi pour macOS : il n'existe pas de paquet, seulement l'installation depuis les sources. Python 3.13 et <code>uv</code> requis.</p>
+</div>
+</div>
+<noscript><p class="hint">Sans JavaScript, toutes les méthodes sont listées ci-dessus. Détails sur la page <a href="download.html">Télécharger</a>.</p></noscript>
+</section>
 
-  <h2>Fonctions</h2>
-  <ul>
-    <li>Projets, groupes, recherche, statuts et catégories</li>
-    <li>Git intégré, clonage de dépôts, GitHub</li>
-    <li>Vault chiffré et chiffrement de fichiers</li>
-    <li>Snapshots, synchronisation entre deux ordinateurs</li>
-    <li>Plugins officiels : Code Inspector, DevOps Center, API Studio, Project Knowledge, Workflow Forge, et d'autres</li>
-    <li>Mise à jour assistée : téléchargement vérifié (SHA-256), installation en arrière-plan</li>
-  </ul>
+<section class="block reveal" aria-labelledby="autres">
+<h2 id="autres">Autres méthodes</h2>
+<ul class="plain">
+<li><a href="https://github.com/yo-le-zz/Voktora/releases/latest">Releases GitHub</a><span class="muted">tous les fichiers (.deb, .rpm, .pkg.tar.zst, .msi) et <code>SHA256SUMS</code></span></li>
+<li><a href="download.html#verifier">Vérifier le téléchargement</a><span class="muted"><code>sha256sum -c SHA256SUMS --ignore-missing</code></span></li>
+<li><a href="https://github.com/yo-le-zz/Voktora/tree/main/Installers/Arch%20installer">PKGBUILD Arch</a><span class="muted">référence <code>voktora-bin</code></span></li>
+<li><a href="https://github.com/yo-le-zz/Voktora/blob/main/doc/BUILD.md">Compiler soi-même</a><span class="muted">Nuitka, paquets .deb / .rpm / .msi</span></li>
+</ul>
+</section>
 
-  <h2>Développeurs</h2>
-  <p>Écrire un plugin : <a href="https://github.com/yo-le-zz/Voktora/tree/main/doc/plugins">doc/plugins</a>.
-     Thèmes, icônes et styles : <a href="https://github.com/yo-le-zz/Voktora/blob/main/doc/SHOPS.md">doc/SHOPS.md</a>.</p>
+<section class="block reveal" aria-labelledby="premier">
+<h2 id="premier">Premier lancement</h2>
+<p>Voktora demande un <strong>mot de passe maître</strong> : il n'est jamais stocké (seul un vérificateur PBKDF2 est conservé) et protège le coffre. Vous pouvez le passer, mais ce n'est pas conseillé. Les données sont dans <code>~/.voktora/</code> ; elles ne sont pas supprimées à la désinstallation.</p>
+</section>
 
-  <footer>
-    <a href="https://github.com/yo-le-zz">yolezz</a> · Licence <a href="https://github.com/yo-le-zz/Voktora/blob/main/LICENSE">MIT</a>
-  </footer>
+<section class="block reveal" aria-labelledby="fonctions">
+<h2 id="fonctions">Fonctions</h2>
+<ul class="plain"><li><span>Projets</span><span class="muted">Dépôts Git classés par catégories, vue liste ou grille, import et clonage.</span></li><li><span>Profils et hooks</span><span class="muted">Commande, variables et scripts par projet ; hooks sur 7 événements Git.</span></li><li><span>Coffre</span><span class="muted">Tokens, clés SSH et clés d'API chiffrés, mot de passe maître jamais stocké.</span></li><li><span>Snapshots</span><span class="muted">Capture, comparaison et restauration de l'état d'un projet.</span></li><li><span>Synchronisation</span><span class="muted">Entre deux PC du même réseau, chiffrée, avec reprise automatique.</span></li><li><span>Plugins</span><span class="muted">Python, JavaScript ou Rust, installables depuis le marketplace.</span></li><li><span>Apparence</span><span class="muted">Thèmes, packs d'icônes et styles installables.</span></li><li><span>Mise à jour</span><span class="muted">Téléchargement vérifié par SHA-256, installation en arrière-plan.</span></li></ul>
+<p class="small" style="margin-top:14px"><a href="features.html">Fonctions en détail</a> · <a href="plugins.html">Plugins</a> · <a href="docs.html">Documentation</a> · <a href="changelog.html">Changelog</a></p>
+</section>
+</div>
 </main>
-<script>
-  document.querySelectorAll("details pre").forEach(function (pre) {
-    var b = document.createElement("button");
-    b.className = "copy"; b.textContent = "Copier";
-    b.addEventListener("click", function () {
-      var text = pre.firstChild.textContent;
-      (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () {
-        b.textContent = "Copié"; setTimeout(function () { b.textContent = "Copier"; }, 1500);
-      }).catch(function () {});
-    });
-    pre.appendChild(b);
-  });
-</script>
+<footer class="site-footer"><div class="wrap">
+<span>Voktora 1.1.4 · par <a href="https://github.com/yo-le-zz">yolezz</a> · licence <a href="https://github.com/yo-le-zz/Voktora/blob/main/LICENSE">MIT</a></span>
+<nav aria-label="Liens du dépôt"><a href="https://github.com/yo-le-zz/Voktora">Code source</a><a href="https://github.com/yo-le-zz/Voktora/releases/latest">Releases</a><a href="https://github.com/yo-le-zz/Voktora/issues">Signaler un problème</a></nav>
+</div></footer>
+<script src="js/main.js" defer></script>
 </body>
 </html>

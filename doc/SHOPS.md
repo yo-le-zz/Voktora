@@ -49,3 +49,8 @@ Les icônes déjà affichées changent à la réouverture des fenêtres. Les obj
 45 thèmes (dont des clairs), 8 packs d'icônes (`trait-fin`, `trait-epais`, `carre`, `duo-ton`, `plein`, `accent`, `neon`, `pointille`, ~185 icônes aux noms MDI,
 `currentColor` pris en charge : l'icône prend la couleur du thème) et 10 styles QSS (sans `url()` ni `@import`).
 Régénération : `tools/gen_shop_themes.py`, `gen_shop_icons.py`, `gen_shop_styles.py`, puis `tools/shop_tool.py build-index`.
+
+## Recherche, aperçus, « Tout installer » (1.1.4)
+
+Chaque boutique a la barre de recherche intelligente (`voktora/catalog_search.py`) : `tag:sombre`, `-bleu`, `is:new`, `sort:recent`… Les aperçus d'icônes et de styles fonctionnent
+sans installer l'objet. « Tout installer » applique le filtre en cours ; chaque fichier est vérifié (SHA-256 + contenu) et un échec n'arrête pas les autres.

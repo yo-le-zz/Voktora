@@ -276,23 +276,23 @@ class TestMarket:
     def test_fetch_install_load_update_uninstall(self, pdir, served):
         entries, cached = market.fetch_index()
         assert not cached
-        entry = next(e for e in entries if e.id == "project-counter")
+        entry = next(e for e in entries if e.id == "focus-timer")
         assert market.status(entry) == "new"
         progress: list[tuple] = []
         folder = market.install(entry, on_progress=lambda d, t, n: progress.append((d, t, n)))
         assert (folder / "main.py").is_file() and (folder / ".source.json").is_file()
-        assert progress[-1][0] == progress[-1][1] == 3          # main.py, summary.py + plugin.json
+        assert progress[-1][0] == progress[-1][1] == len(entry.files)
         plugins.load_all()
-        assert plugins.find("project-counter").origin == "market" and market.status(entry) == "installed"
+        assert plugins.find("focus-timer").origin == "market" and market.status(entry) == "installed"
         # version supérieure dans l'index -> « update »
         newer = market.MarketEntry(**{**entry.__dict__, "version": "9.0.0"})
         assert market.status(newer) == "update"
-        assert market.uninstall("project-counter", purge_data=True)
-        assert not (pdir / "project-counter").exists() and market.installed_version("project-counter") is None
+        assert market.uninstall("focus-timer", purge_data=True)
+        assert not (pdir / "focus-timer").exists() and market.installed_version("focus-timer") is None
 
     def test_tampered_file_is_rejected_and_nothing_installed(self, pdir, monkeypatch, served):
         entries, _ = market.fetch_index()
-        entry = next(e for e in entries if e.id == "ui-tweaks")
+        entry = next(e for e in entries if e.id == "zen-mode")
         real = market._fetch
 
         def tampered(url, timeout=0, limit=0):
@@ -302,21 +302,21 @@ class TestMarket:
         monkeypatch.setattr(market, "_fetch", tampered)
         with pytest.raises(market.MarketError, match="Empreinte incorrecte"):
             market.install(entry)
-        assert not (pdir / "ui-tweaks").exists()
+        assert not (pdir / "zen-mode").exists()
         assert not any(p.name.startswith(".installing") for p in pdir.iterdir())
 
     def test_failed_update_keeps_previous_version(self, pdir, monkeypatch, served):
         entries, _ = market.fetch_index()
-        entry = next(e for e in entries if e.id == "ui-tweaks")
+        entry = next(e for e in entries if e.id == "zen-mode")
         market.install(entry)
         monkeypatch.setattr(market, "_fetch", lambda *a, **k: (_ for _ in ()).throw(market.MarketError("offline")))
         with pytest.raises(market.MarketError):
             market.install(entry)
-        assert (pdir / "ui-tweaks" / "main.py").is_file()
+        assert (pdir / "zen-mode" / "main.py").is_file()
 
     def test_manifest_must_match_index(self, pdir, served):
         entries, _ = market.fetch_index()
-        entry = next(e for e in entries if e.id == "ui-tweaks")
+        entry = next(e for e in entries if e.id == "zen-mode")
         lying = market.MarketEntry(**{**entry.__dict__, "permissions": ["ui", "shell"]})
         with pytest.raises(market.MarketError, match="ne correspond pas"):
             market.install(lying)

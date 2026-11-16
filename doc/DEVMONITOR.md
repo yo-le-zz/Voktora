@@ -42,3 +42,11 @@ et la trace native).
 - Un plantage avant l'activation (très tôt au démarrage) n'est pas capté.
 - Un blocage (`freeze`) est détecté par une minuterie du fil principal : seuil de 2 s.
 - Sous Windows, le lancement détaché et le test de présence du processus n'ont pas été testés.
+
+## Sécurité du canal (1.1.4)
+
+Voktora crée un secret aléatoire de 32 octets et le transmet au moniteur par un tube anonyme (entrée standard) : ni argument, ni variable d'environnement, ni fichier.
+Chaque ligne du journal est chiffrée en AES-256-GCM, avec un numéro et l'étiquette de la ligne précédente comme données authentifiées : une ligne modifiée,
+supprimée, déplacée ou forgée est rejetée (le moniteur affiche « Ligne rejetée »). Les commandes de changement de mode sont chiffrées, authentifiées et munies
+d'un compteur croissant (anti-rejeu). Dossier en 0700, fichiers en 0600. Limite : un processus du même utilisateur pouvant lire la mémoire de Voktora (ptrace) peut obtenir le secret ;
+un moniteur lancé « à la main » sans ce secret refuse de démarrer.

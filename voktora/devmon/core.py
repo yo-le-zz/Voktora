@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import base64
+import contextlib
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -53,6 +57,8 @@ def base_dir() -> Path:
 def new_session(directory: Path | None = None) -> Path:
     directory = directory or base_dir()
     directory.mkdir(parents=True, exist_ok=True)
+    with contextlib.suppress(OSError):
+        directory.chmod(0o700)                      # réservé à l'utilisateur
     prune(directory)
     return directory / f"session-{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}.jsonl"
 
@@ -93,16 +99,88 @@ def valid_level(level, default: str = "normal") -> str:
     return level if level in RANK else default
 
 
+class Codec:
+    """Canal authentifié et CHIFFRÉ entre Voktora et le moniteur : AES-256-GCM, clé dérivée d'un secret partagé (32 octets
+    aléatoires, créé au lancement et transmis au moniteur par un tube anonyme — jamais par un fichier, un argument ni une variable
+    d'environnement). Chaque ligne est liée à la précédente (étiquette GCM chaînée + numéro) : une ligne modifiée, supprimée,
+    déplacée, rejouée ou forgée sans le secret est rejetée. Limite : un processus du MÊME utilisateur capable de lire la mémoire
+    de Voktora (ptrace) peut obtenir le secret."""
+
+    def __init__(self, secret: bytes):
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        if len(secret) < 16:
+            raise ValueError("secret trop court")
+        self._lines = AESGCM(hmac.new(secret, b"voktora-devmon-lines", hashlib.sha256).digest())
+        self._ctl = AESGCM(hmac.new(secret, b"voktora-devmon-control", hashlib.sha256).digest())
+        self._prev = b"\0" * 16
+        self._seq = 0                                 # côté lecture : prochain numéro attendu
+
+    @staticmethod
+    def _nonce(seq: int) -> bytes:
+        return b"\0\0\0\0" + seq.to_bytes(8, "big")
+
+    def encode(self, event: dict, seq: int) -> str:
+        ct = self._lines.encrypt(self._nonce(seq), json.dumps(event, ensure_ascii=False, default=str).encode(),
+                                 self._prev + seq.to_bytes(8, "big"))
+        self._prev = ct[-16:]
+        return base64.b64encode(ct).decode()
+
+    def decode(self, line: str) -> dict | None:
+        """Événement authentique, ou None (ligne rejetée : le chaînage reste inchangé)."""
+        try:
+            ct = base64.b64decode(line.strip(), validate=True)
+            plain = self._lines.decrypt(self._nonce(self._seq + 1), ct, self._prev + (self._seq + 1).to_bytes(8, "big"))
+            event = json.loads(plain.decode())
+        except Exception:  # noqa: BLE001 — toute anomalie = rejet
+            return None
+        self._seq += 1
+        self._prev = ct[-16:]
+        return event if isinstance(event, dict) else None
+
+    def seal_control(self, message: dict) -> str:
+        nonce = os.urandom(12)
+        return base64.b64encode(nonce + self._ctl.encrypt(nonce, json.dumps(message).encode(), b"control")).decode()
+
+    def open_control(self, blob: str) -> dict | None:
+        try:
+            raw = base64.b64decode(blob.strip(), validate=True)
+            data = json.loads(self._ctl.decrypt(raw[:12], raw[12:], b"control").decode())
+            return data if isinstance(data, dict) else None
+        except Exception:  # noqa: BLE001
+            return None
+
+
+def write_control(session: Path, codec: Codec, mode: str, counter: int) -> None:
+    """Commande « changer de mode » envoyée par le moniteur ; le compteur croissant empêche le rejeu d'une ancienne commande."""
+    path = control_file(session)
+    tmp = path.with_suffix(".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(codec.seal_control({"mode": mode, "ctr": counter}))
+    os.replace(tmp, path)
+
+
+def read_control(session: Path, codec: Codec, last_counter: int) -> tuple[str, int] | None:
+    try:
+        data = codec.open_control(control_file(session).read_text(encoding="utf-8"))
+    except OSError:
+        return None
+    if not data or not isinstance(data.get("ctr"), int) or data["ctr"] <= last_counter or data.get("mode") not in RANK:
+        return None
+    return data["mode"], data["ctr"]
+
+
 class Writer:
     """Ajoute des lignes JSON à un fichier : sûr entre threads, vidé à chaque ligne (un plantage ne perd rien), plafonné."""
 
-    def __init__(self, path: Path, max_bytes: int = MAX_BYTES):
-        self.path, self.max_bytes = Path(path), max_bytes
+    def __init__(self, path: Path, max_bytes: int = MAX_BYTES, codec: Codec | None = None):
+        self.path, self.max_bytes, self.codec = Path(path), max_bytes, codec
         self._lock = threading.Lock()
         self._size = 0
         self._seq = 0
         self._full = False
-        self._fh = open(self.path, "a", encoding="utf-8", buffering=1)  # noqa: SIM115 — fermé par close()
+        fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)       # lisible par l'utilisateur seul
+        self._fh = os.fdopen(fd, "a", encoding="utf-8", buffering=1)
 
     def write(self, event: dict) -> None:
         with self._lock:
@@ -110,16 +188,21 @@ class Writer:
                 return
             self._seq += 1
             event = {"n": self._seq, "t": round(time.time(), 3), **event}
-            line = json.dumps(event, ensure_ascii=False, default=str) + "\n"
+            line = self._line(event)
             if self._size + len(line) > self.max_bytes:
                 self._full = True
-                line = json.dumps({"n": self._seq, "t": round(time.time(), 3), "sev": "warning", "cat": "app", "src": "devmon",
-                                   "msg": "Journal plein : les événements suivants ne sont plus enregistrés."}) + "\n"
+                line = self._line({"n": self._seq, "t": round(time.time(), 3), "sev": "warning", "cat": "app", "src": "devmon",
+                                   "msg": "Journal plein : les événements suivants ne sont plus enregistrés."})
             try:
                 self._fh.write(line)
                 self._size += len(line)
             except (OSError, ValueError):
                 self._full = True
+
+    def _line(self, event: dict) -> str:
+        if self.codec:
+            return self.codec.encode(event, self._seq) + "\n"
+        return json.dumps(event, ensure_ascii=False, default=str) + "\n"
 
     def close(self) -> None:
         with self._lock:
@@ -139,8 +222,9 @@ def make_event(cat: str, msg: str, sev: str = "info", src: str = "voktora", data
 class Tail:
     """Relit un fichier JSON Lines au fil de l'eau (ignore les lignes incomplètes et les lignes illisibles)."""
 
-    def __init__(self, path: Path):
-        self.path, self.offset, self._partial = Path(path), 0, b""
+    def __init__(self, path: Path, codec: Codec | None = None):
+        self.path, self.offset, self._partial, self.codec = Path(path), 0, b"", codec
+        self.rejected = 0
 
     def read(self) -> list[dict]:
         try:
@@ -160,10 +244,20 @@ class Tail:
         *lines, self._partial = data.split(b"\n")
         out = []
         for raw in lines:
-            try:
-                ev = json.loads(raw.decode("utf-8", errors="replace"))
-            except ValueError:
-                continue
+            text = raw.decode("utf-8", errors="replace")
+            if self.codec:
+                ev = self.codec.decode(text)
+                if ev is None:
+                    if text.strip():
+                        self.rejected += 1
+                        out.append({"t": time.time(), "sev": "critical", "cat": "security", "src": "devmon",
+                                    "msg": "Ligne rejetée : authentification impossible (fichier modifié ou forgé ?)."})
+                    continue
+            else:
+                try:
+                    ev = json.loads(text)
+                except ValueError:
+                    continue
             if isinstance(ev, dict):
                 out.append(ev)
         return out

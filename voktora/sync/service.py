@@ -20,23 +20,35 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import net, secure
-from .client import RemoteError, RemoteStore, pair
-from .engine import Cancelled, PeerGone, Plan, SyncEngine, SyncError
-from .server import SyncServer
+from .client import ConfigMismatch, RemoteError, RemoteStore, pair
+from .confsync import ConfigSync
+from .control import SyncController
+from .engine import DEL_LOCAL, PULL, Cancelled, PeerGone, Plan, Suspended, SyncEngine, SyncError
+from .groupsync import GroupSync
+from .server import HandlerError, SyncServer
 from .settings import DEFAULT_PORT, SyncSettings
 from .store import ConfigIO, LocalStore
 
 OFFLINE, ONLINE, SYNCING, DONE, DECISION, PAUSED, ERROR, IDLE = (
     "offline", "online", "syncing", "done", "decision", "paused", "error", "idle")
+BLOCKED, STOPPED = "blocked", "stopped"          # 1.1.4 : configuration différente / arrêtée par l'utilisateur
 INVITE_TTL = 600.0
 
 
 class SyncService:
     def __init__(self, data_dir: Path, config_io: ConfigIO, extras: dict[str, Path] | None = None):
-        self.dir = Path(data_dir) / "sync"
+        self.data_dir = Path(data_dir)
+        self.dir = self.data_dir / "sync"
         self.settings = SyncSettings(self.dir)
         self.store = LocalStore(self.settings, config_io, self.dir / "state", extras)
-        self.server = SyncServer(self.settings, self.store, self._own_status, self._request_from_peer, self.is_busy)
+        self.control = SyncController(hold_seconds=float(self.settings["pause_hold"] or 300))
+        self.groups = GroupSync(self)
+        self.cfg = ConfigSync(self)
+        self._suspended: set[str] = set()
+        self._overwrite_wait: dict[str, list[str]] = {}
+        self.control.add_cleanup(self._after_stop)
+        self.control.listeners.append(self._on_control_state)
+        self.server = SyncServer(self.settings, self.store, self._own_status, self._request_from_peer, self.is_busy, self)
         self.listeners: list[Callable[[dict], None]] = []
         self.status: dict[str, dict] = {}
         self._own = {"state": IDLE, "percent": 0, "detail": ""}
@@ -63,8 +75,12 @@ class SyncService:
         self.listeners.append(fn)
 
     def snapshot(self) -> dict:
+        group = self.groups.state
         return {"enabled": self.settings["enabled"], "device_id": self.settings.device_id,
                 "primary_id": self.settings["primary_id"], "own": dict(self._own),
+                "control": self.control.snapshot(), "group": group.to_dict(),
+                "roles": {pid: self.groups.role_of(pid) for pid in [self.settings.device_id, *[p["id"] for p in self.settings["peers"]]]},
+                "config": self._config_snapshot(),
                 "port": self.server.port, "log": list(self.logs)[-120:], "log_total": self.log_total,
                 "log_enabled": bool(self.settings["log_enabled"]),
                 "peers": {k: dict(v) for k, v in self.status.items()}}
@@ -144,7 +160,94 @@ class SyncService:
         return self._run.locked()
 
     def peer_is_primary(self, peer_id: str) -> bool:
-        return self.settings["primary_id"] == peer_id
+        return self.groups.effective_primary() == peer_id
+
+    def is_primary_effective(self) -> bool:
+        """Ce PC gagne-t-il les conflits ? (le chef en mode dirigé, sinon le principal)"""
+        return self.groups.effective_primary() == self.settings.device_id
+
+    def _config_snapshot(self) -> dict:
+        try:
+            info = self.cfg.local_info()
+        except Exception:  # noqa: BLE001 — l'état ne doit jamais empêcher l'affichage
+            return {"error": True}
+        ref = self.cfg.ref()
+        return {"rev": info.rev, "ref": ref.to_dict() if ref else None, "applied_rev": info.applied_rev,
+                "inbox": self.cfg.inbox(), "requests": self.cfg.requests(), "proposals": self.groups.pending_incoming(),
+                "queued": {pid: self.queued_conflicts(pid) for pid in self._overwrite_wait}, "gate": bool(self.settings["config_gate"])}
+
+    # ── interface « étendue » appelée par le serveur (config, rôles, contrôle) ──
+
+    def hello_config(self) -> dict:
+        return self.cfg.hello_info()
+
+    def group_dict(self) -> dict:
+        return self.groups.group_dict()
+
+    def check_lock(self, device: str, body: dict) -> None:
+        if self.control.paused:
+            raise HandlerError(423, "ce PC est en pause : reprenez la synchronisation")
+        self.cfg.check_lock(device, body)
+
+    def pack_for(self, device: str) -> dict:
+        return self.cfg.pack_for(device)
+
+    def on_config_push(self, device: str, body: dict) -> dict:
+        return self.cfg.on_push(device, body)
+
+    def on_config_request(self, device: str, body: dict) -> dict:
+        return self.cfg.on_request(device, body)
+
+    def on_roles_propose(self, device: str, body: dict) -> dict:
+        return self.groups.on_propose(device, body)
+
+    def on_roles_accept(self, device: str, body: dict) -> dict:
+        return self.groups.on_accept(device, body)
+
+    # ── pause / reprise / stop (1.1.4) ───────────────────────────────────────
+
+    def pause(self) -> bool:
+        """Suspend les cycles et les transferts, état conservé (reprise exacte avec `resume()`)."""
+        if not self.control.pause():
+            return False
+        self.log("Pause : transferts et cycles suspendus, l'état est conservé", important=True)
+        return True
+
+    def resume(self) -> bool:
+        if not self.control.resume():
+            return False
+        self.log("Reprise de la synchronisation", important=True)
+        for pid in sorted(self._suspended):
+            self._suspended.discard(pid)
+            threading.Thread(target=self.sync_peer, args=(pid,), daemon=True, name="voktora-sync-resume").start()
+        self._wake.set()
+        return True
+
+    def _on_control_state(self, state: str) -> None:
+        from .control import PAUSED as C_PAUSED
+        if state == C_PAUSED:
+            for pid, entry in list(self.status.items()):
+                if entry.get("state") == SYNCING:
+                    self._set(pid, state=PAUSED, detail="en pause — reprendra exactement là où elle s'est arrêtée")
+        self._emit(force=True)
+
+    def _after_stop(self) -> None:
+        """Nettoyage d'un Stop : aucun fichier partiel, plus de verrou, états « arrêtée »."""
+        self.server.session.release(self.server.session.owner)
+        with contextlib.suppress(Exception):
+            self.store.purge_partials(max_age=0)
+        self._own = {"state": IDLE, "percent": 0, "detail": ""}
+        for pid, entry in list(self.status.items()):
+            if entry.get("state") in (SYNCING, PAUSED, BLOCKED, DECISION):
+                self._set(pid, state=STOPPED, detail="synchronisation arrêtée")
+        self._suspended.clear()
+
+    def queued_conflicts(self, peer_id: str) -> list[str]:
+        import json
+        try:
+            return list(json.loads((self.dir / "state" / f"queue-{peer_id[:16]}.json").read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            return []
 
     # ── cycle de vie ─────────────────────────────────────────────────────────
 
@@ -156,6 +259,7 @@ class SyncService:
         if not self._start_server():
             return
         self._stop.clear()
+        self.control.start()
         self._thread = threading.Thread(target=self._loop, name="voktora-sync", daemon=True)
         self._thread.start()
 
@@ -168,7 +272,7 @@ class SyncService:
         for port in candidates:
             try:
                 self.server = SyncServer(self.settings, self.store, self._own_status, self._request_from_peer,
-                                         self.is_busy)
+                                         self.is_busy, self)
                 actual = self.server.start(port=port)
             except OSError as exc:
                 last = exc
@@ -185,13 +289,18 @@ class SyncService:
         return False
 
     def stop(self) -> None:
+        """Stop : annule les transferts en cours, ferme connexions et serveur, ne laisse ni fichier partiel ni verrou ;
+        l'état redevient « arrêtée »."""
         self._stop.set()
         self._cancel_flag.set()
+        self.control.stop()
         self._wake.set()
         self.server.stop()
-        if self._thread:
+        if self._thread and self._thread is not threading.current_thread():
             self._thread.join(timeout=5)
         self._thread = None
+        with contextlib.suppress(Exception):
+            self.store.purge_partials(max_age=0)
 
     def restart(self) -> None:
         self.stop()
@@ -210,11 +319,11 @@ class SyncService:
         while not self._stop.is_set():
             self._tick += 1
             with contextlib.suppress(Exception):
-                self._scan()
+                self._scan(sync_allowed=not self.control.paused)
             self._wake.wait(max(5, int(self.settings["interval"])))
             self._wake.clear()
 
-    def _scan(self) -> None:
+    def _scan(self, sync_allowed: bool = True) -> None:
         for peer in list(self.settings["peers"]):
             if self._stop.is_set():
                 return
@@ -232,13 +341,23 @@ class SyncService:
                 continue
             current = self.status.get(pid, {})
             keep = current.get("state") in (DECISION, SYNCING)
-            self._set(pid, remote=info.get("status", {}), reachable=True,
-                      **({} if keep else {"state": ONLINE, "detail": "connecté"}))
-            if not self.settings["auto"] or keep or self._run.locked():
+            gate = self.cfg.gate(pid, info)
+            if not gate.ok and not keep:
+                self._blocked(pid, gate)
                 continue
-            if pid in self._requested or not self.settings.is_primary or self._tick % 4 == 0:
+            self.control.unblock(pid)
+            if current.get("state") == BLOCKED:
+                current = {}
+            self._set(pid, remote=info.get("status", {}), reachable=True,
+                      **({} if keep or current.get("state") == PAUSED else {"state": ONLINE, "detail": "connecté"}))
+            if not sync_allowed or not self.settings["auto"] or keep or self._run.locked():
+                continue
+            group = self.groups.state
+            if group.directed and self.settings.device_id != group.leader_id and pid != group.leader_id:
+                continue                                  # mode dirigé : les suiveurs ne se synchronisent qu'avec le chef
+            if pid in self._requested or not self.is_primary_effective() or self._tick % 4 == 0:
                 self._requested.discard(pid)
-                if not self.settings.is_primary:
+                if not self.is_primary_effective():
                     self.sync_peer(pid)
                 elif not info.get("busy"):
                     with contextlib.suppress(ConnectionError, RemoteError):
@@ -256,6 +375,8 @@ class SyncService:
             info = remote.hello()
         if info.get("port") and int(info["port"]) != int(peer["port"]):
             self._remember_port(peer, int(info["port"]))
+        if isinstance(info.get("group"), dict):
+            self.groups.adopt(info["group"], via=peer["id"])         # état d'époque supérieure et autorisé : adopté
         was = self.status.get(peer["id"], {}).get("state")
         if was in (None, OFFLINE):
             self.log(f"Contact établi ({info.get('rtt_ms', '?')} ms)", peer["id"])
@@ -332,7 +453,7 @@ class SyncService:
 
     def _request_from_peer(self, device: str) -> bool:
         """Le PC principal nous demande de nous synchroniser."""
-        if self._run.locked() or not self.settings["enabled"]:
+        if self._run.locked() or not self.settings["enabled"] or self.control.paused:
             return False
         self._requested.add(device)
         self._wake.set()
@@ -343,12 +464,30 @@ class SyncService:
     def _first_sync(self) -> str:
         return {"ask": "ask"}.get(self.settings["policy"], "primary")
 
+    def _blocked(self, peer_id: str, gate) -> None:
+        """Synchronisation bloquée : configuration différente (jamais de synchro silencieuse avec une config divergente)."""
+        if self.status.get(peer_id, {}).get("state") != BLOCKED:
+            self.log(f"Synchronisation bloquée : {gate.message}", peer_id, important=True)
+        self.control.block(peer_id, gate.message)
+        self._set(peer_id, state=BLOCKED, detail=gate.message, gate=gate.code, gate_actions=list(gate.actions))
+
+    def confirm_overwrite(self, peer_id: str) -> None:
+        """Mode dirigé : le suiveur confirme l'écrasement de ses modifications locales conflictuelles (sauvegardées)."""
+        self._overwrite_wait.pop(peer_id, None)
+        threading.Thread(target=self.sync_peer, args=(peer_id,), kwargs={"overwrite_ok": True}, daemon=True,
+                         name="voktora-sync-overwrite").start()
+
     def sync_peer(self, peer_id: str, first_sync: str | None = None, full: bool = False,
-                  dry_run: bool = False) -> Plan | None:
+                  dry_run: bool = False, overwrite_ok: bool = False) -> Plan | None:
         """Synchronise avec un pair (appelable depuis l'UI ou la surveillance). Retourne le plan exécuté,
         ou celui en attente d'une décision de l'utilisateur."""
         peer = self.settings.peer(peer_id)
         if not peer or not self._run.acquire(blocking=False):
+            return None
+        token = self.control.begin_run()
+        if token is None:                                          # en pause : on ne démarre rien
+            self._run.release()
+            self.log("Synchronisation en pause : reprenez-la d'abord", peer_id)
             return None
         self._cancel_flag.clear()
         remote = self._remote(peer)
@@ -365,6 +504,18 @@ class SyncService:
                 raise PeerGone(f"{peer['name']} est injoignable ({exc}). Utilisez « Tester la connexion » pour le détail.") from exc
             remote = self._remote(peer)              # le port a pu changer pendant la recherche
             remote.features = set(info.get("features", ()))        # delta / compression : pair 1.1.1+ seulement
+            group = self.groups.state
+            if group.directed and self.settings.device_id != group.leader_id and peer_id != group.leader_id:
+                self.log("Mode dirigé : seul le chef synchronise avec les suiveurs", peer_id)
+                return None
+            gate = self.cfg.gate(peer_id, info)
+            if not gate.ok:
+                self._blocked(peer_id, gate)
+                return None
+            if gate.code == "unverifiable":
+                self.log(f"Attention : {gate.message}", peer_id)
+            self.control.unblock(peer_id)
+            remote.lock_config = self.cfg.hello_info()
             self._progress(peer_id, 0, f"Connecté ({info.get('rtt_ms', '?')} ms) — réservation de {peer['name']}…")
             remote.lock()
             locked = True
@@ -388,10 +539,11 @@ class SyncService:
                           detail=f"à jour (vérifié en {elapsed:.1f} s)")
                 return None
             engine = SyncEngine(self.store, remote, peer_id, self.settings, self.dir / "state" / "base",
-                                self.settings.is_primary, lambda p, d: self._progress(peer_id, p, d),
-                                self._cancel_flag.is_set, self.settings["device_name"],
+                                self.is_primary_effective(), lambda p, d: self._progress(peer_id, p, d),
+                                lambda: self._cancel_flag.is_set() or self.control.cancelled(token), self.settings["device_name"],
                                 lambda text, detail=False: self.log(text, peer_id, detail), peer["name"])
             engine.parallel, engine.scan_nice = profile["scans"], profile["nice"]
+            engine.gate = lambda beat: self.control.checkpoint(token, beat)
             if fresh and resume.get("status") in ("interrupted", "running") and resume.get("total_weight"):
                 engine.resume_weight = (int(resume.get("done_weight", 0)), int(resume.get("total_weight", 0)))
                 self.log(f"Reprise de la synchronisation interrompue ({resume.get('done', 0)} action(s) déjà faites, "
@@ -409,6 +561,21 @@ class SyncService:
                 self._set(peer_id, state=DECISION, percent=0, summary=plan.summary(),
                           detail="les deux PC ont des contenus différents : choisissez la source")
                 return plan
+            if not dry_run and group.directed and self.settings.device_id != group.leader_id:
+                overwrites = [a for a in plan.actions if a.note.startswith("conflit") and a.kind in (PULL, DEL_LOCAL)]
+                if overwrites and not overwrite_ok:
+                    names = [f"{a.space.split(':', 1)[-1]}/{a.rel}" for a in overwrites]
+                    if self.settings["follower_conflicts"] == "queue":
+                        plan.actions = [a for a in plan.actions if a not in overwrites]
+                        self._overwrite_wait[peer_id] = names
+                        self._save_queue(peer_id, names)
+                        self.log(f"Mode dirigé : {len(names)} conflit(s) local(aux) mis en file (non écrasés)", peer_id, important=True)
+                    else:
+                        self._overwrite_wait[peer_id] = names
+                        self._set(peer_id, state=DECISION, percent=0, summary=plan.summary(), overwrite=True,
+                                  detail=f"mode dirigé : {len(names)} modification(s) locale(s) seront écrasées par celles du chef "
+                                         "(copies conservées en .sync-conflict) — confirmation nécessaire")
+                        return plan
             if dry_run:
                 lines = self.describe_plan(plan)
                 self.last_dry_run[peer_id] = {"ts": time.time(), "summary": plan.summary(), "lines": lines}
@@ -434,10 +601,21 @@ class SyncService:
                 self._quick_forget(peer_id)
             self._set(peer_id, state=DONE if not problems else ERROR, percent=100, last_sync=time.time(),
                       summary=plan.summary(), detail="à jour" if not problems else f"{len(problems)} erreur(s) : {problems[0]}")
+        except Suspended:
+            self.log("Pause prolongée : passe suspendue, autre PC libéré ; elle reprendra à la reprise", peer_id)
+            self._save_resume(peer_id, status="interrupted", reason="pause prolongée")
+            self._suspended.add(peer_id)
+            self._set(peer_id, state=PAUSED, detail=self._paused_detail(peer_id, "en pause"))
         except Cancelled:
             self.log("Synchronisation arrêtée", peer_id)
             self._save_resume(peer_id, status="interrupted", reason="arrêt demandé")
-            self._set(peer_id, state=PAUSED, detail=self._paused_detail(peer_id, "arrêtée"))
+            if self.control.cancelled(token):
+                self._set(peer_id, state=STOPPED, detail="synchronisation arrêtée (état conservé, reprise possible)")
+            else:
+                self._set(peer_id, state=PAUSED, detail=self._paused_detail(peer_id, "arrêtée"))
+        except ConfigMismatch as exc:
+            self._blocked(peer_id, __import__("sync.configpack", fromlist=["GateResult"]).GateResult(
+                False, "peer-diverged", str(exc), ("push", "apply")))
         except (PeerGone, ConnectionError) as exc:
             self.log(f"Pause : {exc} — reprise automatique dès que l'autre PC revient", peer_id)
             self._save_resume(peer_id, status="interrupted", reason=str(exc)[:200])
@@ -457,10 +635,18 @@ class SyncService:
         finally:
             if locked:
                 remote.unlock()
+            self.control.end_run(token)
             self._own = {"state": IDLE, "percent": 0, "detail": ""}
             self._run.release()
             self._emit(force=True)
         return plan
+
+    def _save_queue(self, peer_id: str, names: list[str]) -> None:
+        import json
+        with contextlib.suppress(OSError):
+            path = self.dir / "state" / f"queue-{peer_id[:16]}.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(names), encoding="utf-8")
 
     def _event(self, name: str, **data) -> None:
         hook = self.event_hook
@@ -659,6 +845,26 @@ class SyncService:
         self.settings.save()
         self.status.pop(peer_id, None)
         self._emit()
+
+    # ── configuration et rôles : API publique (la fenêtre n'appelle que celle-ci) ──
+
+    def push_config(self, peer_id: str | None = None):
+        return self.cfg.push(peer_id) if peer_id else self.cfg.push_all()
+
+    def config_preview(self, peer_id: str):
+        return self.cfg.preview(peer_id)
+
+    def apply_received_config(self, peer_id: str, **options):
+        return self.cfg.apply(peer_id, **options)
+
+    def fetch_group_config(self, peer_id: str):
+        return self.cfg.fetch_from(peer_id)
+
+    def set_group_mode(self, mode: str, leader_id: str = "", takeover: bool = False):
+        return self.groups.propose(mode, leader_id, takeover)
+
+    def abdicate(self, successor: str = ""):
+        return self.groups.abdicate(successor)
 
     def set_primary(self, device_id: str) -> None:
         self.settings.set_primary(device_id)

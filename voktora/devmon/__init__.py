@@ -26,5 +26,5 @@ def open_monitor(level: str = "normal", app=None, open_window: bool = True):
     else:
         em.set_level(level)
     if open_window:
-        launcher.launch_viewer(em.session)
+        launcher.launch_viewer(em.session, em.secret)
     return em

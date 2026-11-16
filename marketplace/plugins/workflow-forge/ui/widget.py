@@ -7,22 +7,25 @@ import threading
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, Qt
+from PySide6.QtCore import QPointF, Qt, QTimer
 from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QApplication,
     QCheckBox,
     QComboBox,
-    QDoubleSpinBox,
+    QDialog,
     QFileDialog,
-    QFormLayout,
     QHBoxLayout,
     QInputDialog,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMenu,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QScrollArea,
-    QSpinBox,
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
@@ -33,10 +36,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..core import blocks, engine, triggers, validation
+from ..core import blocks, engine, schema, templates, triggers, validation
 from ..core.proc import run as proc_run
 from ..storage import store as store_mod
 from .editor import FlowScene, FlowView
+from .props import PropertiesPanel
 
 
 def _alive(fn):
@@ -60,7 +64,15 @@ class ForgeWidget(QWidget):
         self.cancel = threading.Event()
         self.manager: triggers.Manager | None = None
         self.running = False
+        self.history = schema.History()
+        self._clip: dict | None = None
+        self._paste_n = 0
+        self._autosave = QTimer(self)
+        self._autosave.setSingleShot(True)
+        self._autosave.setInterval(700)
+        self._autosave.timeout.connect(self.flush_autosave)
         self._build()
+        self._loaded()
 
     # ------------------------------------------------------------------ construction
     def _build(self) -> None:
@@ -69,13 +81,30 @@ class ForgeWidget(QWidget):
         self.combo = QComboBox()
         self.btns = {}
         for key, text in (("new", "Nouveau"), ("save", "Enregistrer"), ("del", "Supprimer"), ("check", "Valider"), ("run", "Exécuter"), ("dry", "Test à blanc"),
-                          ("stop", "Annuler"), ("imp", "Importer…"), ("exp", "Exporter…"), ("fit", "Ajuster")):
+                          ("stop", "Arrêter"), ("imp", "Importer…"), ("exp", "Exporter…"), ("fit", "Ajuster")):
             b = QPushButton(text)
             self.btns[key] = b
             bar.addWidget(b)
         bar.insertWidget(0, self.combo, 1)
         self.btns["stop"].setEnabled(False)
         lay.addLayout(bar)
+        bar2 = QHBoxLayout()
+        for key, text, tip in (("undo", "↶ Annuler", "Annuler la dernière modification (Ctrl+Z)"), ("redo", "↷ Rétablir", "Rétablir (Ctrl+Y)"),
+                               ("dup", "Dupliquer", "Dupliquer les blocs sélectionnés (Ctrl+D)"), ("copy", "Copier", "Copier les blocs sélectionnés (Ctrl+C)"),
+                               ("paste", "Coller", "Coller les blocs copiés (Ctrl+V)")):
+            b = QPushButton(text)
+            b.setToolTip(tip)
+            self.btns[key] = b
+            bar2.addWidget(b)
+        self.btns["tpl"] = QPushButton("Modèles ▾")
+        self.btns["tpl"].setToolTip("Ouvrir un workflow d'exemple")
+        self.tpl_menu = QMenu(self)
+        for key, title in templates.template_list():
+            self.tpl_menu.addAction(title, lambda k=key: self.open_template(k))
+        self.btns["tpl"].setMenu(self.tpl_menu)
+        bar2.addWidget(self.btns["tpl"])
+        bar2.addStretch(1)
+        lay.addLayout(bar2)
         self.status = QLabel("")
         lay.addWidget(self.status)
         split = QSplitter()
@@ -88,7 +117,11 @@ class ForgeWidget(QWidget):
         self.palette.setHeaderHidden(True)
         ll.addWidget(self.search)
         ll.addWidget(self.palette, 1)
-        ll.addWidget(QLabel("Double-clic : ajouter. Glisser depuis le rond de sortie vers un bloc : relier. Suppr : supprimer."))
+        self.block_help = QLabel("Sélectionnez un bloc de la palette pour lire son aide.")
+        self.block_help.setWordWrap(True)
+        self.block_help.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        ll.addWidget(self.block_help)
+        ll.addWidget(QLabel("Double-clic : ajouter. Glisser depuis le rond de sortie vers un bloc : relier. Double-clic sur un bloc : modifier. Suppr : supprimer."))
         split.addWidget(left)
         # éditeur
         self.scene = FlowScene()
@@ -96,12 +129,22 @@ class ForgeWidget(QWidget):
         split.addWidget(self.view)
         # droite : paramètres, déclencheurs
         right = QTabWidget()
-        self.form_host = QWidget()
-        self.form = QFormLayout(self.form_host)
+        self.panel = PropertiesPanel()
+        self.form = self.panel.form
         sc = QScrollArea()
         sc.setWidgetResizable(True)
-        sc.setWidget(self.form_host)
+        sc.setWidget(self.panel)
         right.addTab(sc, "Bloc")
+        ow = QWidget()
+        ol = QVBoxLayout(ow)
+        self.order_info = QLabel("")
+        self.order_info.setWordWrap(True)
+        self.order = QListWidget()
+        self.order.setDragDropMode(QAbstractItemView.InternalMove)
+        self.order.model().rowsMoved.connect(lambda *_: QTimer.singleShot(0, lambda: self.reorder_steps(self._list_order())))
+        ol.addWidget(self.order_info)
+        ol.addWidget(self.order, 1)
+        right.addTab(ow, "Ordre")
         tw = QWidget()
         tl = QVBoxLayout(tw)
         self.trig = QPlainTextEdit()
@@ -140,30 +183,47 @@ class ForgeWidget(QWidget):
         self.btns["imp"].clicked.connect(lambda: self.import_file())
         self.btns["exp"].clicked.connect(lambda: self.export_file())
         self.btns["fit"].clicked.connect(self.view.fit)
+        self.btns["undo"].clicked.connect(self.undo)
+        self.btns["redo"].clicked.connect(self.redo)
+        self.btns["dup"].clicked.connect(self.duplicate_selection)
+        self.btns["copy"].clicked.connect(self.copy_selection)
+        self.btns["paste"].clicked.connect(self.paste)
         self.combo.activated.connect(lambda _i: self.open_workflow(self.combo.currentData()))
         self.search.textChanged.connect(self.fill_palette)
         self.palette.itemDoubleClicked.connect(self._palette_add)
         self.scene.node_selected.connect(self.show_form)
+        self.scene.node_activated.connect(lambda i: self.quick_edit(i))
+        self.scene.changed_model.connect(lambda: self._model_changed())
+        self.scene.node_moved.connect(lambda: self._model_changed())
+        self.scene.action.connect(self._action)
+        self.panel.changed.connect(self._panel_changed)
+        self.palette.currentItemChanged.connect(self._palette_help)
         self.btn_trig.clicked.connect(self.apply_triggers)
         self.runs.cellClicked.connect(self._show_run)
         self.fill_palette()
 
     def fill_palette(self) -> None:
-        flt = self.search.text().lower().strip()
+        flt = self.search.text().strip()
         self.palette.clear()
         cats: dict[str, QTreeWidgetItem] = {}
-        for b in sorted(blocks.REGISTRY.values(), key=lambda b: (b.category, b.title)):
-            if flt and flt not in b.title.lower() and flt not in b.type and flt not in b.category.lower():
-                continue
+        found = schema.search_blocks(flt) if flt else sorted(blocks.REGISTRY.values(), key=lambda b: (b.category, b.title))
+        for b in found:
             cat = cats.get(b.category) or QTreeWidgetItem([b.category])
             if b.category not in cats:
                 cats[b.category] = cat
                 self.palette.addTopLevelItem(cat)
             it = QTreeWidgetItem([b.title])
             it.setData(0, Qt.UserRole, b.type)
-            it.setToolTip(0, b.doc)
+            it.setToolTip(0, schema.describe(b.type))
             cat.addChild(it)
             cat.setExpanded(True)
+        if flt and not found:
+            self.block_help.setText("Aucun bloc ne correspond à cette recherche.")
+
+    def _palette_help(self, item, _prev=None) -> None:
+        t = item.data(0, Qt.UserRole) if item else None
+        b = blocks.REGISTRY.get(t) if t else None
+        self.block_help.setText(f"{b.title}\n{schema.describe(t)}" if b else "Sélectionnez un bloc de la palette pour lire son aide.")
 
     def _palette_add(self, item, _col) -> None:
         t = item.data(0, Qt.UserRole)
@@ -199,17 +259,19 @@ class ForgeWidget(QWidget):
         self.scene.load(self.wf)
         self.trig.setPlainText(json.dumps(self.wf["triggers"], indent=1))
         self.enabled.setChecked(True)
+        self._loaded()
 
     def open_workflow(self, wf_id) -> None:
         wf = self.store.workflows(self.project).get(wf_id)
         if not wf:
             return
-        self.wf_id, self.wf = wf_id, wf
+        self.wf_id, self.wf = wf_id, schema.upgrade_workflow(wf)
         self.scene.load(self.wf)
         self.view.fit()
         self.trig.setPlainText(json.dumps(self.wf.get("triggers", []), indent=1))
         self.enabled.setChecked(self.wf.get("enabled", True))
         self.refresh_list()
+        self._loaded()
 
     def save(self) -> str:
         self.wf_id = self.store.save_workflow(self.project, self.wf, self.wf_id or None)
@@ -234,62 +296,169 @@ class ForgeWidget(QWidget):
 
     # ------------------------------------------------------------------ formulaire de paramètres
     def show_form(self, node_id: str) -> None:
-        while self.form.rowCount():
-            self.form.removeRow(0)
         it = self.scene.items_by_id.get(node_id)
         if not it:
+            self.panel.clear()
             return
-        d = it.data
-        b = blocks.REGISTRY.get(d["type"])
-        label = QLineEdit(str(d.get("label", "")))
+        self.panel.set_node(it.data, self.wf, project=self.project or "")
 
-        def set_label(t):
-            d["label"] = t
-            it.refresh_text()
-        label.textChanged.connect(set_label)
-        self.form.addRow("Nom affiché", label)
-        for q in (b.params if b else []):
-            self.form.addRow(q.name + (" *" if q.required else ""), self._editor(d, q))
-        opts = d.setdefault("options", {})
-        for key, text, kind in (("retries", "Tentatives supplémentaires", int), ("retry_delay", "Délai entre tentatives (s)", float), ("timeout", "Délai maximal (s, 0 = aucun)", float)):
-            w = QDoubleSpinBox() if kind is float else QSpinBox()
-            w.setMaximum(100000)
-            w.setValue(opts.get(key, 0))
-            w.valueChanged.connect(lambda v, k=key: opts.__setitem__(k, v))
-            self.form.addRow(text, w)
-        c = QCheckBox("Continuer si ce bloc échoue")
-        c.setChecked(bool(opts.get("continue_on_error")))
-        c.toggled.connect(lambda v: opts.__setitem__("continue_on_error", v))
-        self.form.addRow(c)
-
-    @staticmethod
-    def _editor(d: dict, q: blocks.Param) -> QWidget:
-        params = d.setdefault("params", {})
-        cur = params.get(q.name, q.default)
-        if q.kind == "bool":
-            w = QCheckBox()
-            w.setChecked(bool(cur))
-            w.toggled.connect(lambda v: params.__setitem__(q.name, v))
-        elif q.kind == "int":
-            w = QSpinBox()
-            w.setRange(-1_000_000, 1_000_000)
-            w.setValue(int(cur or 0))
-            w.valueChanged.connect(lambda v: params.__setitem__(q.name, v))
-        elif q.kind == "choice":
-            w = QComboBox()
-            w.addItems(list(q.choices))
-            w.setCurrentText(str(cur))
-            w.currentTextChanged.connect(lambda v: params.__setitem__(q.name, v))
-        elif q.kind in ("code", "text", "json"):
-            w = QPlainTextEdit(str(cur))
-            w.setMaximumHeight(110)
-            w.textChanged.connect(lambda: params.__setitem__(q.name, w.toPlainText()))
+    def _show_selection(self) -> None:
+        ids = self.scene.selected_ids()
+        if len(ids) == 1:
+            self.show_form(ids[0])
         else:
-            w = QLineEdit(str(cur))
-            w.textChanged.connect(lambda v: params.__setitem__(q.name, v))
-        if q.kind == "expr":
-            w.setPlaceholderText("expression : vars.x > 1, out.bloc.champ, upper(...)")
-        return w
+            self.panel.clear()
+
+    def quick_edit(self, node_id: str, show: bool = True) -> QDialog | None:
+        """Édition rapide (double-clic) : seulement les champs essentiels du bloc."""
+        it = self.scene.items_by_id.get(node_id)
+        if not it:
+            return None
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Modifier le bloc")
+        dlg.resize(460, 380)
+        lay = QVBoxLayout(dlg)
+        panel = PropertiesPanel(dlg)
+        panel.changed.connect(self._panel_changed)
+        panel.set_node(it.data, self.wf, essential_only=True, project=self.project or "")
+        sc = QScrollArea()
+        sc.setWidgetResizable(True)
+        sc.setWidget(panel)
+        lay.addWidget(sc, 1)
+        close = QPushButton("Fermer")
+        close.clicked.connect(dlg.accept)
+        lay.addWidget(close)
+        dlg.panel = panel
+        dlg.finished.connect(lambda _r: self.show_form(node_id) if self.scene.selected_ids() == [node_id] else None)
+        if show:
+            dlg.exec()
+        return dlg
+
+    def _panel_changed(self, node_id: str, key: str) -> None:
+        self.scene.refresh_node(node_id)
+        self._model_changed(f"{node_id}:{key}")
+
+    # ------------------------------------------------------------------ modèle, historique, enregistrement automatique
+    def _loaded(self) -> None:
+        schema.upgrade_workflow(self.wf)
+        self.history.reset(self.wf)
+        self.panel.clear()
+        self._paste_n = 0
+        self.refresh_order()
+        self._update_buttons()
+
+    def _model_changed(self, key: str | None = None) -> None:
+        if self.history.record(self.wf, key):
+            self._autosave.start()
+        if key is None:
+            self.refresh_order()
+        self._update_buttons()
+
+    def _update_buttons(self) -> None:
+        self.btns["undo"].setEnabled(self.history.can_undo)
+        self.btns["redo"].setEnabled(self.history.can_redo)
+
+    def flush_autosave(self) -> bool:
+        """Enregistre tout de suite les modifications en attente (sans relancer les déclencheurs)."""
+        self._autosave.stop()
+        if self.project is None or self.running:
+            return False
+        self.wf_id = self.store.save_workflow(self.project, self.wf, self.wf_id or None)
+        self.refresh_list()
+        self.status.setText(f"Enregistré automatiquement : {self.wf['name']}")
+        return True
+
+    def _apply_state(self, state: dict | None) -> bool:
+        if state is None:
+            return False
+        sel = set(self.scene.selected_ids())
+        schema.restore(self.wf, state)
+        self.scene.reload([i for i in sel if i in {n["id"] for n in self.wf["nodes"]}])
+        self._show_selection()
+        self.refresh_order()
+        self._update_buttons()
+        self._autosave.start()
+        return True
+
+    def undo(self) -> bool:
+        return self._apply_state(self.history.undo())
+
+    def redo(self) -> bool:
+        return self._apply_state(self.history.redo())
+
+    def _action(self, name: str) -> None:
+        {"copy": self.copy_selection, "paste": self.paste, "duplicate": self.duplicate_selection, "undo": self.undo, "redo": self.redo}[name]()
+
+    # ------------------------------------------------------------------ copier / coller / dupliquer
+    def copy_selection(self) -> bool:
+        payload = schema.copy_nodes(self.wf, self.scene.selected_ids())
+        if not payload["nodes"]:
+            self.status.setText("Sélectionnez au moins un bloc (hors Démarrage) à copier.")
+            return False
+        self._clip, self._paste_n = payload, 0
+        QApplication.clipboard().setText(schema.clip_text(payload))
+        self.status.setText(f"{len(payload['nodes'])} bloc(s) copié(s).")
+        return True
+
+    def paste(self) -> list[str]:
+        payload = schema.clip_parse(QApplication.clipboard().text()) or self._clip
+        if not payload:
+            self.status.setText("Rien à coller.")
+            return []
+        self._paste_n += 1
+        ids = schema.paste_nodes(self.wf, payload, 40 * self._paste_n, 40 * self._paste_n)
+        self._structure_changed(ids)
+        return ids
+
+    def duplicate_selection(self) -> list[str]:
+        ids = schema.duplicate_nodes(self.wf, self.scene.selected_ids())
+        self._structure_changed(ids)
+        return ids
+
+    def _structure_changed(self, select) -> None:
+        self.scene.reload(select)
+        self._model_changed()
+        self._show_selection()
+
+    # ------------------------------------------------------------------ ordre des étapes (glisser pour réordonner)
+    def refresh_order(self) -> None:
+        chain = schema.linear_chain(self.wf)
+        nodes = {n["id"]: n for n in self.wf["nodes"]}
+        self.order.blockSignals(True)
+        self.order.clear()
+        for i in chain:
+            it = QListWidgetItem(f"{nodes[i].get('label') or i} — {schema.summary(nodes[i])}")
+            it.setData(Qt.UserRole, i)
+            self.order.addItem(it)
+        self.order.blockSignals(False)
+        self.order.setEnabled(bool(chain))
+        self.order_info.setText("Glissez les lignes pour changer l'ordre d'exécution." if chain else
+                                "Réordonnancement par glisser disponible pour une suite simple de blocs (Démarrage → a → b → c, sans branche). Ici, déplacez et reliez les blocs dans l'éditeur.")
+
+    def _list_order(self) -> list[str]:
+        return [self.order.item(i).data(Qt.UserRole) for i in range(self.order.count())]
+
+    def reorder_steps(self, new_order: list[str]) -> bool:
+        ok = schema.reorder_chain(self.wf, new_order)
+        if ok:
+            self.scene.reload(self.scene.selected_ids())
+            self._model_changed()
+        else:
+            self.refresh_order()
+        return ok
+
+    # ------------------------------------------------------------------ modèles d'exemple
+    def open_template(self, key: str) -> dict:
+        self.wf, self.wf_id = templates.build(key), ""
+        self.scene.load(self.wf)
+        self.view.fit()
+        self.trig.setPlainText(json.dumps(self.wf["triggers"], indent=1))
+        self.enabled.setChecked(True)
+        self._loaded()
+        if self.project is not None:
+            self.save()
+        self.status.setText(f"Modèle ouvert : {self.wf['name']}")
+        return self.wf
 
     # ------------------------------------------------------------------ exécution
     def execute(self, dry: bool, trigger: dict | None = None, wait: bool = True) -> dict | None:
@@ -433,9 +602,11 @@ class ForgeWidget(QWidget):
             self.status.setText(f"✗ Import impossible : {exc}")
             return False
         self.wf, self.wf_id = wf, ""
+        schema.upgrade_workflow(self.wf)
         self.save()
         self.scene.load(self.wf)
         self.view.fit()
+        self._loaded()
         return True
 
     def closeEvent(self, ev):  # noqa: N802

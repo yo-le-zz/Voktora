@@ -3,7 +3,6 @@
 | Plugin | Rôle | Options principales |
 |---|---|---|
 | **api-plus** | aides pour auteurs de plugins : `fmt_bytes`, `fmt_duration`, `slug`, `debounce`, `Store`, `Cache`, bus d'événements | — |
-| **quick-note** | notes rapides (par projet) dans un panneau ancrable, enregistrement différé | police, retour à la ligne, délai, position, raccourci |
 | **system-monitor** | CPU/RAM/disques/charge, barre d'état + panneau, alertes | éléments affichés, intervalle, seuils |
 | **dev-toolbox** | Base64, UUID, horodatage, JSON, hachages, URL, mots de passe | outil au démarrage, copie auto, longueur de mot de passe |
 | **theme-studio** | éditeur de thèmes avec aperçu en direct, import/export JSON | point de départ, aperçu, auteur |
@@ -12,7 +11,7 @@
 | **api-studio** | client HTTP/WebSocket, mock, scripts, OpenAPI/Postman | variables, environnements |
 | **project-knowledge** | recherche BM25, wiki, diagrammes, doc d'API | fichiers indexés |
 | **workflow-forge** | éditeur visuel d'automatisations, cron, déclencheurs | déclencheurs, port http_in |
-| + ceux d'avant : project-counter, todo-scanner, ui-tweaks, zen-mode, … | | |
+| + ceux d'avant : todo-scanner, zen-mode, … | | |
 
 Les thèmes, packs d'icônes et styles sont dans les **boutiques** (`doc/SHOPS.md`), plus dans les plugins.
 Quick Note, System Monitor et Dev Toolbox **dépendent** d'api-plus (installée automatiquement).
@@ -39,7 +38,7 @@ correspondant, ajoutez un test, puis relancez `validate --run`.
 
 ## Nouveautés 1.1.3
 
-Améliorés (v1.1.0, options, tests) : **todo-scanner**, **git-insights**, **focus-timer**, **project-counter**, **zen-mode**, **quick-notes**.
+Améliorés (v1.1.0, options, tests) : **todo-scanner**, **git-insights**, **focus-timer**, **zen-mode**, **quick-notes**.
 
 | Nouveau plugin | Langage | Rôle |
 |---|---|---|
@@ -49,6 +48,6 @@ Améliorés (v1.1.0, options, tests) : **todo-scanner**, **git-insights**, **foc
 | snippet-vault | Python | coffre d'extraits (global ou par projet), recherche, export/import Markdown |
 | color-lab | Python | conversion de couleurs, contraste WCAG, correction, palettes |
 | text-case-js | JavaScript | camelCase/snake_case/tri… sur le presse-papiers |
-| json-clipboard-js | JavaScript | formater/minifier/trier du JSON |
-| generators-js | JavaScript | UUID, lorem ipsum, couleurs (non cryptographique) |
 | loc-counter-rs | Rust | comptage de lignes par langage (cargo requis, natif sans bac à sable) |
+
+*1.1.4 : retirés (doublons ou recoupement avec dev-toolbox, quick-notes ou les styles de la boutique) : quick-note, ui-tweaks, project-counter, json-clipboard-js, generators-js.*

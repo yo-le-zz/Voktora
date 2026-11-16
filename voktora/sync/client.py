@@ -32,6 +32,10 @@ class RemoteError(Exception):
         self.status = status
 
 
+class ConfigMismatch(RemoteError):
+    """L'autre PC refuse la synchronisation : configuration différente (voir configpack.evaluate_gate)."""
+
+
 class RemoteStore:
     def __init__(self, host: str, port: int, device_id: str, secret: bytes, timeout: float = TIMEOUT):
         self.host, self.port, self.device_id, self.secret, self.timeout = host, int(port), device_id, secret, timeout
@@ -151,12 +155,16 @@ class RemoteStore:
     def request_sync(self) -> bool:
         return bool(self._call("POST", "/request-sync", payload={}).get("accepted"))
 
+    lock_config: dict | None = None          # révision de configuration annoncée à l'autre PC (1.1.4)
+
     def lock(self) -> None:
         try:
-            self._call("POST", "/lock", payload={})
+            self._call("POST", "/lock", payload={"config": self.lock_config} if self.lock_config else {})
         except RemoteError as exc:
             if exc.status == 423:
                 raise ConnectionError(str(exc)) from exc
+            if exc.status == 409:
+                raise ConfigMismatch(409, str(exc)) from exc
             raise
         self._locked = True
 
@@ -167,6 +175,37 @@ class RemoteStore:
                 self._call("POST", "/unlock", payload={})
             except (ConnectionError, RemoteError):
                 pass
+
+    # ── 1.1.4 : configuration et rôles (None = pair d'une version plus ancienne) ──
+
+    def _ext(self, method: str, route: str, payload: dict | None = None) -> dict | None:
+        try:
+            return self._call(method, route, payload=payload)
+        except RemoteError as exc:
+            if exc.status == 404:
+                return None
+            raise
+
+    def config_rev(self) -> dict | None:
+        return self._ext("GET", "/config/rev")
+
+    def config_pack(self) -> dict | None:
+        return self._ext("GET", "/config/pack")
+
+    def config_push(self, body: dict) -> dict | None:
+        return self._ext("POST", "/config/push", body)
+
+    def config_request(self, body: dict) -> dict | None:
+        return self._ext("POST", "/config/request", body)
+
+    def roles_state(self) -> dict | None:
+        return self._ext("GET", "/roles/state")
+
+    def roles_propose(self, body: dict) -> dict | None:
+        return self._ext("POST", "/roles/propose", body)
+
+    def roles_accept(self, body: dict) -> dict | None:
+        return self._ext("POST", "/roles/accept", body)
 
     # ── interface « magasin » ────────────────────────────────────────────────
 

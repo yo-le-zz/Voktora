@@ -1,0 +1,282 @@
+{
+ "count": 21,
+ "shops": {
+  "themes": 51,
+  "icons": 9,
+  "styles": 13
+ },
+ "plugins": [
+  {
+   "id": "api-plus",
+   "name": "API Plus",
+   "lang": "python",
+   "description": "Bibliothèque d'aides pour auteurs de plugins : formats, stockage JSON, bus d'événements, anti-rebond, cache. À mettre dans « dependencies ».",
+   "tags": [
+    "developpeur",
+    "bibliotheque"
+   ],
+   "version": "1.0.0",
+   "tier": "official"
+  },
+  {
+   "id": "api-studio",
+   "name": "API Studio",
+   "lang": "python",
+   "description": "Client HTTP complet : collections, variables, chaînage, tests, scripts Python/JS isolés, WebSocket, serveur mock, import OpenAPI/Postman.",
+   "tags": [
+    "developpeur",
+    "api",
+    "http",
+    "websocket"
+   ],
+   "version": "1.0.0",
+   "tier": "official"
+  },
+  {
+   "id": "changelog-builder",
+   "name": "Changelog Builder",
+   "lang": "python",
+   "description": "Génère un changelog depuis les commits Git (Conventional Commits) entre deux références, propose la prochaine version SemVer et l'insère dans CHANGELOG.md.",
+   "tags": [
+    "git",
+    "changelog",
+    "release"
+   ],
+   "version": "1.0.0",
+   "tier": "official"
+  },
+  {
+   "id": "code-inspector",
+   "name": "Code Inspector",
+   "lang": "python",
+   "description": "Comprend un projet : architecture, dépendances, graphe d'appels avec niveau de certitude, ponts Python × Rust, qualité, exports JSON/HTML/SVG/Markdown/PDF.",
+   "tags": [
+    "developpeur",
+    "analyse",
+    "architecture",
+    "rust",
+    "python"
+   ],
+   "version": "1.0.0",
+   "tier": "official"
+  },
+  {
+   "id": "color-lab",
+   "name": "Color Lab",
+   "lang": "python",
+   "description": "Convertit HEX/RGB/HSL, vérifie les contrastes WCAG (AA/AAA), corrige une couleur illisible et propose des palettes (complémentaire, triade, nuances).",
+   "tags": [
+    "couleurs",
+    "accessibilité",
+    "design"
+   ],
+   "version": "1.0.0",
+   "tier": "official"
+  },
+  {
+   "id": "dev-toolbox",
+   "name": "Dev Toolbox",
+   "lang": "python",
+   "description": "Boîte à outils : Base64, UUID, horodatages, JSON, hachages, URL, mots de passe — dans une fenêtre à onglets.",
+   "tags": [
+    "developpeur",
+    "outils"
+   ],
+   "version": "1.0.0",
+   "tier": "official"
+  },
+  {
+   "id": "devops-center",
+   "name": "DevOps Center",
+   "lang": "python",
+   "description": "Git, tickets/PR GitHub, Docker, serveurs SSH, déploiements avec sauvegarde et restauration automatique, pipelines personnalisables, historique.",
+   "tags": [
+    "developpeur",
+    "git",
+    "docker",
+    "ssh",
+    "deploiement"
+   ],
+   "version": "1.0.0",
+   "tier": "official"
+  },
+  {
+   "id": "focus-timer",
+   "name": "Focus Timer",
+   "lang": "python",
+   "description": "Pomodoro dans la barre d'état : durées réglables, longue pause, passer/réinitialiser, statistiques sur 7 jours.",
+   "tags": [
+    "focus",
+    "pomodoro",
+    "productivité"
+   ],
+   "version": "1.1.0",
+   "tier": "official"
+  },
+  {
+   "id": "git-insights",
+   "name": "Git Insights",
+   "lang": "python",
+   "description": "Tableau de bord Git du projet : état, retard/avance, auteurs, activité hebdomadaire, fichiers actifs, derniers commits, copie en Markdown.",
+   "tags": [
+    "git",
+    "statistiques"
+   ],
+   "version": "1.1.0",
+   "tier": "official"
+  },
+  {
+   "id": "gitignore-gen",
+   "name": "Gitignore Generator",
+   "lang": "python",
+   "description": "Génère ou complète le .gitignore du projet : 20 modèles (langages, éditeurs, systèmes), détection automatique, fusion sans doublons.",
+   "tags": [
+    "git",
+    "outil",
+    "gitignore"
+   ],
+   "version": "1.0.0",
+   "tier": "official"
+  },
+  {
+   "id": "license-picker",
+   "name": "License Picker",
+   "lang": "python",
+   "description": "Écrit le fichier LICENSE du projet (MIT, BSD, ISC, Unlicense) avec année et titulaire, génère les en-têtes SPDX, et pointe vers les textes officiels Apache/GPL/MPL.",
+   "tags": [
+    "licence",
+    "outil",
+    "légal"
+   ],
+   "version": "1.0.0",
+   "tier": "official"
+  },
+  {
+   "id": "loc-counter-rs",
+   "name": "LOC Counter (Rust)",
+   "lang": "rust",
+   "description": "Compte les lignes de code, de commentaires et vides par langage (plugin natif Rust, rapide).",
+   "tags": [
+    "code",
+    "statistiques",
+    "rust"
+   ],
+   "version": "1.0.0",
+   "tier": "official"
+  },
+  {
+   "id": "project-knowledge",
+   "name": "Project Knowledge",
+   "lang": "python",
+   "description": "Mémoire du projet : index incrémental, recherche plein texte BM25, wiki par projet avec liens, symboles, diagrammes, documentation d'API et exports.",
+   "tags": [
+    "developpeur",
+    "documentation",
+    "recherche",
+    "wiki"
+   ],
+   "version": "1.0.0",
+   "tier": "official"
+  },
+  {
+   "id": "quick-notes",
+   "name": "Quick Notes",
+   "lang": "python",
+   "description": "Un bloc-notes par projet : sauvegarde automatique, compteur de mots, copie en Markdown, taille du texte réglable.",
+   "tags": [
+    "notes",
+    "productivité"
+   ],
+   "version": "1.1.0",
+   "tier": "official"
+  },
+  {
+   "id": "snippet-vault",
+   "name": "Snippet Vault",
+   "lang": "python",
+   "description": "Bibliothèque de snippets globale ou par projet : recherche, étiquettes, copie en un clic, export Markdown, accès depuis la palette.",
+   "tags": [
+    "productivité",
+    "code",
+    "snippets"
+   ],
+   "version": "1.0.0",
+   "tier": "official"
+  },
+  {
+   "id": "system-monitor",
+   "name": "System Monitor",
+   "lang": "python",
+   "description": "Processeur, mémoire, disques et charge en temps réel dans la barre d'état et un panneau détaillé.",
+   "tags": [
+    "systeme",
+    "monitoring"
+   ],
+   "version": "1.0.0",
+   "tier": "official"
+  },
+  {
+   "id": "text-case-js",
+   "name": "Text Case (JS)",
+   "lang": "js",
+   "description": "Convertit le presse-papiers : camelCase, snake_case, kebab-case, slug, tri et dédoublonnage de lignes… (plugin JavaScript).",
+   "tags": [
+    "texte",
+    "productivité",
+    "javascript"
+   ],
+   "version": "1.0.0",
+   "tier": "official"
+  },
+  {
+   "id": "theme-studio",
+   "name": "Theme Studio",
+   "lang": "python",
+   "description": "Créez vos thèmes avec aperçu EN DIRECT : couleurs, import/export JSON, enregistrement dans Paramètres → Thèmes.",
+   "tags": [
+    "developpeur",
+    "apparence"
+   ],
+   "version": "1.0.0",
+   "tier": "official"
+  },
+  {
+   "id": "todo-scanner",
+   "name": "TODO Scanner",
+   "lang": "python",
+   "description": "Liste les TODO, FIXME, HACK, BUG… du projet ouvert (dans les commentaires), avec filtre, recherche, options et export Markdown.",
+   "tags": [
+    "code",
+    "qualité",
+    "tâches"
+   ],
+   "version": "1.1.0",
+   "tier": "official"
+  },
+  {
+   "id": "workflow-forge",
+   "name": "Workflow Forge",
+   "lang": "python",
+   "description": "Éditeur visuel d'automatisations : blocs, conditions, boucles, branches parallèles, déclencheurs (fichiers, Git, cron, HTTP local), test à blanc, journaux.",
+   "tags": [
+    "automatisation",
+    "developpeur",
+    "workflow"
+   ],
+   "version": "1.2.0",
+   "tier": "official"
+  },
+  {
+   "id": "zen-mode",
+   "name": "Zen Mode",
+   "lang": "python",
+   "description": "Masque barre de menus, barre d'état et liste des projets pour se concentrer (Ctrl+Shift+Z) ; éléments masqués et plein écran réglables.",
+   "tags": [
+    "interface",
+    "concentration"
+   ],
+   "version": "1.1.0",
+   "tier": "official"
+  }
+ ]
+}

@@ -82,6 +82,9 @@ class SyncDialog(QDialog):
         tabs.addTab(self._build_devices(), "💻 Appareils")
         tabs.addTab(self._build_content(), "📦 Contenu")
         tabs.addTab(self._build_auto(), "⚙️ Automatisme")
+        from .sync_group_panel import SyncGroupPanel
+        self._group_panel = SyncGroupPanel(self.svc)
+        tabs.addTab(self._group_panel, "👥 Groupe & config")
         tabs.addTab(self._build_log(), "📜 Journal")
         tabs.addTab(self._build_history(), "🕘 Historique")
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Close)
@@ -435,6 +438,7 @@ class SyncDialog(QDialog):
 
     def _refresh(self, snap: dict) -> None:
         s = self.s
+        self._group_panel.refresh(snap)
         key = (s["device_name"], s["primary_id"], tuple((p["id"], p["name"]) for p in s["peers"]))
         if key != getattr(self, "_primary_key", None):               # liste recréée seulement si elle a changé
             self._primary_key = key

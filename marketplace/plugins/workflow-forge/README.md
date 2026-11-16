@@ -5,6 +5,15 @@
 ## Éditeur
 Palette de blocs (recherche), double-clic pour ajouter, glisser du rond de sortie vers un bloc pour relier, Suppr pour effacer, molette pour zoomer. La scène reste fluide avec 250 blocs et 250 liens (test automatisé : chargement < 4 s, déplacement d'un bloc relié < 50 ms). Formulaire de paramètres généré par bloc ; options communes : tentatives, délai entre tentatives, délai maximal, « continuer si échec ».
 
+## Nouveautés 1.2.0 — édition des blocs
+- **Schéma de paramètres typé** par bloc (`core/blocks.py`, `core/schema.py`, sans Qt) : texte court, multiligne, code, entier/nombre (min, max, pas, unité), booléen, **menu** (méthode HTTP, mode d'écriture, niveau de journal, encodage, type de corps…), chemin (bouton **Parcourir…**), variable (liste déroulante éditable des variables définies en amont), durée, expression `{{ … }}`, liste **clé / valeur** (en-têtes, variables d'environnement) avec ajout, suppression et réordonnancement des lignes.
+- **Panneau de propriétés** généré depuis le schéma : libellés français, info-bulles (aide + exemple), valeur par défaut, **validation en direct** (message sous le champ), bouton **Réinitialiser** (↺). Les changements sont appliqués tout de suite et enregistrés automatiquement.
+- **Résumé lisible** sur chaque bloc (« HTTP GET https://… ») ; **double-clic** sur un bloc : édition rapide des champs essentiels.
+- **Annuler / Rétablir** (Ctrl+Z / Ctrl+Y, historique de 100 états, modifications d'un même champ fusionnées), **Dupliquer** (Ctrl+D), **Copier / Coller** (Ctrl+C / Ctrl+V, y compris d'un workflow à l'autre), **réordonnancement par glisser** (onglet « Ordre », pour une suite simple de blocs), **recherche** dans la palette (titre, type, catégorie, description) et **aide** par bloc (description, exemple, sorties).
+- **6 modèles d'exemple** (menu « Modèles ▾ ») : tests puis notification, appel d'API, chasse aux TODO, boucle sur des fichiers, build en parallèle, mise à jour Git puis tests.
+- Validation du workflow enrichie (menus, nombres, JSON, syntaxe Python, URL, commande, regex) ; **les anciens workflows restent lisibles** (paramètres manquants complétés, ancien « append » de l'écriture de fichier, en-têtes en dictionnaire). Test à blanc : les sorties des blocs ignorés valent `None` au lieu de provoquer « champ introuvable ».
+- Limites : l'ordre par glisser ne concerne que les chaînes linéaires (les workflows à branches se règlent dans l'éditeur graphique) ; le déplacement d'un bloc est annulable mais pas la sélection ; les déclencheurs restent saisis en JSON.
+
 ## Blocs (30)
 - **Flux** : démarrage, fin, échec volontaire, condition (true/false), pour chaque, tant que, parallèle, joindre, attendre.
 - **Données** : variable, transformation, journal, notification, lecture JSON.
@@ -30,4 +39,4 @@ JSON versionné ; l'import valide le workflow (blocs, ports, expressions, cycles
 ## Limites honnêtes
 Pas d'éditeur de déclencheurs graphique (JSON). Pas de reprise après plantage. Le sondage GitHub n'est pas câblé dans l'interface (la brique est testée). Un jeton HTTP est conservé en clair dans le dossier de données du plugin (il n'est pas dans les exports). Les scripts isolés ne sont pas un bac à sable de sécurité : n'exécutez que vos propres workflows.
 
-Permissions : `shell`, `network`, `projects.read`, `ui`. Tests : `tests/test_plugin_workflow_forge.py` (racine du dépôt).
+Permissions : `shell`, `network`, `projects.read`, `ui`. Tests : `tests/test_plugin_workflow_forge.py` et `tests/test_plugin_workflow_forge_blocks.py` (racine du dépôt).

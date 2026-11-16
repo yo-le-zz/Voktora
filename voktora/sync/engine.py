@@ -48,6 +48,10 @@ class Cancelled(SyncError):
     """Arrêt demandé (ou pair éteint)."""
 
 
+class Suspended(Cancelled):
+    """Pause trop longue : la passe se suspend (état de reprise conservé, verrou rendu) ; `resume()` la relancera."""
+
+
 class PeerGone(SyncError):
     """Le pair ne répond plus (éteint, réseau perdu) : la synchronisation reprendra plus tard."""
 
@@ -193,6 +197,7 @@ class SyncEngine:
         self.base = BaseState(state_root, peer_id)
         self.on_progress, self.cancel, self.local_name = on_progress, cancel, local_name
         self.on_step, self.peer_name = on_step, peer_name
+        self.gate: Callable[[Callable[[], None]], None] | None = None    # point de contrôle pause/stop (control.checkpoint)
         self.errors: list[str] = []
         self._last_beat = time.monotonic()
         self.parallel = PARALLEL_SCANS                 # analyses simultanées (voir SyncSettings.performance_profile)
@@ -224,6 +229,14 @@ class SyncEngine:
     # ── helpers ──────────────────────────────────────────────────────────────
 
     def _check(self) -> None:
+        if self.gate:
+            from .control import PauseTimeout, StopRequested
+            try:
+                self.gate(self._beat)
+            except PauseTimeout as exc:
+                raise Suspended(str(exc)) from exc
+            except StopRequested as exc:
+                raise Cancelled(str(exc)) from exc
         if self.cancel and self.cancel():
             raise Cancelled("Synchronisation arrêtée.")
 
@@ -625,18 +638,26 @@ class SyncEngine:
             return False
 
     def _tee_plain(self, chunks):
-        for chunk in chunks:
-            self._check()
-            yield chunk
+        try:
+            for chunk in chunks:
+                self._check()
+                yield chunk
+        finally:
+            with contextlib.suppress(Exception):
+                chunks.close()                      # connexion fermée tout de suite si on s'arrête en cours de route
 
     def _tee(self, chunks, a: Action):
         """Garde le texte (≤256 Ko) transféré pour pouvoir fusionner plus tard, et surveille l'annulation."""
         buffer, keep = bytearray(), a.size <= BLOB_MAX
-        for chunk in chunks:
-            self._check()
-            if keep:
-                buffer += chunk
-            yield chunk
+        try:
+            for chunk in chunks:
+                self._check()
+                if keep:
+                    buffer += chunk
+                yield chunk
+        finally:
+            with contextlib.suppress(Exception):
+                chunks.close()
         if keep:
             self.base.save_blob(bytes(buffer))
 
