@@ -80,7 +80,7 @@ class ForgeWidget(QWidget):
         bar = QHBoxLayout()
         self.combo = QComboBox()
         self.btns = {}
-        for key, text in (("new", "Nouveau"), ("save", "Enregistrer"), ("del", "Supprimer"), ("check", "Valider"), ("run", "Exécuter"), ("dry", "Test à blanc"),
+        for key, text in (("new", "Nouveau"), ("save", "Enregistrer"), ("del", "Supprimer le workflow"), ("check", "Valider"), ("run", "Exécuter"), ("dry", "Test à blanc"),
                           ("stop", "Arrêter"), ("imp", "Importer…"), ("exp", "Exporter…"), ("fit", "Ajuster")):
             b = QPushButton(text)
             self.btns[key] = b
@@ -89,7 +89,7 @@ class ForgeWidget(QWidget):
         self.btns["stop"].setEnabled(False)
         lay.addLayout(bar)
         bar2 = QHBoxLayout()
-        for key, text, tip in (("undo", "↶ Annuler", "Annuler la dernière modification (Ctrl+Z)"), ("redo", "↷ Rétablir", "Rétablir (Ctrl+Y)"),
+        for key, text, tip in (("delnode", "Supprimer le bloc", "Supprime UNIQUEMENT les blocs sélectionnés (touche Suppr) ; le workflow reste intact"), ("undo", "↶ Annuler", "Annuler la dernière modification (Ctrl+Z)"), ("redo", "↷ Rétablir", "Rétablir (Ctrl+Y)"),
                                ("dup", "Dupliquer", "Dupliquer les blocs sélectionnés (Ctrl+D)"), ("copy", "Copier", "Copier les blocs sélectionnés (Ctrl+C)"),
                                ("paste", "Coller", "Coller les blocs copiés (Ctrl+V)")):
             b = QPushButton(text)
@@ -175,11 +175,13 @@ class ForgeWidget(QWidget):
         lay.addWidget(v, 1)
         self.btns["new"].clicked.connect(lambda: self.new_workflow())
         self.btns["save"].clicked.connect(self.save)
-        self.btns["del"].clicked.connect(self.delete)
+        self.btns["del"].setToolTip("Supprime tout le workflow enregistré (pas seulement le bloc sélectionné)")
+        self.btns["del"].clicked.connect(self._confirm_delete)
+        self.btns["delnode"].clicked.connect(self.scene.remove_selected)
         self.btns["check"].clicked.connect(self.check)
         self.btns["run"].clicked.connect(lambda: self.execute(False))
         self.btns["dry"].clicked.connect(lambda: self.execute(True))
-        self.btns["stop"].clicked.connect(self.cancel.set)
+        self.btns["stop"].clicked.connect(self.stop)
         self.btns["imp"].clicked.connect(lambda: self.import_file())
         self.btns["exp"].clicked.connect(lambda: self.export_file())
         self.btns["fit"].clicked.connect(self.view.fit)
@@ -279,6 +281,20 @@ class ForgeWidget(QWidget):
         self.status.setText(f"Enregistré : {self.wf['name']}")
         self.setup_triggers()
         return self.wf_id
+
+    def stop(self) -> None:
+        """Arrête l'exécution en cours (l'événement d'annulation est recréé à chaque exécution : on vise toujours le courant)."""
+        self.cancel.set()
+        if self.running:
+            self.status.setText("Arrêt demandé…")
+
+    def _confirm_delete(self) -> None:
+        if not self.wf_id:
+            return
+        from PySide6.QtWidgets import QMessageBox
+        if QMessageBox.question(self, "Supprimer le workflow", f"Supprimer TOUT le workflow « {self.wf.get('name', '')} » ?\n"
+                                "(Pour retirer seulement un bloc : « Supprimer le bloc » ou la touche Suppr.)") == QMessageBox.Yes:
+            self.delete()
 
     def delete(self) -> None:
         if self.wf_id:

@@ -8,7 +8,7 @@
 
 par [**yolezz**](https://github.com/yo-le-zz)
 
-[![Version](https://img.shields.io/badge/version-1.1.4-89b4fa?style=flat-square)](https://github.com/yo-le-zz/Voktora/releases)
+[![Version](https://img.shields.io/badge/version-1.1.5-89b4fa?style=flat-square)](https://github.com/yo-le-zz/Voktora/releases)
 [![Python](https://img.shields.io/badge/python-3.13+-cba6f7?style=flat-square)](https://python.org)
 [![PySide6](https://img.shields.io/badge/PySide6-6.x-a6e3a1?style=flat-square)](https://pypi.org/project/PySide6/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-fab387?style=flat-square)](#installation)
@@ -20,6 +20,8 @@ par [**yolezz**](https://github.com/yo-le-zz)
 
 ---
 
+- [Mode live](doc/LIVE.md) — essayer sans installer
+
 ## Présentation
 
 Voktora est un gestionnaire de projets de développement avec interface graphique (**thème Catppuccin Mocha**). Il centralise tous vos projets Git — classés par catégories que vous créez, ou par organisation GitHub — avec profils de lancement, hooks d'automatisation, vault de secrets, snapshots, analytics et plugins.
@@ -30,10 +32,10 @@ Voktora est un gestionnaire de projets de développement avec interface graphiqu
 
 | Plateforme | Téléchargement | Commande |
 |-----------|---------------|---------|
-| 🐧 Linux (Debian/Ubuntu) | `voktora_1.1.4_amd64.deb` | `sudo apt install ./voktora_*.deb` |
-| 🐧 Linux (Fedora/RHEL/openSUSE) | `voktora-1.1.4-1.x86_64.rpm` | `sudo dnf install ./voktora-*.rpm` |
-| 🐧 Linux (Arch, Omarchy, EndeavourOS, Manjaro) | `voktora-1.1.4-1-x86_64.pkg.tar.zst` | `sudo pacman -U ./voktora-*.pkg.tar.zst` |
-| 🪟 Windows 10/11 x64 | `Voktora_1.1.4_x64.msi` | Double-cliquer |
+| 🐧 Linux (Debian/Ubuntu) | `voktora_1.1.5_amd64.deb` | `sudo apt install ./voktora_*.deb` |
+| 🐧 Linux (Fedora/RHEL/openSUSE) | `voktora-1.1.5-1.x86_64.rpm` | `sudo dnf install ./voktora-*.rpm` |
+| 🐧 Linux (Arch, Omarchy, EndeavourOS, Manjaro) | `voktora-1.1.5-1-x86_64.pkg.tar.zst` | `sudo pacman -U ./voktora-*.pkg.tar.zst` |
+| 🪟 Windows 10/11 x64 | `Voktora_1.1.5_x64.msi` | Double-cliquer |
 
 → [Guide d'installation complet](doc/INSTALL.md)
 

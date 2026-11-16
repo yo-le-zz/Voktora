@@ -26,6 +26,15 @@ def archives_dir() -> Path:
     return d
 
 
+def _own_archive(value: str) -> Path:
+    """Chemin d'archive tiré de la configuration : refusé s'il sort du dossier des archives (config modifiée ou synchronisée)."""
+    path = Path(value or "")
+    root = archives_dir().resolve()
+    if not value or not path.resolve().is_relative_to(root):
+        raise ArchiveError("Chemin d'archive hors du dossier des archives : refusé.")
+    return path
+
+
 def _sha256(path: Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as fh:
@@ -80,7 +89,7 @@ def restore_project(path: Path | str, on_progress=None) -> Path:
     entry = core.get_project(folder)
     if entry is None or not entry.get("archived"):
         raise ArchiveError("Ce projet n'est pas archivé.")
-    zip_path = Path(entry.get("archive_path", ""))
+    zip_path = _own_archive(entry.get("archive_path", ""))
     verify_archive(zip_path, entry.get("archive_sha256", ""))
     if entry.get("archive_folder_removed") or not folder.exists():
         from core import archive as arch
@@ -97,7 +106,8 @@ def delete_archive(path: Path | str) -> None:
     """Supprime l'archive ZIP ET la fiche du projet si son dossier n'existe plus (sinon le projet redevient normal)."""
     folder = Path(path)
     entry = core.get_project(folder) or {}
-    Path(entry.get("archive_path", "")).unlink(missing_ok=True)
+    if entry.get("archive_path"):
+        _own_archive(entry["archive_path"]).unlink(missing_ok=True)
     if folder.exists():
         core.update_project(folder, archived=False, archive_path="", archive_sha256="", archive_folder_removed=False)
     else:

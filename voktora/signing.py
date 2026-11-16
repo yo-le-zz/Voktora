@@ -2,7 +2,7 @@
 Voktora — signing (1.1.4) : signature Ed25519 de l'index du marketplace.
 
 L'index (index.json) contient les SHA-256 de tous les fichiers des plugins : le signer protège donc tout le catalogue.
-  • clés de confiance : constante TRUSTED_KEYS ci-dessous (dans le code : une version compilée n'embarque pas de fichiers de données) + réglage `marketplace.trusted_keys` ;
+  • clés de confiance : fichier `trusted_keys.json` (copié à côté de l'exécutable par les scripts de build) + réglage `marketplace.trusted_keys` ;
   • si au moins une clé est configurée, un index sans signature valide est REFUSÉ (réglage `marketplace.allow_unsigned` pour passer outre) ;
   • sans clé configurée, comportement inchangé (non signé) et l'état « non signé » est signalé.
 Génération des clés et signature : `python tools/sign_index.py keygen|sign|verify` (la clé privée reste chez le mainteneur / dans un
@@ -12,6 +12,8 @@ secret CI, jamais dans le dépôt).
 from __future__ import annotations
 
 import base64
+import json
+from pathlib import Path
 
 SIG_NAME = "index.json.sig"
 
@@ -20,15 +22,33 @@ class SignatureError(ValueError):
     pass
 
 
-# Clés publiques (hexadécimal, 64 caractères) du mainteneur. Vide tant que `tools/sign_index.py keygen` n'a pas été utilisé.
-TRUSTED_KEYS: list[str] = [
-    # yolezz public key
-    "447b1d786bc4c7434e15a3da852781668c3018d1a648b6cfb4c0c9d4e72cce0a"
-]
+KEYS_FILE = "trusted_keys.json"
+
+
+def keys_file() -> Path:
+    """Fichier recensant les clés publiques de confiance (à côté de l'application : copié par les scripts de build)."""
+    try:
+        import core
+        candidate = core.get_app_dir() / KEYS_FILE
+        if candidate.is_file():
+            return candidate
+    except Exception:  # noqa: BLE001
+        pass
+    return Path(__file__).resolve().parent / KEYS_FILE
+
+
+def load_keys_file(path: Path | None = None) -> list[str]:
+    """Clés publiques (hex, 64 caractères) listées dans trusted_keys.json : {"keys": [{"key": "…", "owner": "…"}]}."""
+    try:
+        data = json.loads((path or keys_file()).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    entries = data.get("keys", []) if isinstance(data, dict) else []
+    return [e["key"] for e in entries if isinstance(e, dict) and isinstance(e.get("key"), str)]
 
 
 def trusted_keys(extra: list[str] | None = None) -> list[str]:
-    keys = [*TRUSTED_KEYS, *[k for k in (extra or []) if isinstance(k, str)]]
+    keys = [*load_keys_file(), *[k for k in (extra or []) if isinstance(k, str)]]
     return [k.strip().lower() for k in dict.fromkeys(keys) if isinstance(k, str) and len(k.strip()) == 64]
 
 

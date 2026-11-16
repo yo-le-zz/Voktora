@@ -81,7 +81,7 @@ def _send(title: str, body: str) -> bool:
     exe = shutil.which("notify-send")
     if exe:
         try:
-            subprocess.run([exe, "--app-name=Voktora", title, body], timeout=5, check=False, capture_output=True)  # noqa: S603
+            subprocess.run([exe, "--app-name=Voktora", "--", title, body], timeout=5, check=False, capture_output=True)  # noqa: S603
             return True
         except (OSError, subprocess.SubprocessError):
             pass

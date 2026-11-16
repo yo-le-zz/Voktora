@@ -85,6 +85,9 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Voktora — Project Manager")
+        import live
+        if live.active():
+            self.setWindowTitle("Voktora — Project Manager  [MODE LIVE : tout est supprimé à la fermeture]")
         self.setAcceptDrops(True)   # glisser un dossier ou un .zip sur la fenêtre = importer
         self.setMinimumSize(1180, 720)
         
@@ -976,6 +979,9 @@ class MainWindow(QMainWindow):
     # ── CONTENT ──────────────────────────────────
 
     def _log(self, msg: str):
+        if not (hasattr(self, "_project_panel") and self._right_stack.currentIndex() == 1):
+            import devmon
+            devmon.note(msg, src="window")        # le panneau n'est pas affiché : le journal global garde quand même la ligne
         # Déléguer au panneau projet si ouvert
         if hasattr(self, "_project_panel") and self._right_stack.currentIndex() == 1:
             self._project_panel.log(msg)
@@ -1164,7 +1170,9 @@ class MainWindow(QMainWindow):
         if core.get_app_config().get("plugins", {}).get("developer_mode"):
             from plugins import devtools
             devtools.enable(True)
-        QTimer.singleShot(8000, self.act_check_update)
+        import live
+        if not live.active():
+            QTimer.singleShot(8000, self.act_check_update)
         plugins.load_all()
         plugins.fire_hook("on_start", log_cb=self._log)
         if any(p.origin == "market" for p in plugins.get_all()):
@@ -1227,7 +1235,9 @@ class MainWindow(QMainWindow):
         import notifications
         self._sync_watcher = notifications.SyncWatcher()
         self._sync_bridge.changed.connect(self._sync_watcher.feed)
-        QTimer.singleShot(1500, get_service().start)
+        import live
+        if not live.active():                       # mode live : pas de synchronisation (rien ne doit survivre)
+            QTimer.singleShot(1500, get_service().start)
 
     def _on_sync_changed(self, snap: dict) -> None:
         peers = snap.get("peers", {})
@@ -1405,6 +1415,10 @@ class MainWindow(QMainWindow):
         self._refresh_project_panel()
 
     def closeEvent(self, event) -> None:           # noqa: N802 - nom imposé par Qt
+        import live
+        if live.active() and not live.confirm_exit_dialog(self):
+            event.ignore()
+            return
         with contextlib.suppress(Exception):
             from sync import get_service
             get_service().stop()

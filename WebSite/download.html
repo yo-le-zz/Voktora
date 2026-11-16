@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Télécharger — Voktora</title>
-<meta name="description" content="Télécharger Voktora 1.1.4 : .deb, .rpm, .pkg.tar.zst, .msi ou sources, avec commandes et vérification SHA-256.">
+<meta name="description" content="Télécharger Voktora 1.1.5 : .deb, .rpm, .pkg.tar.zst, .msi, .dmg (macOS Intel) ou sources, avec commandes et vérification SHA-256.">
 
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
@@ -17,12 +17,12 @@
 <a class="skip" href="#contenu">Aller au contenu</a>
 <header class="site-header"><div class="wrap">
 <a class="brand" href="index.html"><img src="assets/Voktora.png" alt="" width="28" height="28"><span>Voktora</span></a>
-<nav class="nav" aria-label="Navigation principale"><a href="index.html">Accueil</a><a href="download.html" aria-current="page">Télécharger</a><a href="features.html">Fonctions</a><a href="plugins.html">Plugins</a><a href="docs.html">Docs</a><a href="changelog.html">Changelog</a><a href="https://github.com/yo-le-zz/Voktora" rel="noopener">GitHub</a></nav>
+<nav class="nav" aria-label="Navigation principale"><a href="index.html">Accueil</a><a href="download.html" aria-current="page">Télécharger</a><a href="live.html">Live</a><a href="features.html">Fonctions</a><a href="plugins.html">Plugins</a><a href="docs.html">Docs</a><a href="changelog.html">Changelog</a><a href="https://github.com/yo-le-zz/Voktora" rel="noopener">GitHub</a></nav>
 <button class="icon-btn" id="theme-toggle" type="button" aria-label="Changer de thème"></button>
 </div></header>
 <main id="contenu">
 <div class="wrap">
-<div class="page-head"><h1 class="reveal">Télécharger Voktora 1.1.4</h1>
+<div class="page-head"><h1 class="reveal">Télécharger Voktora 1.1.5</h1>
 <p class="lead reveal">Les fichiers sont publiés sur GitHub Releases. Choisissez le format de votre système.</p>
 <div class="btns reveal"><a class="btn primary" href="https://github.com/yo-le-zz/Voktora/releases/latest">Releases GitHub</a><a class="btn" href="#verifier">Vérifier la somme</a></div></div>
 
@@ -30,42 +30,47 @@
 <div class="table-wrap"><table>
 <thead><tr><th scope="col">Format</th><th scope="col">Système</th><th scope="col">Fichier</th></tr></thead>
 <tbody>
-<tr><td><a href="#deb">.deb</a></td><td>Debian, Ubuntu, Mint</td><td><code>voktora_1.1.4_amd64.deb</code></td></tr>
-<tr><td><a href="#rpm">.rpm</a></td><td>Fedora, RHEL, Rocky, Alma, openSUSE</td><td><code>voktora-1.1.4-1.x86_64.rpm</code></td></tr>
-<tr><td><a href="#arch">.pkg.tar.zst</a></td><td>Arch, Omarchy, EndeavourOS, Manjaro, CachyOS</td><td><code>voktora-1.1.4-1-x86_64.pkg.tar.zst</code></td></tr>
-<tr><td><a href="#msi">.msi</a></td><td>Windows 10 / 11 (x64)</td><td><code>Voktora_1.1.4_x64.msi</code></td></tr>
+<tr><td><a href="#deb">.deb</a></td><td>Debian, Ubuntu, Mint</td><td><code>voktora_1.1.5_amd64.deb</code></td></tr>
+<tr><td><a href="#rpm">.rpm</a></td><td>Fedora, RHEL, Rocky, Alma, openSUSE</td><td><code>voktora-1.1.5-1.x86_64.rpm</code></td></tr>
+<tr><td><a href="#arch">.pkg.tar.zst</a></td><td>Arch, Omarchy, EndeavourOS, Manjaro, CachyOS</td><td><code>voktora-1.1.5-1-x86_64.pkg.tar.zst</code></td></tr>
+<tr><td><a href="#msi">.msi</a></td><td>Windows 10 / 11 (x64)</td><td><code>Voktora_1.1.5_x64.msi</code></td></tr>
+<tr><td><a href="#dmg">.dmg</a></td><td>macOS Intel (x86_64 uniquement)</td><td><code>Voktora_1.1.5_x86_64.dmg</code></td></tr>
 <tr><td><a href="#sources">Sources</a></td><td>Tout système avec Python 3.13 (dont macOS)</td><td>dépôt Git</td></tr>
 </tbody></table></div></section>
 
 <section class="block reveal" aria-labelledby="deb"><h2 id="deb">Debian, Ubuntu, Mint</h2>
-<p class="muted">Recommandé sur ces distributions. Fichier : <code>voktora_1.1.4_amd64.deb</code></p>
+<p class="muted">Recommandé sur ces distributions. Fichier : <code>voktora_1.1.5_amd64.deb</code></p>
 <div class="term"><div class="term-bar"><i></i><i></i><i></i><span class="t">deb — sh</span></div>
-<pre tabindex="0"><code>wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora_1.1.4_amd64.deb
-sudo apt install ./voktora_1.1.4_amd64.deb   <span class="c"># résout aussi les dépendances</span>
+<pre tabindex="0"><code>wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora_1.1.5_amd64.deb
+sudo apt install ./voktora_1.1.5_amd64.deb   <span class="c"># résout aussi les dépendances</span>
 voktora
 
 <span class="c"># désinstaller</span>
 sudo dpkg -r voktora</code></pre></div></section>
 <section class="block reveal" aria-labelledby="rpm"><h2 id="rpm">Fedora, RHEL, openSUSE</h2>
-<p class="muted">Les bibliothèques Qt sont résolues automatiquement. Fichier : <code>voktora-1.1.4-1.x86_64.rpm</code></p>
+<p class="muted">Les bibliothèques Qt sont résolues automatiquement. Fichier : <code>voktora-1.1.5-1.x86_64.rpm</code></p>
 <div class="term"><div class="term-bar"><i></i><i></i><i></i><span class="t">rpm — sh</span></div>
-<pre tabindex="0"><code>wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora-1.1.4-1.x86_64.rpm
-sudo dnf install ./voktora-1.1.4-1.x86_64.rpm      <span class="c"># Fedora, RHEL</span>
-sudo zypper install ./voktora-1.1.4-1.x86_64.rpm   <span class="c"># openSUSE</span>
+<pre tabindex="0"><code>wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora-1.1.5-1.x86_64.rpm
+sudo dnf install ./voktora-1.1.5-1.x86_64.rpm      <span class="c"># Fedora, RHEL</span>
+sudo zypper install ./voktora-1.1.5-1.x86_64.rpm   <span class="c"># openSUSE</span>
 voktora
 
 <span class="c"># désinstaller</span>
 sudo dnf remove voktora      <span class="c"># ou : sudo zypper remove voktora</span></code></pre></div></section>
 <section class="block reveal" aria-labelledby="arch"><h2 id="arch">Arch et dérivées</h2>
-<p class="muted">Un PKGBUILD de référence est dans <code>Installers/Arch installer/</code>. Fichier : <code>voktora-1.1.4-1-x86_64.pkg.tar.zst</code></p>
+<p class="muted">Un PKGBUILD de référence est dans <code>Installers/Arch installer/</code>. Fichier : <code>voktora-1.1.5-1-x86_64.pkg.tar.zst</code></p>
 <div class="term"><div class="term-bar"><i></i><i></i><i></i><span class="t">arch — sh</span></div>
-<pre tabindex="0"><code>wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora-1.1.4-1-x86_64.pkg.tar.zst
-sudo pacman -U ./voktora-1.1.4-1-x86_64.pkg.tar.zst</code></pre></div></section>
+<pre tabindex="0"><code>wget https://github.com/yo-le-zz/Voktora/releases/latest/download/voktora-1.1.5-1-x86_64.pkg.tar.zst
+sudo pacman -U ./voktora-1.1.5-1-x86_64.pkg.tar.zst</code></pre></div></section>
 <section class="block reveal" aria-labelledby="msi"><h2 id="msi">Windows 10 / 11</h2>
-<p class="muted">Double-clic, puis l'assistant (Suivant, Installer, Terminer). Installé dans <code>C:\Program Files\Voktora\</code>. Fichier : <code>Voktora_1.1.4_x64.msi</code></p>
+<p class="muted">Double-clic, puis l'assistant (Suivant, Installer, Terminer). Installé dans <code>C:\Program Files\Voktora\</code>. Fichier : <code>Voktora_1.1.5_x64.msi</code></p>
 <div class="term"><div class="term-bar"><i></i><i></i><i></i><span class="t">windows</span></div>
 <pre tabindex="0"><code><span class="c"># Télécharger puis double-cliquer</span>
-https://github.com/yo-le-zz/Voktora/releases/latest/download/Voktora_1.1.4_x64.msi</code></pre></div><div class="callout"><p>Le .msi n'est pas signé numériquement (pas de certificat de signature de code) : Windows peut indiquer « éditeur non reconnu ». Le code source est public ; téléchargez uniquement depuis les releases GitHub officielles.</p></div></section>
+https://github.com/yo-le-zz/Voktora/releases/latest/download/Voktora_1.1.5_x64.msi</code></pre></div><div class="callout"><p>Le .msi n'est pas signé numériquement (pas de certificat de signature de code) : Windows peut indiquer « éditeur non reconnu ». Le code source est public ; téléchargez uniquement depuis les releases GitHub officielles.</p></div></section>
+<section class="block reveal" aria-labelledby="dmg"><h2 id="dmg">macOS (Intel)</h2>
+<p class="muted">Pour les Mac à processeur Intel (x86_64). Il n'existe pas de version Apple Silicon (arm64). Ouvrez le .dmg et glissez Voktora dans Applications. Fichier : <code>Voktora_1.1.5_x86_64.dmg</code></p>
+<div class="term"><div class="term-bar"><i></i><i></i><i></i><span class="t">macOS — terminal</span></div><pre tabindex="0"><code>curl -LO https://github.com/yo-le-zz/Voktora/releases/latest/download/Voktora_1.1.5_x86_64.dmg</code></pre></div>
+<div class="callout"><p>L'application n'est pas signée ni notarisée par Apple : au premier lancement, clic droit sur Voktora, puis Ouvrir. Ce build n'a pas encore été testé sur un vrai Mac.</p></div></section>
 <section class="block reveal" aria-labelledby="sources"><h2 id="sources">Depuis les sources</h2>
 <p class="muted">Fonctionne aussi sur macOS (pas de paquet macOS). Extension Rust optionnelle (cargo). Fichier : <code>—</code></p>
 <div class="term"><div class="term-bar"><i></i><i></i><i></i><span class="t">sources — sh</span></div>
@@ -94,7 +99,7 @@ uv run python voktora/main.py</code></pre></div><p class="small"><a href="https:
 </div>
 </main>
 <footer class="site-footer"><div class="wrap">
-<span>Voktora 1.1.4 · par <a href="https://github.com/yo-le-zz">yolezz</a> · licence <a href="https://github.com/yo-le-zz/Voktora/blob/main/LICENSE">MIT</a></span>
+<span>Voktora 1.1.5 · par <a href="https://github.com/yo-le-zz">yolezz</a> · licence <a href="https://github.com/yo-le-zz/Voktora/blob/main/LICENSE">MIT</a></span>
 <nav aria-label="Liens du dépôt"><a href="https://github.com/yo-le-zz/Voktora">Code source</a><a href="https://github.com/yo-le-zz/Voktora/releases/latest">Releases</a><a href="https://github.com/yo-le-zz/Voktora/issues">Signaler un problème</a></nav>
 </div></footer>
 <script src="js/main.js" defer></script>

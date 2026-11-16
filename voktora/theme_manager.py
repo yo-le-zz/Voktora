@@ -401,7 +401,10 @@ def import_themes_bulk(source: Path) -> tuple[list[str], list[str]]:
                 for info in z.infolist()[:500]:
                     name = Path(info.filename).name
                     if info.filename.endswith(".json") and not info.is_dir() and info.file_size < 1_000_000 and name:
-                        (folder / name).write_bytes(z.read(info))
+                        with z.open(info) as fh:
+                            data = fh.read(1_000_001)                 # borne réelle (l'en-tête du ZIP peut mentir)
+                        if len(data) <= 1_000_000:
+                            (folder / name).write_bytes(data)
         for file in sorted(folder.glob("*.json"))[:500]:
             try:
                 done.append(import_theme(file))

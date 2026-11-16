@@ -32,7 +32,7 @@ def provider_is_local(provider: dict) -> bool:
 
 def _git(folder: Path, *args: str) -> str:
     try:
-        done = subprocess.run(["git", "-C", str(folder), *args], capture_output=True, text=True, timeout=20, check=False)  # noqa: S603, S607
+        done = subprocess.run(["git", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-C", str(folder), *args], capture_output=True, text=True, timeout=20, check=False)  # noqa: S603, S607
     except (OSError, subprocess.SubprocessError) as exc:
         raise AIGitError(f"git indisponible : {exc}") from exc
     if done.returncode != 0:
@@ -42,10 +42,10 @@ def _git(folder: Path, *args: str) -> str:
 
 def collect_diff(folder: Path, staged: bool = True) -> tuple[str, list[str]]:
     """(diff borné et purgé, fichiers ignorés). Si rien n'est indexé, retombe sur le diff de travail."""
-    args = ["diff", "--no-color", "--unified=2"] + (["--cached"] if staged else [])
+    args = ["diff", "--no-color", "--no-ext-diff", "--no-textconv", "--unified=2"] + (["--cached"] if staged else [])
     raw = _git(folder, *args)
     if staged and not raw.strip():
-        raw = _git(folder, "diff", "--no-color", "--unified=2")
+        raw = _git(folder, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--unified=2")
     return clean_diff(raw)
 
 

@@ -275,7 +275,9 @@ def preview_files(item: ShopItem, limit: int = 12) -> dict[str, bytes]:
     """Quelques fichiers d'un objet pour l'aperçu, SANS l'installer : installé → lus sur disque ; sinon téléchargés,
     vérifiés (SHA-256 + contenu) et mis en cache. Jamais d'exécution : ce ne sont que des SVG/QSS."""
     _check_kind(item.kind)
-    wanted = [n for n in item.files if n.endswith((".svg", ".qss"))][:limit]
+    if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,63}", item.id or ""):
+        raise ShopError(f"Identifiant refusé : {item.id!r}")
+    wanted = [safe_name(item.kind, n) for n in item.files if n.endswith((".svg", ".qss"))][:limit]
     out: dict[str, bytes] = {}
     local = item_dir(item.kind, item.id)
     cache = shops_dir() / ".preview" / item.kind / item.id

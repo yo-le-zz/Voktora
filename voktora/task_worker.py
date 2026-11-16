@@ -29,6 +29,8 @@ class TaskContext:
         return self._worker.is_cancelled()
 
     def log(self, line: str) -> None:
+        import devmon
+        devmon.note(line, src="task", need="verbose")
         self._worker.log.emit(line)
 
 

@@ -24,7 +24,7 @@ Windows + Linux compatible
 # ──────────────────────────────────────────────
 
 APP_NAME              = "Voktora"
-APP_VERSION           = "1.1.4"
+APP_VERSION           = "1.1.5"
 CONTAINER_NAME        = "Voktora"
 PROJECTS_DIR          = "Projects"
 PROJECT_BUILDER       = r"D:\my programme\Project_builder\ProjectsBuilder.exe"

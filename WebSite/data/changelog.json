@@ -1,6 +1,44 @@
 {
  "versions": [
   {
+   "version": "1.1.5",
+   "date": "2026-11-16",
+   "sections": [
+    {
+     "title": "Mode live",
+     "items": [
+      "**Une commande, aucune installation** : `curl -fsSL https://raw.githubusercontent.com/yo-le-zz/Voktora/main/Installers/live/install-live.sh | sh` (Windows : `install-live.ps1`, non testé). Le script télécharge la version demandée, prépare Python 3.13 et les dépendances **dans un dossier temporaire** `voktora-live-XXXXXXXX` (uv y est installé si absent), lance Voktora, puis **supprime tout** à la fermeture — y compris après Ctrl+C, fermeture du terminal ou plantage. Les sessions abandonnées (kill -9) sont nettoyées au lancement suivant.",
+      "Dans l'application (`voktora/live.py`) : configuration, plugins, boutiques, coffre et projets créés vivent dans le dossier live ; fenêtre « Tout supprimer et fermer / Exporter mes projets / Rester » à la fermeture ; synchronisation, mise à jour automatique et moniteur développeur désactivés ; titre « MODE LIVE ». Nouveau réglage d'environnement `VOKTORA_DATA_DIR` (dossier de données au choix).",
+      "Garde-fous de suppression : jamais un dossier arbitraire (nom `voktora-live-<alphanum>`, marqueur `.voktora-live`, dossier réel hors lien symbolique, situé dans le dossier temporaire)."
+     ]
+    },
+    {
+     "title": "Ajouts de dernière minute",
+     "items": [
+      "**Workflow Forge 1.3.0** : bouton ⤵ pour transmettre les données d'un bloc à l'autre (contenu de fichier, réponse HTTP, variables), « Supprimer le bloc » séparé de « Supprimer le workflow », bouton « Arrêter » réparé (il ne marchait qu'à la première exécution), très grande zone de travail déplaçable, modèle « Test » et 3 modèles complexes (CI complet, comptage de lignes, surveillance d'API).",
+      "**Marketplace des plugins** : « Tout mettre à jour (N) » et « Mode non vérifié » (download unsafe : ni SHA-256, ni signature, ni analyse — avec confirmation ; les plugins installés ainsi sont marqués `unsafe`).",
+      "**Journal global** : le moniteur développeur voit enfin l'activité (commandes lancées, réseau, fichiers supprimés/déplacés, console, avertissements, journaux des panneaux et de la synchro).",
+      "**Icônes** manquantes (se déconnecter, accessibilité, suggestion de commit, archives, actualiser…) et 15 autres emojis convertis.",
+      "**Clés de confiance** : `voktora/trusted_keys.json` (clé publique de yolezz) au lieu d'une constante dans le code, copié par les builds.",
+      "**Build macOS Intel (x86_64)** : `.dmg` dans la release (non testé sur un vrai Mac).",
+      "Domaine du site : https://voktora.pages.dev/"
+     ]
+    },
+    {
+     "title": "Sécurité",
+     "items": [
+      "Boutiques : identifiant et noms de fichiers revalidés avant les aperçus (pas de sortie du cache).",
+      "Archivage : une archive n'est lue/supprimée que dans le dossier des archives (une config modifiée ne peut plus viser un autre fichier).",
+      "Suggestions IA de commit : `git` est lancé sans fsmonitor, sans hooks, sans diff externe ni textconv (un dépôt non fiable ne peut rien exécuter).",
+      "Notifications : `--` avant le titre (pas d'injection d'option dans `notify-send`).",
+      "Import de thèmes en lot : taille réellement lue plafonnée (ZIP piégé).",
+      "Sync : le réglage `marketplace` (clés de confiance, `allow_unsigned`) n'est jamais poussé par un pair.",
+      "Site : `_headers` (CSP stricte, nosniff, no-referrer, frame-ancestors none)."
+     ]
+    }
+   ]
+  },
+  {
    "version": "1.1.4",
    "date": "2026-11-16",
    "sections": [
@@ -445,67 +483,6 @@
      "items": [
       "Le dialogue de chiffrement plantait (`NameError`) au premier clic sur « Chiffrer » / « Déchiffrer ».",
       "Métadonnées AppStream du paquet (balise `<n>` invalide → `<name>`)."
-     ]
-    }
-   ]
-  },
-  {
-   "version": "1.0.3",
-   "date": "2026-09-21",
-   "sections": [
-    {
-     "title": "Changé",
-     "items": [
-      "**Instances et intents fusionnés en « projets ».** Une seule liste, une seule racine de stockage (`Voktora/Projects` par défaut). La config passe en schéma 9 : la migration est automatique et une copie de l'ancien fichier est conservée dans `config.pre-v9.json`. Les projets existants gardent leur emplacement. Les anciens bundles `.mpack` et les `config.json` Meridian / Voktora restent importables.",
-      "**Catégories gérées par l'utilisateur** (nom, emoji, couleur, ordre). Les catégories imposées (Web, Desktop…) disparaissent ; celles déjà attribuées à un projet sont conservées. Renommer une catégorie met à jour ses projets ; la supprimer les laisse « sans catégorie ».",
-      "**Regroupement de la liste et de la grille** par catégorie, organisation GitHub, langage ou statut (choix mémorisé). Glisser des projets sur une catégorie les y classe ; clic droit → « Catégorie » fonctionne aussi en vue grille. La recherche couvre désormais catégorie et organisation GitHub.",
-      "**Export global** : n'exclut plus `.git/objects` (un dépôt restauré depuis l'archive avait perdu son historique) ; ne contient plus le compte GitHub ni les tokens de projet.",
-      "Le tri « Type » est remplacé par « Catégorie » et « Ordre manuel »."
-     ]
-    },
-    {
-     "title": "Ajouté",
-     "items": [
-      "**Import sans blocage.** Le dézippage, la copie, le déplacement, l'export et la suppression s'exécutent dans un thread avec une fenêtre de progression (octets, fichier courant) et un bouton Annuler. L'annulation ne laisse aucun demi-projet et n'altère jamais la source.",
-      "**Import de dossiers non compressés** : *déplacer* (défaut), *copier* ou *ajouter sur place*. Le glisser-déposer d'un dossier ou d'un `.zip` sur la fenêtre ouvre l'import (Ctrl+I aussi). Le dépôt GitHub d'un projet importé est repris depuis son `.git`.",
-      "**Clone GitHub** : choix parmi vos dépôts et ceux de vos organisations (filtre par propriétaire, recherche), ou par URL ; branche et catégorie au choix, journal en direct.",
-      "**Compte & organisations** (menu GitHub) : propriétaires de vos dépôts et de vos projets, ouverture sur GitHub, classement automatique des projets par organisation.",
-      "Création de projet : catégorie, `git init` et dépôt GitHub en une étape.",
-      "Suppression : choix entre « Retirer de Voktora » (fichiers conservés) et « Supprimer le dossier ».",
-      "Menu contextuel, glisser-déposer multi-sélection, badges de catégorie sur les cartes.",
-      "`doc/PROJECTS.md` et `doc/SECURITY.md`."
-     ]
-    },
-    {
-     "title": "Corrigé",
-     "items": [
-      "Fige de l'interface pendant l'import d'un ZIP (extraction dans le thread graphique).",
-      "Un ZIP sans dossier racine unique était extrait « en vrac » à la racine des projets.",
-      "Une suppression partielle « oubliait » le projet alors que des fichiers restaient sur disque.",
-      "La migration de fichiers de config hérités pouvait boucler, et absorbait puis supprimait un `settings.json` sans rapport avec Voktora.",
-      "L'auto-sauvegarde des notes visait un widget caché : elle n'enregistrait rien.",
-      "Mises à jour de widgets depuis un thread non graphique (ping des projets).",
-      "`git status`, `git log`, `git pull`, push automatique et clone ne bloquent plus l'interface.",
-      "Détection du langage beaucoup plus rapide (dossiers de dépendances ignorés, plafond de fichiers).",
-      "README : structure et liens de documentation alignés sur le dépôt."
-     ]
-    },
-    {
-     "title": "Sécurité",
-     "items": [
-      "**Le token GitHub n'est plus jamais écrit dans l'URL d'un remote** (donc plus dans `.git/config`, ni dans les exports et snapshots), ni passé en argument de ligne de commande : il est transmis à git par variables d'environnement, limité à `https://github.com/`. Les anciens remotes contenant un token sont nettoyés au prochain push.",
-      "Exports, bundles de migration et snapshots retirent les identifiants de `.git/config`.",
-      "Extraction ZIP : chemins `..`/absolus/lecteurs refusés, liens symboliques ignorés, espace disque vérifié, tailles annoncées contrôlées.",
-      "**Injection de commande corrigée** : un nom de projet venant d'une archive (`'; cmd; '`, `$(cmd)`…) pouvait s'exécuter via « Ouvrir un terminal » / « Ouvrir avec ». Plus aucun chemin n'est interpolé dans un shell.",
-      "URL de clone et noms de branche validés (`ext::`, `--option`, `..` refusés) ; `--` protège les opérandes git.",
-      "`config.json` est créé en `0600` sous Linux.",
-      "Déplacement refusé pour une racine de disque ou le dossier personnel."
-     ]
-    },
-    {
-     "title": "Tests",
-     "items": [
-      "330+ tests (contre 117) : archive, import, catégories, regroupement, migration, API GitHub simulée, authentification git, sécurité, dialogues et fenêtre principale (Qt hors écran). Un test vérifie que la version est identique dans `pyproject.toml`, `version.txt`, `constants.py` et ce fichier."
      ]
     }
    ]

@@ -221,6 +221,7 @@ def main():
     shutil.copytree(ROOT / "voktora" / "themes", onedir_final / "themes", dirs_exist_ok=True)
     shutil.copytree(ROOT / "assets",             onedir_final / "assets",  dirs_exist_ok=True)
     shutil.copy(ROOT / "voktora" / "version.txt", onedir_final / "version.txt")
+    shutil.copy(ROOT / "voktora" / "trusted_keys.json", onedir_final / "trusted_keys.json")
 
     n_final = sum(1 for _ in onedir_final.rglob("*") if _.is_file())
     print(f"    apres copie ressources : {n_final} fichiers")

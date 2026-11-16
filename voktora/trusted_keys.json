@@ -1,0 +1,10 @@
+{
+  "_comment": "Clés publiques Ed25519 (hex) qui peuvent signer marketplace/index.json. Ajoutez une entrée pour autoriser un autre mainteneur.",
+  "keys": [
+    {
+      "key": "447b1d786bc4c7434e15a3da852781668c3018d1a648b6cfb4c0c9d4e72cce0a",
+      "owner": "yolezz",
+      "note": "Clé publique officielle de yolezz (mainteneur de Voktora)"
+    }
+  ]
+}

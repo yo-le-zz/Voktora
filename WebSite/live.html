@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mode live — Voktora</title>
+<meta name="description" content="Essayer Voktora en une commande, sans rien installer : tout est supprimé à la fermeture.">
+
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="assets/favicon-192.png">
+<link rel="stylesheet" href="css/style.css">
+<script>try{var t=localStorage.getItem("voktora-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+</head>
+<body>
+<a class="skip" href="#contenu">Aller au contenu</a>
+<header class="site-header"><div class="wrap">
+<a class="brand" href="index.html"><img src="assets/Voktora.png" alt="" width="28" height="28"><span>Voktora</span></a>
+<nav class="nav" aria-label="Navigation principale"><a href="index.html">Accueil</a><a href="download.html">Télécharger</a><a href="live.html" aria-current="page">Live</a><a href="features.html">Fonctions</a><a href="plugins.html">Plugins</a><a href="docs.html">Docs</a><a href="changelog.html">Changelog</a><a href="https://github.com/yo-le-zz/Voktora" rel="noopener">GitHub</a></nav>
+<button class="icon-btn" id="theme-toggle" type="button" aria-label="Changer de thème"></button>
+</div></header>
+<main id="contenu">
+<div class="wrap">
+<div class="page-head"><h1 class="reveal">Mode live</h1>
+<p class="lead reveal">Essayez Voktora sans l'installer : une commande, tout est utilisable, et tout est supprimé à la fermeture.</p></div>
+
+<section class="block reveal"><h2>Lancer</h2>
+<div class="term"><div class="term-bar"><i></i><i></i><i></i><span class="t">linux, macOS — sh</span></div>
+<pre tabindex="0"><code>curl -fsSL https://raw.githubusercontent.com/yo-le-zz/Voktora/main/Installers/live/install-live.sh | sh</code></pre></div>
+<div class="term"><div class="term-bar"><i></i><i></i><i></i><span class="t">windows — powershell (non testé)</span></div>
+<pre tabindex="0"><code>irm https://raw.githubusercontent.com/yo-le-zz/Voktora/main/Installers/live/install-live.ps1 | iex</code></pre></div>
+<p class="small muted">Prérequis : <code>curl</code> et <code>tar</code> (Linux/macOS), accès à GitHub, et les bibliothèques système de Qt. Python 3.13 et les dépendances sont préparés dans le dossier temporaire par <a href="https://docs.astral.sh/uv/">uv</a>, installé lui aussi dans ce dossier s'il est absent. Première exécution : 1 à 2 minutes.</p></section>
+
+<section class="block reveal"><h2>Ce qui se passe</h2>
+<ul>
+<li>Un dossier privé <code>voktora-live-XXXXXXXX</code> est créé dans le dossier temporaire du système ; rien n'est écrit dans votre dossier personnel.</li>
+<li>Code, Python, dépendances, configuration, plugins, thèmes, coffre et projets créés vivent dans ce dossier.</li>
+<li>À la fermeture, Voktora propose d'<strong>exporter vos projets</strong>, puis supprime tout. Le script supprime aussi le code et l'environnement, même après Ctrl+C ou fermeture du terminal.</li>
+<li>Synchronisation entre PC, mise à jour automatique et moniteur développeur sont désactivés : rien ne doit survivre.</li>
+</ul></section>
+
+<section class="block reveal"><h2>Options</h2>
+<table><thead><tr><th scope="col">Variable</th><th scope="col">Effet</th></tr></thead><tbody>
+<tr><td><code>VOKTORA_LIVE_REF=v1.1.5</code></td><td>version à lancer (étiquette ou branche) ; par défaut la dernière release, sinon <code>main</code></td></tr>
+<tr><td><code>VOKTORA_LIVE_KEEP=1</code></td><td>débogage : ne rien supprimer à la fin</td></tr>
+</tbody></table></section>
+
+<section class="block reveal"><h2>Limites</h2>
+<ul>
+<li>Le code vient de l'archive GitHub de la version demandée, sans somme de contrôle (HTTPS seulement). Relisez le <a href="https://github.com/yo-le-zz/Voktora/blob/main/Installers/live/install-live.sh">script</a> avant de l'exécuter.</li>
+<li>Une coupure brutale (kill -9, extinction) peut laisser le dossier temporaire ; il est nettoyé au lancement suivant ou au redémarrage du système.</li>
+<li>La suppression est un effacement de fichiers, pas un effacement sécurisé.</li>
+</ul></section>
+</div>
+</main>
+<footer class="site-footer"><div class="wrap">
+<span>Voktora 1.1.5 · par <a href="https://github.com/yo-le-zz">yolezz</a> · licence <a href="https://github.com/yo-le-zz/Voktora/blob/main/LICENSE">MIT</a></span>
+<nav aria-label="Liens du dépôt"><a href="https://github.com/yo-le-zz/Voktora">Code source</a><a href="https://github.com/yo-le-zz/Voktora/releases/latest">Releases</a><a href="https://github.com/yo-le-zz/Voktora/issues">Signaler un problème</a></nav>
+</div></footer>
+<script src="js/main.js" defer></script>
+</body>
+</html>

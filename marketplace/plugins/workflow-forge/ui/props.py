@@ -182,12 +182,48 @@ class PropertiesPanel(QWidget):
         editor, set_value = self._editor(q, value)
         editor.setToolTip(self._tooltip(q))
         top.addWidget(editor, 1)
+        if q.kind in ("str", "text", "json", "expr") and isinstance(editor, (QLineEdit, QPlainTextEdit)):
+            top.addWidget(self._data_button(q, editor))
         top.addWidget(reset)
         grid.addLayout(top)
         grid.addWidget(err)
         row = Row(q, container, editor, err, reset, set_value)
         reset.clicked.connect(lambda: self._reset(q))
         return row
+
+    def data_refs(self) -> list[tuple[str, str]]:
+        """(texte du menu, expression) des données utilisables par le bloc : sorties des blocs en amont, variables, boucle, déclencheur."""
+        node_id = self.node["id"] if self.node else ""
+        refs = [(f"{r[4:].replace('.', ' → ')}", r) for r in schema.upstream_outputs(self.wf, node_id)]
+        refs += [(f"variable {v}", f"vars.{v}") for v in schema.known_vars(self.wf, node_id)]
+        refs += [("élément courant de la boucle (item)", "item"), ("numéro dans la boucle (index)", "index"), ("dossier du projet (project)", "project"),
+                 ("données du déclencheur (trigger)", "trigger")]
+        return refs
+
+    def _data_button(self, q: blocks.Param, editor) -> QToolButton:
+        """Menu « ⤵ » : insère à l'endroit du curseur la donnée d'un bloc précédent (ex. le contenu d'un fichier lu plus haut)."""
+        from PySide6.QtWidgets import QMenu
+        button = QToolButton()
+        button.setText("⤵")
+        button.setToolTip("Insérer une donnée venant d'un bloc précédent (contenu d'un fichier, réponse HTTP, variable…)")
+        button.setPopupMode(QToolButton.InstantPopup)
+        menu = QMenu(button)
+        button.setMenu(menu)
+
+        def fill():
+            menu.clear()
+            for text, ref in self.data_refs():
+                menu.addAction(text, lambda r=ref: self.insert_data(q, editor, r))
+        menu.aboutToShow.connect(fill)
+        return button
+
+    def insert_data(self, q: blocks.Param, editor, ref: str) -> None:
+        """Insère `ref` : brut dans un champ « expression », sinon sous la forme {{ref}}."""
+        snippet = ref if q.kind == "expr" else "{{" + ref + "}}"
+        if isinstance(editor, QPlainTextEdit):
+            editor.insertPlainText(snippet)
+        else:
+            editor.insert(snippet)
 
     def _commit(self, q: blocks.Param, value) -> None:
         schema.set_param(self.node, q.name, value)

@@ -568,6 +568,8 @@ class ProjectPanel(QWidget):
         self._refresh_quick_actions()
 
     def log(self, msg: str) -> None:
+        import devmon
+        devmon.note(msg, src="project")
         from datetime import datetime
         ts = datetime.now().strftime("%H:%M:%S")
         self._log_area.append(

@@ -3,9 +3,9 @@
 
     python tools/sign_index.py keygen                       # affiche la clé privée (À GARDER SECRÈTE) et la clé publique
     python tools/sign_index.py sign [--key-env VOKTORA_SIGNING_KEY] [marketplace/index.json]   # écrit index.json.sig
-    python tools/sign_index.py verify [marketplace/index.json]   # vérifie avec TRUSTED_KEYS
+    python tools/sign_index.py verify [marketplace/index.json]   # vérifie avec voktora/trusted_keys.json
 
-Ajoutez la clé PUBLIQUE à TRUSTED_KEYS dans voktora/signing.py ; mettez la clé privée dans un secret CI.
+Ajoutez la clé PUBLIQUE à voktora/trusted_keys.json ; mettez la clé privée dans un secret CI.
 """
 
 import os
@@ -23,7 +23,7 @@ def main(argv: list[str]) -> int:
     index = Path(rest[0]) if rest else ROOT / "marketplace" / "index.json"
     if cmd == "keygen":
         private, public = signing.generate_keypair()
-        print(f"Clé PRIVÉE (secret, ne la commitez jamais) : {private}\nClé publique (à mettre dans TRUSTED_KEYS de voktora/signing.py) : {public}")
+        print(f"Clé PRIVÉE (secret, ne la commitez jamais) : {private}\nClé publique (à ajouter dans voktora/trusted_keys.json) : {public}")
         return 0
     if cmd == "sign":
         env = "VOKTORA_SIGNING_KEY"

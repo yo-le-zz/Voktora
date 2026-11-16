@@ -111,6 +111,8 @@ class NodeItem(QGraphicsRectItem):
         if change == QGraphicsItem.ItemPositionHasChanged:
             self.data["x"], self.data["y"] = round(value.x()), round(value.y())
             self._moved = True
+            if self.scene() and not self.scene().sceneRect().adjusted(600, 600, -600, -600).contains(value):
+                self.scene().grow()
             for e in self.edges:
                 e.update_path()
         return super().itemChange(change, value)
@@ -174,7 +176,11 @@ class FlowScene(QGraphicsScene):
             self._add_item(n)
         for e in wf["edges"]:
             self._add_edge(e)
-        self.setSceneRect(self.itemsBoundingRect().adjusted(-200, -200, 400, 400))
+        self.grow()
+
+    def grow(self) -> None:
+        """Zone de travail très grande autour des blocs (on peut s'éloigner et poser des blocs loin), qui s'étend avec eux."""
+        self.setSceneRect(self.itemsBoundingRect().adjusted(-4000, -3000, 4000, 3000))
 
     def reload(self, select=()) -> None:
         """Reconstruit la scène depuis le modèle (après annuler, coller…) en conservant la sélection."""
@@ -306,10 +312,42 @@ class FlowView(QGraphicsView):
         self.setViewportUpdateMode(QGraphicsView.MinimalViewportUpdate)
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self.setBackgroundBrush(QBrush(QColor(0, 0, 0, 0)))
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self._pan = None
+
+    def mousePressEvent(self, ev):  # noqa: N802
+        if ev.button() in (Qt.MiddleButton, Qt.RightButton):          # glisser avec le bouton du milieu ou droit : se déplacer
+            self._pan = ev.position().toPoint()
+            self.setCursor(Qt.ClosedHandCursor)
+            ev.accept()
+            return
+        super().mousePressEvent(ev)
+
+    def mouseMoveEvent(self, ev):  # noqa: N802
+        if self._pan is not None:
+            d = ev.position().toPoint() - self._pan
+            self._pan = ev.position().toPoint()
+            self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - d.x())
+            self.verticalScrollBar().setValue(self.verticalScrollBar().value() - d.y())
+            ev.accept()
+            return
+        super().mouseMoveEvent(ev)
+
+    def mouseReleaseEvent(self, ev):  # noqa: N802
+        if self._pan is not None and ev.button() in (Qt.MiddleButton, Qt.RightButton):
+            self._pan = None
+            self.unsetCursor()
+            ev.accept()
+            return
+        super().mouseReleaseEvent(ev)
 
     def wheelEvent(self, ev):  # noqa: N802
-        k = 1.15 if ev.angleDelta().y() > 0 else 1 / 1.15
-        self.scale(k, k)
+        if ev.modifiers() & Qt.ControlModifier or not ev.modifiers():
+            k = 1.15 if ev.angleDelta().y() > 0 else 1 / 1.15
+            self.scale(max(0.1, min(4.0, self.transform().m11() * k)) / self.transform().m11(), max(0.1, min(4.0, self.transform().m11() * k)) / self.transform().m11())
+        else:                                            # Maj : défiler à l'horizontale
+            self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - ev.angleDelta().y())
 
     def keyPressEvent(self, ev):  # noqa: N802
         if ev.key() in (Qt.Key_Delete, Qt.Key_Backspace):

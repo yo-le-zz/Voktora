@@ -31,11 +31,15 @@ if os.environ.get("VOKTORA_DEVMON_VIEWER"):          # seconde fenêtre du monit
     from devmon import viewer as _viewer
     raise SystemExit(_viewer.run(os.environ["VOKTORA_DEVMON_VIEWER"]))
 
-import core
-import linux_env
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication
+import live
+
+live.prepare_environment()                              # mode live : dossier de données temporaire (avant tout accès aux données)
+
+import core  # noqa: E402
+import linux_env  # noqa: E402
+from PySide6.QtCore import Qt  # noqa: E402
+from PySide6.QtGui import QIcon  # noqa: E402
+from PySide6.QtWidgets import QApplication  # noqa: E402
 
 
 def main() -> None:
@@ -62,13 +66,17 @@ def main() -> None:
     app.setDesktopFileName("voktora")   # relie la fenêtre à voktora.desktop (icône sous Wayland : GNOME, KDE…)
     app.setStyle("Fusion")
 
+    if live.active():
+        live.main_cleanup_on_exit()
+        live.configure_storage()
+
     # Moniteur développeur global (--dev[=mode], VOKTORA_DEV, ou préférence) : démarré tôt pour voir aussi les plantages du démarrage
     from devmon import core as _dm_core
     from devmon import launcher as _dm_launcher
     _dm_level = _dm_launcher.parse_dev_arg(sys.argv)
     if _dm_level is None and _dm_core.read_prefs().get("autostart"):
         _dm_level = _dm_core.valid_level(_dm_core.read_prefs().get("mode"))
-    if _dm_level:
+    if _dm_level and not live.active():          # mode live : rien ne doit survivre à la fermeture
         import devmon
         devmon.open_monitor(_dm_level, app, open_window=_dm_core.read_prefs().get("window", True))
 

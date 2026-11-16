@@ -33,7 +33,8 @@ PART_SUFFIX = ".voktora-sync-part"
 TRASH_DAYS = 30
 CFG = "cfg"
 # Réglages jamais synchronisés : propres à la machine ou secrets.
-APP_CONFIG_LOCAL_ONLY = {"window_geometry", "splitter_states", "github_client_id", "auth_method"}
+APP_CONFIG_LOCAL_ONLY = {"window_geometry", "splitter_states", "github_client_id", "auth_method",
+                        "marketplace"}      # clés de confiance du marketplace : jamais poussées par un pair (1.1.5)
 SECRET_WORDS = ("token", "secret", "password", "passwd", "credential", "api_key", "apikey")
 META_LOCAL_FIELDS = {"path", "drive", "name"}
 # Dossiers « extras » synchronisés (espace `x:<nom>`) et la catégorie qui les active.

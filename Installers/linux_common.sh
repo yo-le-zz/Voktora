@@ -77,6 +77,7 @@ voktora_compile() {
     cp -r "$root/voktora/themes"      "$ONEDIR/themes"
     cp -r "$root/assets"              "$ONEDIR/assets"
     cp    "$root/voktora/version.txt" "$ONEDIR/version.txt"
+    cp    "$root/voktora/trusted_keys.json" "$ONEDIR/trusted_keys.json"
 }
 
 # Construit l'arborescence du système installé dans $1 (dossier vide ou inexistant).

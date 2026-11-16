@@ -696,27 +696,27 @@
       "description": "Éditeur visuel d'automatisations : blocs, conditions, boucles, branches parallèles, déclencheurs (fichiers, Git, cron, HTTP local), test à blanc, journaux.",
       "entry": "main.py",
       "files": {
-        "README.md": "869c12ec1924d1e43bd822f3938def7fc91de426616a654b6e7001fe5d3a7fa3",
+        "README.md": "45578ee56e21d261cdf2ab6ac76931931f32075313a3b9253b2d952e19b8c620",
         "core/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "core/blocks.py": "c7b506aa141186a4f28159d5999f65417103d774201b78fec69445c4935983d0",
         "core/cron.py": "88cda406b99e15ad42a435cb486ba75d6ef553087d2da079654953387180a7a0",
         "core/engine.py": "1ac68541834030de72b2fefe71624cabee4e953471b6a02bef8774fd98c563be",
-        "core/expr.py": "34afd206ecb311a2a2aafc798433fb1c9446830872919d2679c0fdbb2cc1f3bb",
+        "core/expr.py": "a52e4407cf0794260086f0cd1afd0b2b02ddf0212edc1a62fa27cd93361ce0ac",
         "core/proc.py": "124d394e6cedf61e665690f969356ad3a2b42743bbf148c3e709fc614078a866",
         "core/schema.py": "757e864906946cebf3bc0bd23668d6c3802f6f84fda13a8b3bd483b6d9c1c85c",
-        "core/templates.py": "2e799bf01ce41b8d2c5bbf178dbf80906ebc6cd574da7254bfdc40c004459ef1",
+        "core/templates.py": "142b6fbb2df6fd56c6aea06d7204a8ac00afec58a442a0e6c22e492dcefbb580",
         "core/triggers.py": "54025bcb110007064db8b164f7bfddc620a68ab9c507690c899bd5d15ff28726",
         "core/validation.py": "b61eb742c56df4beed6b6d954b20ed2957908a8e05e0bff64ce008e7bb590e65",
         "main.py": "a266430fbd73ea0595d2afa04a19fa03cc05e1a376245a782f2f04d1db91f802",
-        "plugin.json": "8b3e002c9f85ccdec92b8faec306c5393cb38c00e137f19e30b73e861525881b",
+        "plugin.json": "d4e84f9c36890cdf738edc33350a963957d121ad52db359e45900d8b1d0a9182",
         "services/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "storage/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "storage/store.py": "e1e245d60b19701c066253fc37332eb348b91e3cc94e04e70c5e38ee54a1b468",
         "tests/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "ui/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        "ui/editor.py": "af4eae5397c544bb5f8b46298693b4b4458e65384358faa9424fe7034bfe2e73",
-        "ui/props.py": "393cf8b42329a51bd011f6c1b9b5ccae4fbeb2b4908a0d3161ed867ade0d5a5b",
-        "ui/widget.py": "c4f87b5129878428f71b4ebc688a94ea7973d6cfe880179f48e1edbc1d97e09b"
+        "ui/editor.py": "0423060077a156c7b0d06284132c5754bffd52457da4f27de16c23a82474c075",
+        "ui/props.py": "4149ab001b1ec2458f2e850c6d17ee02e2ccafeb5031f21b8e05c799a332d0d2",
+        "ui/widget.py": "ccd4e2a9ef5440c320e594fed1458fd4a21561db43e11ae61891dde0ab1d4ffa"
       },
       "homepage": "https://github.com/yo-le-zz/Voktora",
       "id": "workflow-forge",
@@ -737,7 +737,7 @@
         "workflow"
       ],
       "tier": "official",
-      "version": "1.2.0"
+      "version": "1.3.0"
     },
     {
       "api": 5,

@@ -93,6 +93,8 @@ class SyncService:
         """Journal lisible (interface + fichier `sync/sync.log`, tourné à 1 Mo). Désactivable ; trois niveaux :
         essentiel / par projet / par fichier. Les erreurs sont toujours gardées en mémoire."""
         s = self.settings
+        import devmon
+        devmon.note(text, cat="sync", sev="info", need="normal" if important else ("trace" if detail else "verbose"), src="sync")
         level = s["log_level"]
         if not s["log_enabled"] and not important:
             return

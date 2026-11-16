@@ -5,6 +5,31 @@ Format : [Semantic Versioning](https://semver.org/) — `MAJEUR.MINEUR.CORRECTIF
 
 ---
 
+## [1.1.5] — 2026-11-16
+
+### 🧪 Mode live
+- **Une commande, aucune installation** : `curl -fsSL https://raw.githubusercontent.com/yo-le-zz/Voktora/main/Installers/live/install-live.sh | sh` (Windows : `install-live.ps1`, non testé). Le script télécharge la version demandée, prépare Python 3.13 et les dépendances **dans un dossier temporaire** `voktora-live-XXXXXXXX` (uv y est installé si absent), lance Voktora, puis **supprime tout** à la fermeture — y compris après Ctrl+C, fermeture du terminal ou plantage. Les sessions abandonnées (kill -9) sont nettoyées au lancement suivant.
+- Dans l'application (`voktora/live.py`) : configuration, plugins, boutiques, coffre et projets créés vivent dans le dossier live ; fenêtre « Tout supprimer et fermer / Exporter mes projets / Rester » à la fermeture ; synchronisation, mise à jour automatique et moniteur développeur désactivés ; titre « MODE LIVE ». Nouveau réglage d'environnement `VOKTORA_DATA_DIR` (dossier de données au choix).
+- Garde-fous de suppression : jamais un dossier arbitraire (nom `voktora-live-<alphanum>`, marqueur `.voktora-live`, dossier réel hors lien symbolique, situé dans le dossier temporaire).
+
+### 🧰 Ajouts de dernière minute
+- **Workflow Forge 1.3.0** : bouton ⤵ pour transmettre les données d'un bloc à l'autre (contenu de fichier, réponse HTTP, variables), « Supprimer le bloc » séparé de « Supprimer le workflow », bouton « Arrêter » réparé (il ne marchait qu'à la première exécution), très grande zone de travail déplaçable, modèle « Test » et 3 modèles complexes (CI complet, comptage de lignes, surveillance d'API).
+- **Marketplace des plugins** : « Tout mettre à jour (N) » et « Mode non vérifié » (download unsafe : ni SHA-256, ni signature, ni analyse — avec confirmation ; les plugins installés ainsi sont marqués `unsafe`).
+- **Journal global** : le moniteur développeur voit enfin l'activité (commandes lancées, réseau, fichiers supprimés/déplacés, console, avertissements, journaux des panneaux et de la synchro).
+- **Icônes** manquantes (se déconnecter, accessibilité, suggestion de commit, archives, actualiser…) et 15 autres emojis convertis.
+- **Clés de confiance** : `voktora/trusted_keys.json` (clé publique de yolezz) au lieu d'une constante dans le code, copié par les builds.
+- **Build macOS Intel (x86_64)** : `.dmg` dans la release (non testé sur un vrai Mac).
+- Domaine du site : https://voktora.pages.dev/
+
+### 🔐 Sécurité
+- Boutiques : identifiant et noms de fichiers revalidés avant les aperçus (pas de sortie du cache).
+- Archivage : une archive n'est lue/supprimée que dans le dossier des archives (une config modifiée ne peut plus viser un autre fichier).
+- Suggestions IA de commit : `git` est lancé sans fsmonitor, sans hooks, sans diff externe ni textconv (un dépôt non fiable ne peut rien exécuter).
+- Notifications : `--` avant le titre (pas d'injection d'option dans `notify-send`).
+- Import de thèmes en lot : taille réellement lue plafonnée (ZIP piégé).
+- Sync : le réglage `marketplace` (clés de confiance, `allow_unsigned`) n'est jamais poussé par un pair.
+- Site : `_headers` (CSP stricte, nosniff, no-referrer, frame-ancestors none).
+
 ## [1.1.4] — 2026-11-16
 
 ### 🔎 Marketplaces : recherche intelligente, « Tout installer », aperçus

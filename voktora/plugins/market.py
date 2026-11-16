@@ -303,12 +303,14 @@ def _check_signature(base: str, data: bytes) -> None:
         raise MarketError(f"Index du marketplace non authentique : {exc}") from exc
 
 
-def fetch_index(base: str | None = None, use_cache_on_error: bool = True) -> tuple[list[MarketEntry], bool]:
-    """Retourne (entrées, depuis_le_cache). Hors ligne, la dernière copie connue est utilisée."""
+def fetch_index(base: str | None = None, use_cache_on_error: bool = True, unsafe: bool = False) -> tuple[list[MarketEntry], bool]:
+    """Retourne (entrées, depuis_le_cache). Hors ligne, la dernière copie connue est utilisée.
+    `unsafe=True` : index NON vérifié (ni signature) et non mis en cache ; à n'utiliser que sur demande explicite de l'utilisateur."""
     base = (base or base_url()).rstrip("/")
     try:
         data = _fetch(f"{base}/{INDEX_NAME}", limit=MAX_INDEX_BYTES)
-        _check_signature(base, data)
+        if not unsafe:
+            _check_signature(base, data)
         entries = parse_index(data)
     except MarketError:
         if not use_cache_on_error:
@@ -317,6 +319,8 @@ def fetch_index(base: str | None = None, use_cache_on_error: bool = True) -> tup
             return parse_index(_cache_path().read_bytes()), True
         except (OSError, MarketError):
             raise
+    if unsafe:
+        return entries, False
     with contextlib.suppress(OSError):
         _cache_path().parent.mkdir(parents=True, exist_ok=True)
         _cache_path().write_bytes(data)
@@ -395,8 +399,11 @@ def _write_plugin(plugin_id: str, files: dict[str, bytes], source: dict,
         shutil.rmtree(staging, ignore_errors=True)
 
 
-def install(entry: MarketEntry, base: str | None = None, on_progress: ProgressCallback | None = None) -> Path:
-    """Télécharge, vérifie (SHA-256 de chaque fichier) puis installe. Ne charge PAS le plugin."""
+def install(entry: MarketEntry, base: str | None = None, on_progress: ProgressCallback | None = None,
+            unsafe: bool = False) -> Path:
+    """Télécharge, vérifie (SHA-256 de chaque fichier) puis installe. Ne charge PAS le plugin.
+    `unsafe=True` (« download unsafe », demande explicite) : AUCUNE vérification — ni empreinte SHA-256, ni concordance avec
+    l'index, ni analyse de sécurité. Restent : taille maximale et noms de fichiers sûrs. Le plugin est marqué `unsafe` dans son verrou."""
     if not entry.compatible:
         raise MarketError(f"{entry.name} nécessite une version plus récente de Voktora (API {entry.api}).")
     base = (base or base_url()).rstrip("/")
@@ -410,16 +417,21 @@ def install(entry: MarketEntry, base: str | None = None, on_progress: ProgressCa
         size += len(content)
         if size > MAX_PLUGIN_BYTES:
             raise MarketError(f"{entry.name} dépasse {MAX_PLUGIN_BYTES // (1024 * 1024)} Mo : installation refusée.")
-        if hashlib.sha256(content).hexdigest() != digest:
+        if not unsafe and hashlib.sha256(content).hexdigest() != digest:
             raise MarketError(
                 f"Empreinte incorrecte pour {name} : fichier modifié ou index périmé. Installation annulée.")
         files[name] = content
-    _verify_manifest_matches(entry, files)
+    if not unsafe:
+        _verify_manifest_matches(entry, files)
+    elif manifest_mod.MANIFEST_NAME not in files:
+        raise MarketError(f"{entry.id} : plugin.json absent.")
     if on_progress:
         on_progress(total, total, "")
     source = {"market": base, "version": entry.version, "tier": entry.tier}
     if entry.community:
         source |= {"repo": entry.repo, "commit": entry.commit}
+    if unsafe:
+        return _write_plugin(entry.id, files, {**source, "unsafe": True})
     return _write_plugin(entry.id, files, source, audit_permissions=list(entry.permissions))
 
 
@@ -526,14 +538,14 @@ def dependencies_to_install(entry: MarketEntry, entries: list[MarketEntry]) -> t
 
 
 def install_with_dependencies(entry: MarketEntry, entries: list[MarketEntry], base: str | None = None,
-                              on_progress: ProgressCallback | None = None) -> list[str]:
+                              on_progress: ProgressCallback | None = None, unsafe: bool = False) -> list[str]:
     """Installe les dépendances manquantes puis le plugin. Retourne les identifiants installés, dans l'ordre."""
     needed, problems = dependencies_to_install(entry, entries)
     if problems:
         raise MarketError(f"{entry.name} : " + " ; ".join(problems))
     done: list[str] = []
     for item in [*needed, entry]:
-        install(item, base, on_progress)
+        install(item, base, on_progress, unsafe=unsafe)
         done.append(item.id)
     return done
 
@@ -578,7 +590,7 @@ def _stamp_update() -> None:
 
 
 def auto_update(entries: list[MarketEntry] | None = None, force: bool = False,
-                apply: Callable[[list[str]], None] | None = None) -> UpdateReport:
+                apply: Callable[[list[str]], None] | None = None, unsafe: bool = False) -> UpdateReport:
     """Met à jour les plugins du marketplace installés, SANS surprise :
       • jamais si la nouvelle version demande une permission de plus (signalé, à confirmer à la main) ;
       • jamais si elle casserait la version exigée par un plugin qui en dépend ;
@@ -589,7 +601,7 @@ def auto_update(entries: list[MarketEntry] | None = None, force: bool = False,
     if not force and not (auto_update_enabled() and _due()):
         return report
     if entries is None:
-        entries, _cached = fetch_index(use_cache_on_error=False)
+        entries, _cached = fetch_index(use_cache_on_error=False, unsafe=unsafe)
     by_id = {e.id: e for e in entries}
     graph = {p.id: dict(p.dependencies) for p in runtime.get_all()}
     for info in list(runtime.get_all()):
@@ -617,9 +629,9 @@ def auto_update(entries: list[MarketEntry] | None = None, force: bool = False,
                 report.skipped[info.id] = "nouvelle dépendance à installer à la main : " + ", ".join(risky)
                 continue
             for dep in needed:
-                install(dep)
+                install(dep, unsafe=unsafe)
                 report.installed_dependencies.append(dep.id)
-            install(entry)
+            install(entry, unsafe=unsafe)
             report.updated.append(info.id)
         except MarketError as exc:
             report.skipped[info.id] = str(exc)

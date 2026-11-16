@@ -5,6 +5,13 @@
 ## Éditeur
 Palette de blocs (recherche), double-clic pour ajouter, glisser du rond de sortie vers un bloc pour relier, Suppr pour effacer, molette pour zoomer. La scène reste fluide avec 250 blocs et 250 liens (test automatisé : chargement < 4 s, déplacement d'un bloc relié < 50 ms). Formulaire de paramètres généré par bloc ; options communes : tentatives, délai entre tentatives, délai maximal, « continuer si échec ».
 
+## Nouveautés 1.3.0
+- **Données entre blocs** : bouton ⤵ à côté de chaque champ texte/expression pour insérer la sortie d'un bloc précédent (ex. le contenu lu par « Lire un fichier ») ; tranches `texte[:80]` dans les expressions.
+- **Supprimer le bloc** (bouton ou Suppr) distinct de **Supprimer le workflow** (avec confirmation).
+- **Arrêter** fonctionne à chaque exécution (l'ancien bouton ne visait que la première).
+- Zone de travail très grande : barres de défilement, glisser avec le bouton du milieu/droit pour se déplacer, zoom borné.
+- 4 nouveaux modèles : **Test (données entre blocs)**, Pipeline CI complet, Compter les lignes du code, Surveiller une API avec reprises.
+
 ## Nouveautés 1.2.0 — édition des blocs
 - **Schéma de paramètres typé** par bloc (`core/blocks.py`, `core/schema.py`, sans Qt) : texte court, multiligne, code, entier/nombre (min, max, pas, unité), booléen, **menu** (méthode HTTP, mode d'écriture, niveau de journal, encodage, type de corps…), chemin (bouton **Parcourir…**), variable (liste déroulante éditable des variables définies en amont), durée, expression `{{ … }}`, liste **clé / valeur** (en-têtes, variables d'environnement) avec ajout, suppression et réordonnancement des lignes.
 - **Panneau de propriétés** généré depuis le schéma : libellés français, info-bulles (aide + exemple), valeur par défaut, **validation en direct** (message sous le champ), bouton **Réinitialiser** (↺). Les changements sont appliqués tout de suite et enregistrés automatiquement.

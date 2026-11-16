@@ -17,7 +17,22 @@ def test_sign_verify_roundtrip_and_tamper():
 
 
 def test_trusted_keys_filter_invalid():
-    assert signing.trusted_keys(["zz", "A" * 64]) == ["a" * 64]
+    got = signing.trusted_keys(["zz", "A" * 64])
+    assert "a" * 64 in got and "zz" not in got
+
+
+def test_keys_file_lists_yolezz_key():
+    keys = signing.load_keys_file()
+    assert "447b1d786bc4c7434e15a3da852781668c3018d1a648b6cfb4c0c9d4e72cce0a" in keys
+    assert all(len(k) == 64 for k in keys)
+
+
+def test_keys_file_shipped_by_builds():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    for script in ("Installers/linux_common.sh", "Installers/MSI installer/build_msi.py", "Installers/macOS installer/build_dmg.sh"):
+        assert "trusted_keys.json" in (root / script).read_text(encoding="utf-8"), script
+    assert "macos-15-intel" in (root / ".github/workflows/build-release.yml").read_text(encoding="utf-8")
 
 
 def test_fetch_index_requires_valid_signature_when_keys_configured(isolated_data_dir, monkeypatch):

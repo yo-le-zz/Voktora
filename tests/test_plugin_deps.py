@@ -238,7 +238,7 @@ def test_auto_update_rules(pdir, monkeypatch):
     entries = [_entry("up", "1.1.0"), _entry("perm", "1.1.0", perms=["network"]), _entry("parent", "2.0.0"),
                _entry("kid", "1.0.0", dependencies={"parent": "<2"})]
     installed = []
-    monkeypatch.setattr(market, "install", lambda e, base=None, on_progress=None: installed.append(e.id))
+    monkeypatch.setattr(market, "install", lambda e, base=None, on_progress=None, unsafe=False: installed.append(e.id))
     report = market.auto_update(entries, force=True)
     assert report.updated == ["up"] and installed == ["up"]
     assert "network" in report.skipped["perm"] and "kid" in report.skipped["parent"]
@@ -257,7 +257,7 @@ def test_install_with_dependencies_order(pdir, monkeypatch):
     from plugins import market
     entries = [_entry("api-plus"), _entry("tool", dependencies={"api-plus": ">=1.0"})]
     installed = []
-    monkeypatch.setattr(market, "install", lambda e, base=None, on_progress=None: installed.append(e.id))
+    monkeypatch.setattr(market, "install", lambda e, base=None, on_progress=None, unsafe=False: installed.append(e.id))
     assert market.install_with_dependencies(entries[1], entries) == ["api-plus", "tool"] and installed == ["api-plus", "tool"]
     with pytest.raises(market.MarketError, match="introuvable"):
         market.install_with_dependencies(_entry("z", dependencies={"nope": "*"}), entries)

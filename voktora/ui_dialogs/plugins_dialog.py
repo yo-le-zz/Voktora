@@ -347,7 +347,13 @@ class PluginsDialog(QDialog):
         btn_contrib.setToolTip("Ouvre le guide de contribution (fork → Pull Request) sur GitHub")
         btn_contrib.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(CONTRIBUTE_URL)))
         top.addWidget(self._search_bar, stretch=1)
+        self._btn_unsafe = QPushButton("Mode non vérifié")
+        self._btn_unsafe.setCheckable(True)
+        self._btn_unsafe.setMinimumHeight(34)
+        self._btn_unsafe.setToolTip("« Download unsafe » : télécharge et installe SANS vérifier ni empreinte SHA-256, ni signature, ni analyse de sécurité")
+        self._btn_unsafe.clicked.connect(self._toggle_unsafe)
         top.addWidget(btn_refresh)
+        top.addWidget(self._btn_unsafe)
         top.addWidget(btn_contrib)
         v.addLayout(top)
 
@@ -369,6 +375,10 @@ class PluginsDialog(QDialog):
         self._btn_install.setEnabled(False)
         self._btn_install.clicked.connect(self._install_selected)
         row.addStretch()
+        self._btn_upd = QPushButton("Tout mettre à jour")
+        self._btn_upd.setToolTip("Met à jour tous les plugins du marketplace qui ont une nouvelle version (jamais si de nouvelles permissions sont demandées)")
+        self._btn_upd.clicked.connect(self._update_all)
+        row.addWidget(self._btn_upd)
         self._btn_all = QPushButton("Tout installer")
         self._btn_all.setToolTip("Installe tous les plugins affichés par le filtre actuel qui ne sont pas installés (avec leurs dépendances)")
         self._btn_all.clicked.connect(self._install_all)
@@ -389,11 +399,54 @@ class PluginsDialog(QDialog):
         if message:
             self._status.setText(message)
 
+    _unsafe = False
+
+    def _toggle_unsafe(self, checked: bool) -> None:
+        if checked:
+            answer = QMessageBox.warning(
+                self, "Mode non vérifié",
+                "Ce mode télécharge et installe SANS vérifier :\n• l'empreinte SHA-256 des fichiers\n• la signature de l'index\n"
+                "• la concordance avec l'index et l'analyse de sécurité.\n\nUn serveur compromis ou une copie modifiée serait installé tel quel. "
+                "À réserver à un marketplace que vous contrôlez (ex. index périmé pendant une re-signature).\n\nActiver ?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if answer != QMessageBox.Yes:
+                self._btn_unsafe.setChecked(False)
+                return
+        self._unsafe = bool(self._btn_unsafe.isChecked())
+        self._status.setText("Mode non vérifié ACTIVÉ : rien n'est vérifié." if self._unsafe else "Vérifications rétablies.")
+        self._load_market()
+
+    def _update_all(self) -> None:
+        if self._installing or (self._worker is not None and self._worker.isRunning()):
+            return
+        todo = [e for e in self._market_entries if market.status(e) == "update" and e.compatible]
+        if not todo:
+            self._status.setText("Tous les plugins sont à jour.")
+            return
+        self._installing = True
+        self._btn_install.setEnabled(False)
+        self._busy(True, f"Mise à jour de {len(todo)} plugin(s)…")
+        entries, unsafe = list(self._market_entries), self._unsafe
+        self._worker = TaskWorker(lambda _ctx: market.auto_update(entries, force=True, unsafe=unsafe))
+        self._worker.succeeded.connect(self._on_updated_all)
+        self._worker.failed.connect(self._on_install_failed)
+        self._worker.start()
+
+    def _on_updated_all(self, report) -> None:
+        self._installing = False
+        text = f"{len(report.updated)} plugin(s) mis à jour."
+        if report.skipped:
+            text += " Non mis à jour : " + " ; ".join(f"{k} ({v})" for k, v in list(report.skipped.items())[:3])
+        self._busy(False, text)
+        plugins.load_all()
+        self._refresh_installed()
+        self._fill_market()
+
     def _load_market(self) -> None:
         if self._worker is not None and self._worker.isRunning():
             return
         self._busy(True, "Chargement du marketplace…")
-        self._worker = TaskWorker(lambda _ctx: market.fetch_index())
+        self._worker = TaskWorker(lambda _ctx, u=self._unsafe: market.fetch_index(unsafe=u))
         self._worker.succeeded.connect(self._on_market_loaded)
         self._worker.failed.connect(self._on_market_failed)
         self._worker.cancelled.connect(lambda: self._busy(False))
@@ -438,6 +491,9 @@ class PluginsDialog(QDialog):
         todo = [e for e in self._visible_entries if market.status(e) == "new" and e.compatible]
         self._btn_all.setText(f"Tout installer ({len(todo)})")
         self._btn_all.setEnabled(bool(todo) and not self._installing)
+        upd = [e for e in self._visible_entries if market.status(e) == "update" and e.compatible]
+        self._btn_upd.setText(f"Tout mettre à jour ({len(upd)})")
+        self._btn_upd.setEnabled(bool(upd) and not self._installing)
         self._market_tree.clear()
         for entry in self._visible_entries:
             state = market.status(entry)
@@ -482,14 +538,14 @@ class PluginsDialog(QDialog):
         self._btn_install.setEnabled(False)
         self._btn_all.setEnabled(False)
         self._busy(True, f"Installation de {len(todo)} plugin(s)…")
-        entries = list(self._market_entries)
+        entries, unsafe = list(self._market_entries), self._unsafe
 
         def work(ctx):
             failed = []
             for n, entry in enumerate(todo, 1):
                 try:
                     if market.status(entry) == "new":
-                        market.install_with_dependencies(entry, entries, on_progress=None)
+                        market.install_with_dependencies(entry, entries, on_progress=None, unsafe=unsafe)
                 except Exception as exc:  # noqa: BLE001
                     failed.append(f"{entry.name} : {exc}")
                 ctx.progress(n, len(todo), entry.name)
@@ -609,7 +665,7 @@ class PluginsDialog(QDialog):
         self._installing = True
         self._btn_install.setEnabled(False)
         self._worker = TaskWorker(lambda ctx: market.install_with_dependencies(
-            entry, self._market_entries, on_progress=ctx.progress))
+            entry, self._market_entries, on_progress=ctx.progress, unsafe=self._unsafe))
         self._worker.progress.connect(self._on_install_progress)
         self._worker.succeeded.connect(lambda _r, e=entry: self._on_installed(e))
         self._worker.failed.connect(self._on_install_failed)

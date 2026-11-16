@@ -222,9 +222,9 @@ def test_history_undo_redo(forge):
 
 
 # ------------------------------------------------------------------------------------------------ modèles d'exemple
-def test_six_templates_are_valid_and_dry_run(forge, tmp_path):
+def test_templates_are_valid_and_dry_run(forge, tmp_path):
     t = forge.templates
-    assert len(t.template_list()) == 6
+    assert len(t.template_list()) == 10
     (tmp_path / "a.md").write_text("# a TODO")
     for key, title in t.template_list():
         wf = t.build(key)
@@ -232,7 +232,8 @@ def test_six_templates_are_valid_and_dry_run(forge, tmp_path):
         r = forge.validation.validate(wf)
         assert r["errors"] == [] and r["warnings"] == [], (key, r)
         assert all(forge.schema.validate_params(n["type"], n["params"]) == {} for n in wf["nodes"]), key
-        rec = forge.engine.run_workflow(wf, str(tmp_path), dry_run=True)
+        rec = forge.engine.run_workflow(wf, str(tmp_path), dry_run=True,
+                                        runner=lambda args, **kw: type("R", (), {"code": 0, "out": "abc1234", "ok": True, "error": "", "cancelled": False, "timed_out": False, "seconds": 0.0, "args": []})())
         assert rec["ok"], (key, rec.get("error"), rec["log"])
     a, b = t.build("tests"), t.build("tests")
     a["nodes"][1]["params"]["command"] = "autre"
@@ -447,3 +448,26 @@ def test_plugin_has_no_dynamic_code_literals():
             for line in text.splitlines():
                 if forbidden in line and not re.search(r"\.(eval|exec|execute)\(|def (eval|execute)\(|# .*" + re.escape(forbidden), line):
                     pytest.fail(f"{f.name}: {line.strip()}")
+
+
+def test_test_template_passes_file_content_between_blocks(forge, tmp_path):
+    (tmp_path / "LISEZMOI.md").write_text("Bonjour depuis le fichier")
+    rec = forge.engine.run_workflow(forge.templates.build("test"), str(tmp_path))
+    assert rec["ok"], rec
+    assert "Début de LISEZMOI.md : Bonjour depuis le fichier" in rec["log"]
+
+
+def test_delete_block_keeps_workflow_and_stop_targets_current_run(forge, tmp_path):
+    from PySide6.QtCore import QPointF
+    w = widget(tmp_path)
+    a = w.scene.add_node("log", QPointF(200, 0))
+    b = w.scene.add_node("log", QPointF(400, 0))
+    w.scene.select_ids([a.data["id"]])
+    w.btns["delnode"].click()
+    ids = [n["id"] for n in w.wf["nodes"]]
+    assert a.data["id"] not in ids and b.data["id"] in ids and "start" in ids
+    w.cancel = __import__("threading").Event()       # une exécution a remplacé l'événement : « Arrêter » doit viser le nouveau
+    w.btns["stop"].setEnabled(True)
+    w.btns["stop"].click()
+    assert w.cancel.is_set()
+    assert w.scene.sceneRect().width() > 8000

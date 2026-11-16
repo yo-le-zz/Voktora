@@ -137,6 +137,8 @@ jobs:
             platform: linux
           - os: windows-latest
             platform: windows
+          - os: macos-15-intel          # Intel x86_64 uniquement (pas d'arm64)
+            platform: macos
     runs-on: ${{ matrix.os }}
     env:
       UV_PYTHON_PREFERENCE: only-system   # compile avec le Python de setup-python, comme avant
@@ -205,6 +207,13 @@ jobs:
           VERSION: ${{ needs.version.outputs.number }}
         run: uv run --frozen --group build python "Installers/MSI installer/build_msi.py" "$env:VERSION"
 
+      # -- macOS (Intel x86_64) ---------------------------------------------------
+      - name: Build macOS (.dmg, x86_64)
+        if: matrix.platform == 'macos'
+        env:
+          VERSION: ${{ needs.version.outputs.number }}
+        run: bash "Installers/macOS installer/build_dmg.sh" "$VERSION"
+
       # -- Upload artifacts ---------------------------------------------------
       - name: Upload DEB artifact
         if: matrix.platform == 'linux'
@@ -230,6 +239,14 @@ jobs:
           path: dist/linux/voktora-*.pkg.tar.zst
           if-no-files-found: error
 
+      - name: Upload DMG artifact
+        if: matrix.platform == 'macos'
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-dmg
+          path: dist/macos/Voktora_*_x86_64.dmg
+          if-no-files-found: error
+
       - name: Upload MSI artifact
         if: matrix.platform == 'windows'
         uses: actions/upload-artifact@v7
@@ -250,7 +267,7 @@ jobs:
       # Empreintes SHA-256 : permettent de verifier l'integrite des fichiers telecharges.
       - name: Calculer les empreintes SHA-256
         run: |
-          sha256sum linux-deb/voktora_*.deb linux-rpm/voktora-*.rpm linux-arch/voktora-*.pkg.tar.zst windows-msi/Voktora_*_x64.msi \
+          sha256sum linux-deb/voktora_*.deb linux-rpm/voktora-*.rpm linux-arch/voktora-*.pkg.tar.zst windows-msi/Voktora_*_x64.msi macos-dmg/Voktora_*_x86_64.dmg \
             | sed 's# [^ ]*/# #' > SHA256SUMS
           cat SHA256SUMS
 
@@ -270,6 +287,7 @@ jobs:
             | Linux (Fedora/RHEL/openSUSE) | `.rpm` | `sudo dnf install ./voktora-*.rpm` (openSUSE : `sudo zypper install ./voktora-*.rpm`) |
             | Linux (Arch, Omarchy, EndeavourOS, Manjaro, CachyOS) | `.pkg.tar.zst` | `sudo pacman -U ./voktora-*.pkg.tar.zst` |
             | Windows 10/11 x64 | `.msi` | Double-cliquer |
+            | macOS Intel (x86_64) | `.dmg` | Glisser Voktora dans Applications (non signé : clic droit > Ouvrir) |
 
             ### Notes d'installation
             - **Linux** : les dependances Qt (libxcb, libgl1...) sont installees automatiquement par apt / dnf / zypper
@@ -282,4 +300,5 @@ jobs:
             linux-rpm/voktora-*.rpm
             linux-arch/voktora-*.pkg.tar.zst
             windows-msi/Voktora_*_x64.msi
+            macos-dmg/Voktora_*_x86_64.dmg
             SHA256SUMS

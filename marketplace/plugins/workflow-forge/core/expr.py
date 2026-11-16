@@ -120,6 +120,10 @@ def _ev(n, env):  # noqa: C901 — un cas par type de nœud autorisé
         if isinstance(base, dict) and n.attr in base:
             return base[n.attr]
         raise ExprError(f"Champ introuvable : {n.attr}")
+    if isinstance(n, ast.Slice):                       # texte[:80], liste[1:3] (sans pas : aucune explosion possible)
+        if n.step is not None:
+            raise ExprError("Tranche avec pas non autorisée.")
+        return slice(*(None if x is None else _ev(x, env) for x in (n.lower, n.upper)))
     if isinstance(n, ast.Subscript):
         base, key = _ev(n.value, env), _ev(n.slice, env)
         try:

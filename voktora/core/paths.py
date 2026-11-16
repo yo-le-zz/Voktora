@@ -33,6 +33,11 @@ def get_app_dir() -> Path:
 
 @functools.cache
 def get_data_dir() -> Path:
+    override = os.environ.get("VOKTORA_DATA_DIR")        # mode live (live.py) ou installation portable
+    if override:
+        d = Path(override)
+        d.mkdir(parents=True, exist_ok=True)
+        return d
     # Sur Linux, si l'app est installée dans /opt ou /usr (non accessible en écriture),
     # on utilise le répertoire XDG standard : ~/.local/share/voktora/
     if constants.IS_LINUX:

@@ -73,3 +73,15 @@ def fail_on_unhandled_qt_slot_exception(monkeypatch):
     monkeypatch.setattr(sys, "excepthook", lambda exc_type, exc, tb: caught.append(exc))
     yield
     assert not caught, f"exception non gérée dans un slot/callback Qt : {caught[0]!r}"
+
+
+@pytest.fixture(autouse=True)
+def no_trusted_keys_by_default(request, monkeypatch):
+    """Les tests du marketplace servent un index non signé : la clé de confiance du dépôt (trusted_keys.json) est ignorée,
+    sauf dans test_signing.py qui teste justement la signature."""
+    if request.module.__name__.endswith("test_signing"):
+        yield
+        return
+    import signing
+    monkeypatch.setattr(signing, "load_keys_file", lambda path=None: [])
+    yield

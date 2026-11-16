@@ -451,3 +451,23 @@ class TestPluginTool:
         out = tmp_path / "zz.zip"
         assert tool.main(["zip", "zz", "--out", str(out)]) == 0
         assert market.read_local_manifest(out).id == "zz"
+
+
+class TestUnsafeInstall:
+    def test_unsafe_skips_sha_but_safe_refuses(self, pdir, monkeypatch, served):
+        entries, _ = market.fetch_index()
+        entry = next(e for e in entries if e.id == "zen-mode")
+        real = market._fetch
+        monkeypatch.setattr(market, "_fetch", lambda url, timeout=0, limit=0: real(url) + b"\n# x" if url.endswith("main.py") else real(url))
+        with pytest.raises(market.MarketError, match="Empreinte"):
+            market.install(entry)
+        folder = market.install(entry, unsafe=True)
+        assert (folder / "main.py").read_bytes().endswith(b"# x")
+        assert '"unsafe": true' in (folder / ".source.json").read_text(encoding="utf-8")
+
+    def test_unsafe_index_ignores_bad_signature(self, pdir, monkeypatch, served):
+        import signing
+        monkeypatch.setattr(signing, "trusted_keys", lambda extra=None: ["a" * 64])
+        with pytest.raises(market.MarketError, match="authentique"):
+            market.fetch_index(use_cache_on_error=False)
+        assert market.fetch_index(use_cache_on_error=False, unsafe=True)[0]

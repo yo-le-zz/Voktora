@@ -75,6 +75,7 @@ class Emitter:
         self._install_faulthandler()
         self._install_logging()
         self._install_core_wrappers()
+        self._install_activity()
         if app is not None:
             self._install_qt(app)
         threading.Thread(target=self._heartbeat, name="devmon-heartbeat", daemon=True).start()
@@ -209,6 +210,99 @@ class Emitter:
             self._undo.append(lambda: setattr(config_store, "_save_config", original_save))
         except Exception:  # noqa: BLE001
             pass
+
+    # ── activité : commandes, réseau, fichiers, sorties console, avertissements ─────────────────────────
+    def _install_activity(self) -> None:
+        """Rend le journal global bavard : tout ce que fait l'application sans passer par `logging` (elle n'en utilise pas)."""
+        emitter = self
+        busy = threading.local()
+        own_dir = str(core.base_dir())
+
+        def short(value, limit: int = 300) -> str:
+            return core.redact(str(value))[:limit]
+
+        def audit(event: str, args) -> None:
+            if _current is not emitter or getattr(busy, "on", False) or not emitter._started:
+                return
+            busy.on = True
+            try:
+                if event == "subprocess.Popen":
+                    cmd = args[1] if len(args) > 1 else args[0]
+                    cmd = " ".join(map(str, cmd)) if isinstance(cmd, (list, tuple)) else str(cmd)
+                    emitter.emit("process", "Commande : " + short(cmd), need="verbose", src="subprocess",
+                                 data={"cwd": short(args[2]) if len(args) > 2 and args[2] else ""})
+                elif event == "socket.connect":
+                    addr = args[1]
+                    host = addr[0] if isinstance(addr, tuple) and addr else addr
+                    if host not in ("127.0.0.1", "::1", "localhost"):
+                        emitter.emit("network", f"Connexion réseau vers {short(addr, 120)}", need="verbose", src="socket")
+                elif event == "socket.getaddrinfo":
+                    emitter.emit("network", f"Résolution DNS : {short(args[0], 120)}", need="trace", src="socket")
+                elif event == "urllib.Request":
+                    emitter.emit("network", f"Requête {args[2] or 'GET'} {short(args[0])}", need="verbose", src="urllib")
+                elif event == "webbrowser.open":
+                    emitter.emit("process", f"Ouverture dans le navigateur : {short(args[0])}", need="verbose", src="webbrowser")
+                elif event in ("os.remove", "os.rmdir", "shutil.rmtree", "os.rename", "shutil.move", "os.mkdir"):
+                    path = str(args[0])
+                    if own_dir not in path and "__pycache__" not in path:
+                        label = {"os.remove": "Fichier supprimé", "os.rmdir": "Dossier supprimé", "shutil.rmtree": "Arborescence supprimée",
+                                 "os.rename": "Renommé/déplacé", "shutil.move": "Déplacé", "os.mkdir": "Dossier créé"}[event]
+                        extra = f" → {short(args[1])}" if event in ("os.rename", "shutil.move") and len(args) > 1 else ""
+                        emitter.emit("file", f"{label} : {short(path)}{extra}", need="verbose", src="filesystem")
+                elif event == "open":
+                    mode = str(args[1] or "r") if len(args) > 1 else "r"
+                    path = str(args[0])
+                    if any(c in mode for c in "wax+") and own_dir not in path and "__pycache__" not in path and not path.startswith("/proc"):
+                        emitter.emit("file", f"Écriture : {short(path)}", need="trace", src="filesystem")
+            except Exception:  # noqa: BLE001
+                pass
+            finally:
+                busy.on = False
+
+        sys.addaudithook(audit)                       # un hook d'audit ne peut pas être retiré : il se neutralise via `_current`
+
+        class Tee:
+            def __init__(self, original, stream: str):
+                self._o, self._s, self._buf = original, stream, ""
+
+            def write(self, text):
+                try:
+                    if self._o is not None:
+                        self._o.write(text)
+                    self._buf += text
+                    while "\n" in self._buf:
+                        line, self._buf = self._buf.split("\n", 1)
+                        if line.strip():
+                            emitter.emit("console", short(line, 1000), sev="warning" if self._s == "stderr" else "info",
+                                         need="normal" if self._s == "stderr" else "verbose", src=self._s)
+                    self._buf = self._buf[-4000:]
+                except Exception:  # noqa: BLE001
+                    pass
+                return len(text)
+
+            def flush(self):
+                if self._o is not None:
+                    self._o.flush()
+
+            def __getattr__(self, name):
+                return getattr(self._o, name)
+
+        saved = (sys.stdout, sys.stderr)
+        sys.stdout, sys.stderr = Tee(saved[0], "stdout"), Tee(saved[1], "stderr")
+
+        import warnings
+        original_warning = warnings.showwarning
+
+        def show(message, category, filename, lineno, file=None, line=None):
+            emitter.emit("log", f"{category.__name__}: {message} ({os.path.basename(str(filename))}:{lineno})", sev="warning",
+                         need="normal", src="warnings")
+            original_warning(message, category, filename, lineno, file, line)
+        warnings.showwarning = show
+
+        def undo():
+            sys.stdout, sys.stderr = saved
+            warnings.showwarning = original_warning
+        self._undo.append(undo)
 
     # ── Qt ──────────────────────────────────────────────────────────────────────
     def _install_qt(self, app) -> None:

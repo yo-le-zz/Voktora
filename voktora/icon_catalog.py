@@ -168,7 +168,10 @@ EMOJI_TO_ICON: dict[str, str] = {
     # statuts
     "✅": "check-circle", "✔": "check", "❌": "close-circle", "✕": "close", "✖": "close", "⏳": "timer-sand",
     "⚠": "alert", "🚧": "hard-hat", "🟢": "circle", "🟡": "circle", "🔴": "circle", "🔵": "circle",
-    "⭐": "star", "🏁": "flag-checkered", "🆕": "new-box", "🔄": "sync", "⟳": "refresh", "🗃": "archive",
+    "⭐": "star", "🏁": "flag-checkered", "🆕": "new-box", "🔄": "sync", "⟳": "refresh", "↻": "refresh", "🗃": "archive", "🗄": "archive-outline",
+    "🚪": "logout", "☰": "menu", "⬤": "circle", "✓": "check", "✗": "close", "✘": "close", "⬛": "stop", "💙": "heart",
+    "👁": "eye", "✦": "star-four-points", "🗜": "zip-box", "⚪": "circle-outline", "🙈": "eye-off", "👑": "crown",
+    "🕘": "clock-outline", "👻": "ghost", "♿": "wheelchair-accessibility", "✍": "text-box-edit",
     # réactions
     "😀": "emoticon-happy", "😎": "emoticon-cool", "🤔": "head-question", "😅": "emoticon-neutral",
     "😴": "sleep", "🥳": "party-popper", "👍": "thumb-up", "👎": "thumb-down", "💡": "lightbulb-on",
@@ -212,7 +215,7 @@ _EMOJI_CHAR = (
     "[\U0001F000-\U0001FAFF"      # pictogrammes, symboles, émoticônes, drapeaux
     "⌀-⏿"               # techniques (⏳ ⏰ ⌨ ⏱)
     "☀-➿"               # divers (☀ ⚙ ⚠ ✅ ✔ ✕ ❌ ❤ ➕)
-    "⟳"                      # ⟳
+    "⟳↻"                     # ⟳ ↻ (actualiser)
     "⬀-⯿"               # flèches/symboles divers (⬇ ⭐)
     "ℹ]"                     # ℹ
 )
