@@ -95,11 +95,11 @@
   var osGroup = groups.os;
   if (osGroup) {
     var ua = navigator.userAgent || "", plat = navigator.platform || "";
-    var os = /Win/i.test(plat) || /Windows/i.test(ua) ? "windows" : /Linux|X11|CrOS/i.test(plat + ua) && !/Android/i.test(ua) ? "linux" : "sources";
+    var os = /Win/i.test(plat) || /Windows/i.test(ua) ? "windows" : /Mac/i.test(plat) && !/iPhone|iPad/i.test(ua) ? "macos" : /Linux|X11|CrOS/i.test(plat + ua) && !/Android/i.test(ua) ? "linux" : "sources";
     var target = osGroup.tabs.filter(function (t) { return t.dataset.os === os; })[0];
     if (target) osGroup.select(target, false, false);
     var note = doc.getElementById("os-detected");
-    if (note) note.textContent = os === "windows" ? "Windows détecté." : os === "linux" ? "Linux détecté." : "Aucun paquet pour ce système : installation depuis les sources.";
+    if (note) note.textContent = os === "windows" ? "Windows détecté." : os === "macos" ? "macOS détecté." : os === "linux" ? "Linux détecté." : "Aucun paquet pour ce système : installation depuis les sources.";
   }
 
   /* ---------- Bouton Copier ---------- */

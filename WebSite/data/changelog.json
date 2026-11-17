@@ -10,6 +10,7 @@
       "**Build macOS** : l'icône PNG est convertie en `.icns` avec `sips`/`iconutil` (plus d'erreur « Need to install 'imageio' »).",
       "**Compilation plus rapide** : pas de LTO sur macOS par défaut (`VOKTORA_LTO=yes` pour l'activer), ccache, cache de Nuitka entre les runs CI.",
       "**`build.sh`** (Linux/macOS) : compilation locale rapide — `./build.sh` (rapide), `run`, `release` (LTO), `dev` (sans compiler), `clean`.",
+      "**Installation en une commande** : `Installers/install.sh` (Linux — distribution détectée — et macOS Intel) et `install.ps1` (Windows, non testé) téléchargent le bon paquet, vérifient son SHA-256 puis l'installent ; mode live équivalent pour chaque système. Site mis à jour (macOS, commandes uniques).",
       "Tests : le test du plugin retiré `project-counter` est supprimé (il échouait à l'import)."
      ]
     }

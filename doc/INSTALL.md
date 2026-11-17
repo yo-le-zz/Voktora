@@ -4,6 +4,20 @@
 
 ---
 
+## ⚡ Une seule commande
+
+```sh
+# Linux (distribution détectée : Debian/Ubuntu, Fedora/RHEL/openSUSE, Arch et dérivées) et macOS Intel
+curl -fsSL https://raw.githubusercontent.com/yo-le-zz/Voktora/main/Installers/install.sh | sh
+```
+```powershell
+# Windows (script non testé)
+irm https://raw.githubusercontent.com/yo-le-zz/Voktora/main/Installers/install.ps1 | iex
+```
+Le script télécharge le paquet de la dernière release, **vérifie son SHA-256** (fichier `SHA256SUMS` de la release, refus en cas d'écart) puis l'installe. `VOKTORA_VERSION=1.1.6` force une version, `VOKTORA_DRY_RUN=1` affiche le plan sans rien faire.
+
+Mode live (essai sans installation) : voir [LIVE.md](LIVE.md).
+
 ## 🐧 Linux (Debian / Ubuntu / Mint / Fedora / openSUSE)
 
 ### Via le paquet .deb (recommandé)

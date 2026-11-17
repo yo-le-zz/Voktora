@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Voktora — gestionnaire de projets de développement</title>
-<meta name="description" content="Voktora : gestionnaire de projets de développement pour Linux et Windows. Dépôts Git, profils, hooks, coffre chiffré, snapshots, plugins. Libre (MIT).">
+<meta name="description" content="Voktora : gestionnaire de projets de développement pour Linux, macOS et Windows. Dépôts Git, profils, hooks, coffre chiffré, snapshots, plugins. Libre (MIT).">
 
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
@@ -33,10 +33,14 @@
 <h2 id="inst">Installer</h2>
 <p class="hint" id="os-detected" aria-live="polite">Choisissez votre système.</p>
 <div data-tabs="os">
-<div class="tabs" role="tablist" aria-label="Système d'exploitation"><button class="tab" role="tab" id="o-linux" data-os="linux" aria-controls="po-linux" aria-selected="true" tabindex="0">Linux</button><button class="tab" role="tab" id="o-windows" data-os="windows" aria-controls="po-windows" aria-selected="false" tabindex="-1">Windows</button><button class="tab" role="tab" id="o-sources" data-os="sources" aria-controls="po-sources" aria-selected="false" tabindex="-1">Sources</button></div>
+<div class="tabs" role="tablist" aria-label="Système d'exploitation"><button class="tab" role="tab" id="o-linux" data-os="linux" aria-controls="po-linux" aria-selected="true" tabindex="0">Linux</button><button class="tab" role="tab" id="o-macos" data-os="macos" aria-controls="po-macos" aria-selected="false" tabindex="-1">macOS</button><button class="tab" role="tab" id="o-windows" data-os="windows" aria-controls="po-windows" aria-selected="false" tabindex="-1">Windows</button><button class="tab" role="tab" id="o-sources" data-os="sources" aria-controls="po-sources" aria-selected="false" tabindex="-1">Sources</button></div>
 
 <div class="panel" role="tabpanel" id="po-linux" aria-labelledby="o-linux">
-<h3 class="panel-title">Linux</h3>
+<h3 class="panel-title">Linux — une commande</h3>
+<div class="term"><div class="term-bar"><i></i><i></i><i></i><span class="t">linux — sh</span></div>
+<pre tabindex="0"><code>curl -fsSL https://raw.githubusercontent.com/yo-le-zz/Voktora/main/Installers/install.sh | sh</code></pre></div>
+<p class="hint">Détecte votre distribution (Debian/Ubuntu, Fedora/RHEL/openSUSE, Arch et dérivées), télécharge le bon paquet, vérifie son empreinte SHA-256 puis l'installe. Essai sans rien installer : <a href="live.html">mode live</a>.</p>
+<h4 class="panel-title">Installation manuelle</h4>
 <div data-tabs="distro"><div class="tabs sub-tabs" role="tablist" aria-label="Distribution"><button class="tab" role="tab" id="t-deb" aria-controls="p-deb" aria-selected="true" tabindex="0">Debian, Ubuntu, Mint</button><button class="tab" role="tab" id="t-rpm" aria-controls="p-rpm" aria-selected="false" tabindex="-1">Fedora, openSUSE</button><button class="tab" role="tab" id="t-arch" aria-controls="p-arch" aria-selected="false" tabindex="-1">Arch, Manjaro, EndeavourOS</button></div>
 <div class="panel" role="tabpanel" id="p-deb" aria-labelledby="t-deb">
 <h4 class="panel-title">Debian, Ubuntu, Mint</h4><div class="term" data-type><div class="term-bar"><i></i><i></i><i></i><span class="t">deb — sh</span></div>
@@ -57,8 +61,18 @@ voktora<span class="cursor" aria-hidden="true"></span></code></pre></div><p clas
 </div>
 </div>
 
+<div class="panel" role="tabpanel" id="po-macos" aria-labelledby="o-macos" hidden>
+<h3 class="panel-title">macOS (Intel x86_64) — une commande</h3>
+<div class="term"><div class="term-bar"><i></i><i></i><i></i><span class="t">macos — sh</span></div>
+<pre tabindex="0"><code>curl -fsSL https://raw.githubusercontent.com/yo-le-zz/Voktora/main/Installers/install.sh | sh</code></pre></div>
+<p class="hint">Télécharge le .dmg, vérifie son empreinte SHA-256 et copie Voktora dans Applications. Build Intel uniquement (pas d'Apple Silicon natif), non signé ni notarisé, pas encore testé sur un vrai Mac. <a href="download.html#dmg">Installation manuelle</a>.</p>
+</div>
+
 <div class="panel" role="tabpanel" id="po-windows" aria-labelledby="o-windows" hidden>
-<h3 class="panel-title">Windows 10 / 11 (x64)</h3>
+<h3 class="panel-title">Windows 10 / 11 (x64) — une commande</h3>
+<div class="term"><div class="term-bar"><i></i><i></i><i></i><span class="t">windows — powershell</span></div>
+<pre tabindex="0"><code>irm https://raw.githubusercontent.com/yo-le-zz/Voktora/main/Installers/install.ps1 | iex</code></pre></div>
+<p class="hint">Script non testé sous Windows. Ou manuellement :</p>
 <div class="term"><div class="term-bar"><i></i><i></i><i></i><span class="t">windows — msi</span></div>
 <pre tabindex="0"><code data-copy="https://github.com/yo-le-zz/Voktora/releases/latest/download/Voktora_1.1.6_x64.msi"><span class="c"># Télécharger le .msi, puis double-cliquer dessus</span>
 https://github.com/yo-le-zz/Voktora/releases/latest/download/Voktora_1.1.6_x64.msi<span class="cursor" aria-hidden="true"></span></code></pre></div>
@@ -73,7 +87,7 @@ cd Voktora
 curl -LsSf https://astral.sh/uv/install.sh | sh   <span class="c"># uv, une seule fois</span>
 uv sync
 uv run python voktora/main.py<span class="cursor" aria-hidden="true"></span></code></pre></div>
-<p class="hint">Aussi pour macOS : il n'existe pas de paquet, seulement l'installation depuis les sources. Python 3.13 et <code>uv</code> requis.</p>
+<p class="hint">Python 3.13 et <code>uv</code> requis. Pour les systèmes sans paquet (autres Unix, Linux ARM).</p>
 </div>
 </div>
 <noscript><p class="hint">Sans JavaScript, toutes les méthodes sont listées ci-dessus. Détails sur la page <a href="download.html">Télécharger</a>.</p></noscript>

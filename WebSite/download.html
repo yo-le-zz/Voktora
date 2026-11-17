@@ -26,6 +26,16 @@
 <p class="lead reveal">Les fichiers sont publiés sur GitHub Releases. Choisissez le format de votre système.</p>
 <div class="btns reveal"><a class="btn primary" href="https://github.com/yo-le-zz/Voktora/releases/latest">Releases GitHub</a><a class="btn" href="#verifier">Vérifier la somme</a></div></div>
 
+<section class="block reveal" aria-labelledby="une-cmd"><h2 id="une-cmd">Une seule commande</h2>
+<p class="muted">Une commande par système : elle détecte la distribution (Linux), télécharge le bon paquet, <strong>vérifie son empreinte SHA-256</strong> avec le fichier SHA256SUMS de la release, puis l'installe.</p>
+<div class="term"><div class="term-bar"><i></i><i></i><i></i><span class="t">linux — sh (distribution détectée)</span></div>
+<pre tabindex="0"><code>curl -fsSL https://raw.githubusercontent.com/yo-le-zz/Voktora/main/Installers/install.sh | sh</code></pre></div>
+<div class="term"><div class="term-bar"><i></i><i></i><i></i><span class="t">macos — sh (Intel x86_64)</span></div>
+<pre tabindex="0"><code>curl -fsSL https://raw.githubusercontent.com/yo-le-zz/Voktora/main/Installers/install.sh | sh</code></pre></div>
+<div class="term"><div class="term-bar"><i></i><i></i><i></i><span class="t">windows — powershell (non testé)</span></div>
+<pre tabindex="0"><code>irm https://raw.githubusercontent.com/yo-le-zz/Voktora/main/Installers/install.ps1 | iex</code></pre></div>
+<p class="small muted">Version précise : <code>VOKTORA_VERSION=1.1.6</code> avant la commande. Lisez le <a href="https://github.com/yo-le-zz/Voktora/blob/main/Installers/install.sh">script</a> avant de l'exécuter. Les installations manuelles sont détaillées ci-dessous.</p></section>
+
 <section class="block reveal"><h2>Formats</h2>
 <div class="table-wrap"><table>
 <thead><tr><th scope="col">Format</th><th scope="col">Système</th><th scope="col">Fichier</th></tr></thead>
@@ -89,6 +99,7 @@ uv run python voktora/main.py</code></pre></div><p class="small"><a href="https:
 <section class="block reveal"><h2>Prérequis</h2>
 <ul class="plain">
 <li><span>Linux</span><span class="muted">paquets .deb / .rpm / .pkg.tar.zst, dépendances Qt installées avec le paquet (OpenGL, GLib, bibliothèques XCB)</span></li>
+<li><span>macOS</span><span class="muted">Mac Intel (x86_64), .dmg non signé ; pas de build Apple Silicon natif</span></li>
 <li><span>Windows</span><span class="muted">Windows 10 ou 11, x64</span></li>
 <li><span>Sources</span><span class="muted">Python 3.13, <a href="https://docs.astral.sh/uv/">uv</a> ; Rust (cargo) optionnel pour l'extension native</span></li>
 </ul></section>
