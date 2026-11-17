@@ -25,23 +25,24 @@ OS="$(uname -s)"
 command -v ccache >/dev/null || echo "(astuce : installez ccache — dnf/apt/brew install ccache — pour des recompilations 3 à 10 fois plus rapides)"
 
 ICON=(); PLAT=()
+# Familles de plugins Qt : « styles » n'existe que sous macOS/Windows ; sous Linux, Nuitka refuse ce nom.
+QT_PLUGINS="iconengines,imageformats,platforms,platformthemes,tls,xcbglintegrations"
 if [[ "$OS" == Darwin ]]; then
+  QT_PLUGINS="iconengines,imageformats,platforms,styles,tls"
   mkdir -p "$OUT"; bash "$ROOT/Installers/macOS installer/make_icns.sh" "$OUT/Voktora.icns"
   ICON=(--macos-app-icon="$OUT/Voktora.icns"); PLAT=(--macos-create-app-bundle --macos-app-name=Voktora)
-else
-  ICON=(--linux-icon="$ROOT/assets/Voktora.png")
 fi
 
 mkdir -p "$OUT"
 echo ">>> Nuitka ($MODE, LTO=$LTO, $JOBS tâches)"
 uv run --project "$ROOT" --group build python -m nuitka \
-  --standalone "${PLAT[@]}" "${ICON[@]}" \
+  --standalone ${PLAT[@]+"${PLAT[@]}"} ${ICON[@]+"${ICON[@]}"} \
   --lto="$LTO" --jobs="$JOBS" \
   --python-flag=no_docstrings --python-flag=no_asserts \
   --noinclude-unittest-mode=nofollow --noinclude-pytest-mode=nofollow --noinclude-setuptools-mode=nofollow \
   --nofollow-import-to=tkinter,test,pydoc,doctest,lib2to3 \
-  --enable-plugin=pyside6 --include-qt-plugins=iconengines,imageformats,platforms,styles,tls \
-  --assume-yes-for-downloads --disable-console --output-dir="$OUT/nuitka" --output-filename=voktora \
+  --enable-plugin=pyside6 --include-qt-plugins="$QT_PLUGINS" \
+  --assume-yes-for-downloads --output-dir="$OUT/nuitka" --output-filename=voktora \
   voktora/main.py
 
 if [[ "$OS" == Darwin ]]; then BIN_DIR="$(find "$OUT/nuitka" -maxdepth 1 -name '*.app' | head -n1)/Contents/MacOS"; RUN="open \"${BIN_DIR%/Contents/MacOS}\""

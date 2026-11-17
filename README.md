@@ -11,7 +11,7 @@ par [**yolezz**](https://github.com/yo-le-zz)
 [![Version](https://img.shields.io/badge/version-1.1.6-89b4fa?style=flat-square)](https://github.com/yo-le-zz/Voktora/releases)
 [![Python](https://img.shields.io/badge/python-3.13+-cba6f7?style=flat-square)](https://python.org)
 [![PySide6](https://img.shields.io/badge/PySide6-6.x-a6e3a1?style=flat-square)](https://pypi.org/project/PySide6/)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-fab387?style=flat-square)](#installation)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-fab387?style=flat-square)](#installation)
 [![License](https://img.shields.io/badge/license-MIT-f38ba8?style=flat-square)](LICENSE)
 
 [**Télécharger**](https://github.com/yo-le-zz/Voktora/releases/latest) · [**Documentation**](doc/) · [**Changelog**](CHANGELOG.md)
@@ -30,12 +30,28 @@ Voktora est un gestionnaire de projets de développement avec interface graphiqu
 
 ## Installation
 
+**Une seule commande par système** (vérifie le SHA-256 avant d'installer) :
+
+```sh
+# Linux (distribution détectée) et macOS Intel
+curl -fsSL https://raw.githubusercontent.com/yo-le-zz/Voktora/main/Installers/install.sh | sh
+```
+```powershell
+# Windows (non testé)
+irm https://raw.githubusercontent.com/yo-le-zz/Voktora/main/Installers/install.ps1 | iex
+```
+
+**Essayer sans installer (mode live, tout est supprimé à la fermeture)** : `curl -fsSL https://raw.githubusercontent.com/yo-le-zz/Voktora/main/Installers/live/install-live.sh | sh` — Windows : `irm https://raw.githubusercontent.com/yo-le-zz/Voktora/main/Installers/live/install-live.ps1 | iex` ([détails](doc/LIVE.md)).
+
+Manuellement :
+
 | Plateforme | Téléchargement | Commande |
 |-----------|---------------|---------|
 | 🐧 Linux (Debian/Ubuntu) | `voktora_1.1.6_amd64.deb` | `sudo apt install ./voktora_*.deb` |
 | 🐧 Linux (Fedora/RHEL/openSUSE) | `voktora-1.1.6-1.x86_64.rpm` | `sudo dnf install ./voktora-*.rpm` |
 | 🐧 Linux (Arch, Omarchy, EndeavourOS, Manjaro) | `voktora-1.1.6-1-x86_64.pkg.tar.zst` | `sudo pacman -U ./voktora-*.pkg.tar.zst` |
 | 🪟 Windows 10/11 x64 | `Voktora_1.1.6_x64.msi` | Double-cliquer |
+| 🍎 macOS Intel (x86_64) | `Voktora_1.1.6_x86_64.dmg` | Glisser dans Applications (non signé : clic droit → Ouvrir) |
 
 → [Guide d'installation complet](doc/INSTALL.md)
 

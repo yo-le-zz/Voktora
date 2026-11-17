@@ -85,3 +85,15 @@ def no_trusted_keys_by_default(request, monkeypatch):
     import signing
     monkeypatch.setattr(signing, "load_keys_file", lambda path=None: [])
     yield
+
+
+def pytest_ignore_collect(collection_path, config):
+    """Fichiers de test restés d'un ancien plugin supprimé du marketplace (une copie écrasée par-dessus ne les retire pas)."""
+    from pathlib import Path
+    name = Path(str(collection_path)).name
+    if name.startswith("test_plugin_") and name.endswith(".py"):
+        slug = name[len("test_plugin_"):-3].replace("_", "-")
+        root = Path(__file__).resolve().parents[1] / "marketplace" / "plugins"
+        if slug in ("project-counter", "quick-note", "ui-tweaks", "json-clipboard-js", "generators-js") and not (root / slug / "main.py").is_file():
+            return True
+    return None

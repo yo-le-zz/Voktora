@@ -5,7 +5,7 @@ Essayer Voktora sans rien installer : tout est supprimé à la fermeture.
 ```sh
 curl -fsSL https://raw.githubusercontent.com/yo-le-zz/Voktora/main/Installers/live/install-live.sh | sh
 ```
-Windows (non testé) : `irm https://raw.githubusercontent.com/yo-le-zz/Voktora/main/Installers/live/install-live.ps1 | iex`
+Même commande sous Linux et macOS. Windows (non testé) : `irm https://raw.githubusercontent.com/yo-le-zz/Voktora/main/Installers/live/install-live.ps1 | iex`
 
 ## Fonctionnement
 - Dossier `voktora-live-XXXXXXXX` (+ marqueur `.voktora-live`) dans le dossier temporaire ; code, Python (uv), dépendances, config, plugins, coffre, projets s'y trouvent. Rien dans `$HOME`.
